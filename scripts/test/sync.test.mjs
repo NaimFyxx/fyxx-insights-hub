@@ -89,6 +89,60 @@ check("revenue at 3dp", sales[0].total_online_revenue_jod === 2431.667);
 check("attributed revenue at 3dp", sales[0].klaviyo_attributed_revenue_jod === 512.334);
 check("a day with no orders is zero, not null", sales[1].total_online_revenue_jod === 0 && sales[1].orders === 0);
 
+/* ------------------------------------------ loyalty sanity checks -- */
+group("loyalty sanity checks");
+const ll = await import("../lib/loyaltylion.mjs");
+
+/** Runs fn while capturing everything it logs, so warnings can be asserted. */
+function capture(fn) {
+  const out = [];
+  const orig = { log: console.log, warn: console.warn, error: console.error };
+  console.log = console.warn = console.error = (m) => out.push(String(m));
+  try { fn(); } finally { Object.assign(console, orig); }
+  return out.join("\n");
+}
+
+const healthy = capture(() =>
+  ll.reportBirthdayMatch({
+    matchedRules: new Set(["Birthday Reward"]),
+    allRuleNames: new Set(["Birthday Reward"]),
+    birthday: 23,
+    valueSpread: new Map([[400, 12], [500, 6], [600, 4], [700, 1]]),
+  }),
+);
+check("tiered spread is reported as consistent", healthy.includes("consistent with a tiered birthday reward"));
+check("tiered spread raises no wrong-rule warning", !healthy.includes("WRONG rule"));
+
+const oneValue = capture(() =>
+  ll.reportBirthdayMatch({
+    matchedRules: new Set(["Birthday Email"]),
+    allRuleNames: new Set(["Birthday Email"]),
+    birthday: 31,
+    valueSpread: new Map([[50, 31]]),
+  }),
+);
+check("a single repeated value is flagged as the wrong rule", oneValue.includes("WRONG rule"));
+check("an unknown tier value is called out", oneValue.includes("not a known tier value"));
+
+const noMatch = capture(() =>
+  ll.reportBirthdayMatch({
+    matchedRules: new Set(),
+    allRuleNames: new Set(["Order", "Enrolled"]),
+    birthday: 0,
+    valueSpread: new Map(),
+  }),
+);
+check("no match lists the rule names that were seen", noMatch.includes("Enrolled"));
+
+check("plausible liability passes the band",
+  capture(() => ll.reportPointsLiability(1_487_320, 8214)).includes("within the expected order of magnitude"));
+check("10x too high is flagged with the likely cause",
+  capture(() => ll.reportPointsLiability(48_900_000, 8214)).includes("lifetime-earned total"));
+check("10x too low is flagged with the likely cause",
+  capture(() => ll.reportPointsLiability(94_100, 8214)).includes("points_pending"));
+check("liability is converted at 100 points = 1 JOD",
+  capture(() => ll.reportPointsLiability(1_500_000, 100)).includes("15,000 JOD"));
+
 /* ---------------------------------------------------------- redaction -- */
 group("secret redaction");
 process.env.KLAVIYO_API_KEY = "pk_thisisaverysecretklaviyokey123456";

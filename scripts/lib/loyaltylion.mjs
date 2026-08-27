@@ -73,7 +73,9 @@ export async function fetchSnapshot() {
   }
   log.ok(`loyalty: ${customers} customers scanned across ${Object.values(counts).reduce((a, b) => a + b, 0)} tiered members`);
 
-  return { counts, pointsOutstanding: int(pointsOutstanding), customers };
+  const points = int(pointsOutstanding);
+  reportPointsLiability(points, customers);
+  return { counts, pointsOutstanding: points, customers };
 }
 
 /**
@@ -81,10 +83,17 @@ export async function fetchSnapshot() {
  *
  * A redemption is a transaction whose resource is a claimed reward. Birthday
  * rewards are identified by the rule name, because LoyaltyLion has no
- * dedicated birthday activity type — the rule is merchant-configured. The
- * matched rule names are logged on every run so a renamed rule shows up as a
- * visible warning rather than a silent zero.
+ * dedicated birthday activity type — the rule is merchant-configured, so a
+ * name match is the only handle available.
+ *
+ * Because that match is a guess, the run reports enough to falsify it. The
+ * birthday reward is points-based and varies by tier (400 Blue → 700 Platinum),
+ * so a CORRECT match shows a spread of point values across those tiers. A
+ * single repeated value means the match has latched onto the wrong rule, and
+ * the run says so rather than quietly returning a plausible number.
  */
+export const BIRTHDAY_TIER_POINTS = [400, 500, 600, 700];
+
 export async function fetchPeriodActivity(from, to) {
   const min = `${from}T00:00:00+03:00`;
   const max = `${to}T23:59:59+03:00`;
@@ -99,19 +108,68 @@ export async function fetchPeriodActivity(from, to) {
   }
 
   let birthday = 0;
-  const ruleNames = new Set();
+  const allRuleNames = new Set();
+  const matchedRules = new Set();
+  const valueSpread = new Map(); // points value -> how many times it was issued
+
   for await (const batch of paginate(`/activities?${q}`, "activities", "activities")) {
     for (const a of batch) {
       const name = `${a.rule?.name ?? ""} ${a.rule?.title ?? ""}`.trim();
-      if (name) ruleNames.add(name);
-      if (/birthday/i.test(name) && a.state === "approved") birthday++;
+      if (name) allRuleNames.add(name);
+      if (!/birthday/i.test(name)) continue;
+      matchedRules.add(name);
+      if (a.state !== "approved") continue;
+      birthday++;
+      const v = Number(a.value ?? 0);
+      valueSpread.set(v, (valueSpread.get(v) ?? 0) + 1);
     }
   }
-  const birthdayRules = [...ruleNames].filter((n) => /birthday/i.test(n));
-  if (birthdayRules.length) log.ok(`birthday rules matched: ${birthdayRules.join(", ")}`);
-  else log.warn("no rule name containing 'birthday' was seen in this period — birthday_rewards_issued will be 0");
 
-  return { redemptions, birthdayRewards: birthday };
+  reportBirthdayMatch({ matchedRules, allRuleNames, birthday, valueSpread });
+  return { redemptions, birthdayRewards: birthday, valueSpread, matchedRules: [...matchedRules] };
+}
+
+/** Prints the birthday-rule evidence loudly enough to be checked at a glance. */
+export function reportBirthdayMatch({ matchedRules, allRuleNames, birthday, valueSpread }) {
+  log.info("");
+  log.info("── birthday reward match ──────────────────────────────────");
+  if (!matchedRules.size) {
+    log.warn("NO rule name containing 'birthday' was seen in this period.");
+    log.warn("birthday_rewards_issued will be 0. Rule names that WERE seen:");
+    for (const n of [...allRuleNames].slice(0, 20)) log.warn(`    ${n}`);
+    if (allRuleNames.size > 20) log.warn(`    … and ${allRuleNames.size - 20} more`);
+    log.info("───────────────────────────────────────────────────────────");
+    return;
+  }
+
+  log.ok(`matched rule(s): ${[...matchedRules].join(" | ")}`);
+  log.ok(`${birthday} approved birthday reward(s) in the period`);
+
+  const values = [...valueSpread.entries()].sort((a, b) => a[0] - b[0]);
+  if (!values.length) {
+    log.warn("no approved rewards to check point values against");
+  } else {
+    log.info("  points issued:");
+    for (const [v, n] of values) {
+      const known = BIRTHDAY_TIER_POINTS.includes(v) ? "" : "   ← not a known tier value";
+      log.info(`    ${String(v).padStart(5)} points  ×${n}${known}`);
+    }
+    // The falsification test.
+    if (values.length === 1) {
+      log.warn(
+        `ALL rewards issued the same ${values[0][0]} points. The birthday reward should vary ` +
+          `by tier (${BIRTHDAY_TIER_POINTS.join("/")}), so this match is probably the WRONG rule.`,
+      );
+    } else {
+      const seen = values.map(([v]) => v).filter((v) => BIRTHDAY_TIER_POINTS.includes(v));
+      const missing = BIRTHDAY_TIER_POINTS.filter((v) => !seen.includes(v));
+      log.ok(`spread across ${values.length} distinct value(s) — consistent with a tiered birthday reward`);
+      if (missing.length) {
+        log.info(`  (no ${missing.join("/")} point rewards this period, which is normal for a short range)`);
+      }
+    }
+  }
+  log.info("───────────────────────────────────────────────────────────");
 }
 
 export function toSnapshotRow({ counts, pointsOutstanding }, { redemptions, birthdayRewards }, snapshotDate) {
@@ -132,3 +190,40 @@ export function toSnapshotRow({ counts, pointsOutstanding }, { redemptions, birt
 
 /** 100 points = 1 JOD, for the outstanding-liability figure. */
 export const POINTS_PER_JOD = 100;
+
+/**
+ * Expected order of magnitude for points outstanding, used only to sanity
+ * check the assumption that "outstanding" means the sum of points_approved.
+ * The reference point is roughly 1.5M points ≈ 15,000 JOD; anything an order
+ * of magnitude off in either direction means the assumption is wrong, not
+ * that the business changed overnight. Override with LL_POINTS_EXPECTED if
+ * the programme genuinely grows past the band.
+ */
+export const POINTS_EXPECTED = Number(process.env.LL_POINTS_EXPECTED ?? 1_500_000);
+
+export function reportPointsLiability(points, customers) {
+  const jod = points / POINTS_PER_JOD;
+  const low = POINTS_EXPECTED / 10;
+  const high = POINTS_EXPECTED * 10;
+
+  log.info("");
+  log.info("── points outstanding ─────────────────────────────────────");
+  log.ok(`${points.toLocaleString("en-US")} points  ≈  ${jod.toLocaleString("en-US", { maximumFractionDigits: 3 })} JOD liability`);
+  log.info(`  (sum of points_approved across ${customers.toLocaleString("en-US")} customers, at 100 points = 1 JOD)`);
+
+  if (points < low || points > high) {
+    log.warn(
+      `this is more than an order of magnitude from the expected ~${POINTS_EXPECTED.toLocaleString("en-US")} points ` +
+        `(~${(POINTS_EXPECTED / POINTS_PER_JOD).toLocaleString("en-US")} JOD).`,
+    );
+    log.warn(
+      points < low
+        ? "TOO LOW: points_approved may already be net of spent points, or most points sit in points_pending."
+        : "TOO HIGH: points_approved may be a lifetime-earned total rather than a current balance.",
+    );
+    log.warn("Check this against the LoyaltyLion dashboard before trusting the figure.");
+  } else {
+    log.ok(`within the expected order of magnitude (${low.toLocaleString("en-US")} – ${high.toLocaleString("en-US")} points)`);
+  }
+  log.info("───────────────────────────────────────────────────────────");
+}

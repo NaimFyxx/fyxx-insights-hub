@@ -90,12 +90,24 @@ by frontend code — the service-role key bypasses row-level security entirely.
 
 ## Known assumptions worth checking on the first real run
 
+Both of the LoyaltyLion figures rest on an assumption, so every run prints the
+evidence needed to falsify it.
+
 - **Points outstanding** is the sum of `points_approved` across all customers.
-  Compare it against the LoyaltyLion dashboard once and confirm it matches.
+  The run prints the JOD liability at 100 points = 1 JOD and checks it against
+  an expected order of magnitude (~1.5M points ≈ 15,000 JOD). Outside that band
+  it warns, and names the likely cause: too low usually means `points_approved`
+  is already net of spent points or the balance sits in `points_pending`; too
+  high usually means it is a lifetime-earned total rather than a current
+  balance. Override the reference with `LL_POINTS_EXPECTED` if the programme
+  genuinely outgrows the band.
 - **Birthday rewards** are matched by looking for "birthday" in the rule name,
-  since LoyaltyLion has no dedicated birthday activity type. The matched rule
-  names are printed on every run; if a rule gets renamed you will see a warning
-  rather than a silent zero.
+  since LoyaltyLion has no dedicated birthday activity type. Because that is a
+  guess, the run prints the matched rule names and a histogram of the points
+  issued. The birthday reward is tiered (400 Blue → 700 Platinum), so a correct
+  match shows a spread across those values. A single repeated value is flagged
+  as probably the wrong rule, and no match at all lists the rule names that
+  were actually seen.
 - **Shopify totals** are `currentTotalPriceSet` for non-cancelled, non-POS
   orders, VAT-inclusive at 16% exactly as Shopify reports them. No VAT is
   stripped at fetch time.

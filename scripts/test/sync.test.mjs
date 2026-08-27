@@ -292,6 +292,10 @@ check("liability converts at 100 points = 1 JOD",
 /* ---------------------------------------------------------- redaction -- */
 group("secret redaction");
 process.env.KLAVIYO_API_KEY = "pk_thisisaverysecretklaviyokey123456";
+// Fixtures deliberately avoid Shopify's real token shape (shpat_ + 32 HEX).
+// A hex-shaped fake matches GitHub's secret scanner and blocks the push, even
+// though it is invented. These contain non-hex letters, so they exercise the
+// redactor without tripping the scanner.
 process.env.SHOPIFY_ADMIN_TOKEN = "shpat_NOT_A_REAL_TOKEN_test_fixture_only";
 const { redact } = await import("../lib/env.mjs");
 const secrets = [process.env.KLAVIYO_API_KEY, process.env.SHOPIFY_ADMIN_TOKEN];

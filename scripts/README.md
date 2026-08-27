@@ -24,7 +24,7 @@ neither the tables nor `sync_log`. Always worth doing first on a new range.
 Tests (no network or credentials needed):
 
 ```bash
-node scripts/test/sync.test.mjs
+npm run test:sync
 ```
 
 ## Two revenue figures, on purpose
@@ -79,6 +79,31 @@ sync actually did rather than guessing:
 `duration_ms`, `message`.
 
 Failures are logged too, with a redacted message.
+
+## Shopify authentication
+
+Shopify removed admin-created custom apps on 1 January 2026, so new apps no
+longer issue a permanent `shpat_` token. The app "Fyxx Insights Hub" is a Dev
+Dashboard app, which uses the **client credentials grant**:
+
+    POST https://drynksapp.myshopify.com/admin/oauth/access_token
+    Content-Type: application/x-www-form-urlencoded
+    grant_type=client_credentials & client_id=… & client_secret=…
+    -> { access_token, scope, expires_in: 86399 }
+
+The token lasts about 24 hours and is refreshed by repeating the same request.
+The script exchanges once at the start of a run, keeps the token in memory
+only, refreshes it five minutes before expiry, and retries once on a 401 in
+case a long backfill outlives it anyway. The token is never written to disk,
+to a log line, or to `sync_log`; the client secret and the token are both on
+the redaction list.
+
+If `SHOPIFY_ADMIN_TOKEN` is set it takes precedence and no exchange happens,
+so a legacy app still works if we ever need one.
+
+Note: this grant only works when the app and the store are in the **same
+Shopify organization**. A 400 or 403 on the exchange usually means that, not a
+bad secret, and the error message says so.
 
 ## Secrets
 

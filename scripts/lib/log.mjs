@@ -32,7 +32,7 @@ export class Limiter {
     this.chain = Promise.resolve();
   }
   run(fn) {
-    this.chain = this.chain.then(async () => {
+    const result = this.chain.then(async () => {
       const wait = this.last + this.minIntervalMs - Date.now();
       if (wait > 0) {
         if (wait > 5000) log.info(`waiting ${Math.round(wait / 1000)}s for ${this.name} rate limit`);
@@ -41,7 +41,16 @@ export class Limiter {
       this.last = Date.now();
       return fn();
     });
-    return this.chain;
+    // The queue must keep its place even when a task fails. Assigning the
+    // rejected promise back to this.chain would poison the limiter: every
+    // later run() would chain onto a rejected promise and reject immediately
+    // without ever calling fn, so one failed request would kill the rest of
+    // the run and report the FIRST error over and over.
+    this.chain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 }
 

@@ -263,10 +263,30 @@ function preflight(sources, dryRun) {
   }
   if (sources.includes("klaviyo"))
     required.push(["KLAVIYO_API_KEY", "Klaviyo → Settings → Account → API keys → Create Private API Key (campaigns:read, flows:read, metrics:read)"]);
-  if (sources.includes("shopify"))
-    required.push(["SHOPIFY_ADMIN_TOKEN", "Shopify → Settings → Apps and sales channels → Develop apps → Admin API access token (read_orders + read_all_orders)"]);
-
   const missing = required.filter(([k]) => !process.env[k]);
+
+  // Shopify accepts either the Dev Dashboard client credentials (current) or a
+  // legacy shpat_ token, if one still exists from an admin-created custom app.
+  if (sources.includes("shopify")) {
+    const hasLegacy = Boolean(process.env.SHOPIFY_ADMIN_TOKEN);
+    const hasId = Boolean(process.env.SHOPIFY_CLIENT_ID);
+    const hasSecret = Boolean(process.env.SHOPIFY_CLIENT_SECRET);
+    if (!hasLegacy && !(hasId && hasSecret)) {
+      if (hasId !== hasSecret) {
+        // Half-configured is worth calling out separately: it is nearly always
+        // a paste that missed one of the two fields.
+        missing.push([
+          hasId ? "SHOPIFY_CLIENT_SECRET" : "SHOPIFY_CLIENT_ID",
+          `Shopify Dev Dashboard → Fyxx Insights Hub → ${hasId ? "Client secret" : "Client ID"} (the other half is already set)`,
+        ]);
+      } else {
+        missing.push([
+          "SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET",
+          "Shopify Dev Dashboard → Fyxx Insights Hub → API credentials (or set a legacy SHOPIFY_ADMIN_TOKEN)",
+        ]);
+      }
+    }
+  }
 
   // LoyaltyLion accepts either the current Bearer key or the deprecated pair.
   if (sources.includes("loyaltylion")) {

@@ -4,25 +4,133 @@ import { Limiter, httpJson, withRetry, log, money3 } from "./log.mjs";
 const API_VERSION = "2026-07";
 const limiter = new Limiter(600, "Shopify");
 
-function endpoint() {
-  const domain = optional("SHOPIFY_STORE_DOMAIN") || "drynksapp.myshopify.com";
-  return `https://${domain}/admin/api/${API_VERSION}/graphql.json`;
+function shopDomain() {
+  return optional("SHOPIFY_STORE_DOMAIN") || "drynksapp.myshopify.com";
 }
 
-const headers = () => ({
-  "X-Shopify-Access-Token": need(
-    "SHOPIFY_ADMIN_TOKEN",
-    "Shopify → Settings → Apps and sales channels → Develop apps → Admin API access token",
-  ),
+function endpoint() {
+  return `https://${shopDomain()}/admin/api/${API_VERSION}/graphql.json`;
+}
+
+/* ------------------------------------------------------------------------
+ * Access tokens.
+ *
+ * Shopify stopped allowing admin-created custom apps on 1 January 2026, so
+ * new apps no longer get a permanent shpat_ token. Dev Dashboard apps instead
+ * exchange a Client ID and Client Secret for an access token that lives about
+ * 24 hours (`expires_in` is 86399). Refreshing is just the same request again.
+ *
+ * Confirmed against Shopify's client credentials grant documentation:
+ *   POST https://{shop}.myshopify.com/admin/oauth/access_token
+ *   Content-Type: application/x-www-form-urlencoded
+ *   grant_type=client_credentials & client_id=… & client_secret=…
+ *   -> { access_token, scope, expires_in }
+ * The token then goes in the X-Shopify-Access-Token header, exactly as the
+ * legacy token did, so only the acquisition changes.
+ *
+ * The token lives in memory for the run and is never written to disk, to a
+ * log line, or to sync_log. Both credentials are on the redaction list.
+ * --------------------------------------------------------------------- */
+
+const REFRESH_MARGIN_MS = 5 * 60 * 1000; // refresh 5 min early, never mid-request
+let token = { value: null, expiresAt: 0, legacy: false };
+
+async function accessToken({ force = false } = {}) {
+  // A legacy app token, if one is still configured, never expires.
+  const legacy = optional("SHOPIFY_ADMIN_TOKEN");
+  if (legacy) {
+    if (!token.legacy) {
+      log.info("Shopify: using the legacy SHOPIFY_ADMIN_TOKEN");
+      token.legacy = true;
+    }
+    return legacy;
+  }
+
+  if (!force && token.value && Date.now() < token.expiresAt - REFRESH_MARGIN_MS) {
+    return token.value;
+  }
+
+  const clientId = need("SHOPIFY_CLIENT_ID", "Shopify Dev Dashboard → your app → Client ID");
+  const clientSecret = need("SHOPIFY_CLIENT_SECRET", "Shopify Dev Dashboard → your app → Client secret");
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+
+  let res;
+  try {
+    res = await withRetry("shopify token exchange", () =>
+      httpJson(
+        `https://${shopDomain()}/admin/oauth/access_token`,
+        { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body },
+        "shopify token exchange",
+      ),
+    );
+  } catch (err) {
+    // The two failures worth naming, because the generic message is unhelpful.
+    if (err.status === 401 || /invalid_client/i.test(err.message)) {
+      throw new Error(
+        "Shopify rejected the client credentials. Check SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET " +
+          "are copied from the same app, with no trailing whitespace.",
+      );
+    }
+    if (err.status === 400 || err.status === 403) {
+      throw new Error(
+        `Shopify refused the client credentials grant for ${shopDomain()}. This grant only works when ` +
+          "the app and the store are in the SAME Shopify organization — check the app is installed on " +
+          "this store and both sit under the same organization in the Dev Dashboard.",
+      );
+    }
+    throw err;
+  }
+
+  if (!res?.access_token) throw new Error("Shopify token exchange returned no access_token");
+
+  const ttlMs = Number(res.expires_in ?? 86399) * 1000;
+  token = { value: res.access_token, expiresAt: Date.now() + ttlMs, legacy: false };
+
+  // Log the shape of what we got, never the token itself.
+  const hours = Math.round(ttlMs / 3600000);
+  log.ok(`Shopify: access token obtained, valid ~${hours}h, scopes: ${res.scope ?? "(none reported)"}`);
+  return token.value;
+}
+
+const headers = async () => ({
+  "X-Shopify-Access-Token": await accessToken(),
   "content-type": "application/json",
 });
 
-async function gql(query, variables, label) {
-  const res = await limiter.run(() =>
-    withRetry(label, () =>
-      httpJson(endpoint(), { method: "POST", headers: headers(), body: JSON.stringify({ query, variables }) }, label),
-    ),
-  );
+/**
+ * A GraphQL call that survives its own token expiring.
+ *
+ * Proactive refresh (5 minutes before expiry) handles the normal case, but a
+ * 90-day backfill runs for the better part of an hour and could still be
+ * unlucky, so a 401 triggers one forced refresh and a single retry. Beyond
+ * that the error is real and is allowed through.
+ */
+async function gql(query, variables, label, { authRetried = false } = {}) {
+  let res;
+  try {
+    res = await limiter.run(() =>
+      withRetry(label, async () =>
+        httpJson(
+          endpoint(),
+          { method: "POST", headers: await headers(), body: JSON.stringify({ query, variables }) },
+          label,
+        ),
+      ),
+    );
+  } catch (err) {
+    if ((err.status === 401 || err.status === 403) && !authRetried && !optional("SHOPIFY_ADMIN_TOKEN")) {
+      log.info("Shopify token was rejected mid-run; refreshing and retrying once");
+      await accessToken({ force: true });
+      return gql(query, variables, label, { authRetried: true });
+    }
+    throw err;
+  }
+
   if (res.errors?.length) {
     const msg = res.errors.map((e) => e.message).join("; ");
     // The single most likely misconfiguration, called out explicitly.

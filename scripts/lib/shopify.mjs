@@ -77,10 +77,17 @@ async function accessToken({ force = false } = {}) {
       );
     }
     if (err.status === 400 || err.status === 403) {
+      // Keep Shopify's own wording. `shop_not_permitted` means the store is
+      // not in the app's organization; anything else here is a different
+      // problem and the raw text is the only way to tell them apart.
+      const shopNotPermitted = /shop_not_permitted/i.test(err.message);
       throw new Error(
-        `Shopify refused the client credentials grant for ${shopDomain()}. This grant only works when ` +
-          "the app and the store are in the SAME Shopify organization — check the app is installed on " +
-          "this store and both sit under the same organization in the Dev Dashboard.",
+        `Shopify refused the client credentials grant for ${shopDomain()}.\n` +
+          `  Shopify said: ${err.message}\n` +
+          (shopNotPermitted
+            ? "  shop_not_permitted means the STORE IS NOT IN THE APP'S ORGANIZATION. Compare the org id in\n" +
+              "  the Dev Dashboard URL (dev.shopify.com/dashboard/<org-id>) against the org that owns the store."
+            : "  This grant requires the app and store to be in the same Shopify organization."),
       );
     }
     throw err;

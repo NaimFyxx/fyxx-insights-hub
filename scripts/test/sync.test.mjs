@@ -77,6 +77,14 @@ check("flow money at 3dp", flows[0].revenue_jod === 744.001);
 check("flow has the new clicked column", flows[0].clicked === 22);
 check("flow row carries its date", flows[0].date === "2026-08-15");
 
+const legacySpelling = toFlowRows(
+  [{ flowId: "f9", messageId: "fm9", flowName: "Push Flow", channel: "mobile_push",
+     s: { recipients: 10, opens_unique: 3, conversions: 1, conversion_value: 12.5 } }],
+  "2026-08-15",
+);
+check("a row tagged mobile_push still routes to push, not flows",
+  legacySpelling.flows.length === 0 && legacySpelling.push.length === 1);
+
 /* --------------------------------------------------------- sales rows -- */
 group("shopify shaping");
 const sales = toSalesRows(
@@ -88,6 +96,25 @@ check("every day in range gets a row", sales.length === 2);
 check("revenue at 3dp", sales[0].total_online_revenue_jod === 2431.667);
 check("attributed revenue at 3dp", sales[0].klaviyo_attributed_revenue_jod === 512.334);
 check("a day with no orders is zero, not null", sales[1].total_online_revenue_jod === 0 && sales[1].orders === 0);
+
+/* --------------------------------------------------- channel vocabularies -- */
+group("klaviyo channel vocabularies");
+{
+  const k = await import("../lib/klaviyo.mjs");
+  // Klaviyo uses two different names for push depending on the endpoint.
+  // Getting these the wrong way round is a 400 that blames "channel".
+  check("campaigns LIST endpoint uses mobile_push", k.LIST_CHANNEL.push === "mobile_push", k.LIST_CHANNEL.push);
+  check("VALUES REPORT endpoints use push-notification",
+    k.REPORT_CHANNEL.push === "push-notification", k.REPORT_CHANNEL.push);
+  check("the two vocabularies are genuinely different",
+    k.LIST_CHANNEL.push !== k.REPORT_CHANNEL.push);
+  check("email is spelled the same in both", k.LIST_CHANNEL.email === k.REPORT_CHANNEL.email);
+  check("isPush accepts the report spelling", k.isPush("push-notification"));
+  check("isPush accepts the list spelling", k.isPush("mobile_push"));
+  check("isPush rejects email", !k.isPush("email"));
+  check("isPush rejects sms and whatsapp", !k.isPush("sms") && !k.isPush("whatsapp"));
+  check("isPush rejects undefined", !k.isPush(undefined));
+}
 
 /* ------------------------------------------------------------ limiter -- */
 group("rate limiter");

@@ -29,6 +29,32 @@ const postReport = (path, body, label) =>
     ),
   );
 
+/* ------------------------------------------------------------------------
+ * Channel vocabularies. Klaviyo uses TWO DIFFERENT NAMES for push depending
+ * on which endpoint you are talking to, and mixing them up produces a 400
+ * that names the wrong culprit. Confirmed against the current docs:
+ *
+ *   /api/campaigns          messages.channel   email | sms | mobile_push
+ *   values reports          send_channel       email | sms | push-notification | whatsapp
+ *
+ * These constants exist so the difference is stated once, in the open, rather
+ * than being an easily-copied literal in three places.
+ * --------------------------------------------------------------------- */
+
+/** Values accepted by the campaigns LIST endpoint's messages.channel filter. */
+export const LIST_CHANNEL = { email: "email", push: "mobile_push" };
+
+/** Values returned/accepted by the VALUES REPORT endpoints' send_channel. */
+export const REPORT_CHANNEL = { email: "email", push: "push-notification" };
+
+/**
+ * Both spellings mean push. Groupings come from the report endpoints and
+ * metadata from the list endpoint, so anything routing on channel has to
+ * accept either without caring which endpoint it came from.
+ */
+const PUSH_ALIASES = new Set([LIST_CHANNEL.push, REPORT_CHANNEL.push]);
+export const isPush = (channel) => PUSH_ALIASES.has(channel);
+
 /** Day boundaries in Amman time, so a "day" means what it means in the shop. */
 const dayStart = (d) => `${d}T00:00:00${TZ_OFFSET}`;
 const dayEnd = (d) => `${d}T23:59:59${TZ_OFFSET}`;
@@ -67,7 +93,7 @@ export async function findPlacedOrderMetricId() {
  * --------------------------------------------------------------------- */
 export async function fetchCampaignMeta(from, to) {
   const meta = new Map();
-  for (const channel of ["email", "push-notification"]) {
+  for (const channel of [LIST_CHANNEL.email, LIST_CHANNEL.push]) {
     // Campaigns must be filtered by channel; the endpoint requires it.
     // A 45-day lookback catches campaigns scheduled well before they sent.
     const since = new Date(new Date(`${from}T00:00:00Z`).getTime() - 45 * 864e5)
@@ -204,8 +230,6 @@ export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId
 /** ------------------------------------------------------------------------
  * Shaping report rows into table rows.
  * --------------------------------------------------------------------- */
-const isPush = (channel) => channel === "push-notification";
-
 export function toCampaignRows(results, meta) {
   const email = [];
   const push = [];

@@ -42,6 +42,21 @@ A campaign sent on the 3rd that converts on the 7th books its revenue on the
 that can be compared against Shopify's daily total, because both are dated by
 when the order happened.
 
+## Klaviyo channel names
+
+Klaviyo uses two different names for the push channel depending on the
+endpoint, and mixing them up returns a 400 that blames "channel" without
+saying which vocabulary it wanted:
+
+| Endpoint | Field | Push value |
+|---|---|---|
+| `/api/campaigns` | `messages.channel` | `mobile_push` |
+| `/api/campaign-values-reports`, `/api/flow-values-reports` | `send_channel` | `push-notification` |
+
+`LIST_CHANNEL` and `REPORT_CHANNEL` in `lib/klaviyo.mjs` hold these separately
+so the difference is stated once. `isPush()` accepts either spelling, because
+groupings arrive from the report endpoints and metadata from the list endpoint.
+
 ## Idempotency
 
 Every write is an upsert against a unique index:

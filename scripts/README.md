@@ -130,7 +130,19 @@ by frontend code — the service-role key bypasses row-level security entirely.
 
 ## Known assumptions worth checking on the first real run
 
-Both of the LoyaltyLion figures rest on an assumption, so every run prints the
+### LoyaltyLion field paths, established from live data
+
+- The tier name is at **`loyalty_tier_membership.loyalty_tier.name`**. It is
+  nested two levels down; reading `…membership.tier.name` yields `undefined`
+  for every customer and produces a snapshot of four zeros that looks valid.
+- `/v2/customers` returns **every Shopify customer**, not just members. Only
+  rows with `enrolled === true` are counted. On this account that is 11,909 of
+  21,240 — the rest are guests who never joined.
+- **Points outstanding is `points_approved - points_spent`**, over enrolled
+  members only. `points_approved` alone is the lifetime approved total and
+  overstates the liability by whatever has already been redeemed.
+
+Both figures rest on an assumption, so every run prints the
 evidence needed to falsify it.
 
 - **Points outstanding** is the sum of `points_approved` across all customers.

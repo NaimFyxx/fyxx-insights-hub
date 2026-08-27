@@ -165,6 +165,12 @@ async function syncLoyalty({ from, to, dryRun }) {
   // tier counts, which is the entire reason this table exists.
   const snapshotDate = ammanToday();
   const snap = await ll.fetchSnapshot();
+
+  // Refuses an impossible snapshot before anything else happens. A row of
+  // zero tier counts would look like real data and would silently break every
+  // "vs prior month" comparison built on top of it.
+  ll.assertSnapshotUsable(snap);
+
   const period = await ll.fetchPeriodActivity(from, to);
   const row = ll.toSnapshotRow(snap, period, snapshotDate);
 

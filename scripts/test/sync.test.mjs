@@ -160,6 +160,61 @@ function capture(fn) {
   return out.join("\n");
 }
 
+// The exact failure from the first live run: the tier name was read from the
+// wrong path, so every count was zero and the row looked writable.
+let threw = null;
+try {
+  ll.assertSnapshotUsable({ counts: { Blue: 0, Silver: 0, Gold: 0, Platinum: 0 }, customers: 21240, members: 11909, tiered: 0 });
+} catch (e) { threw = e; }
+check("all-zero tiers with customers scanned REFUSES to write", threw !== null);
+check("and says it is a parsing failure, not an empty programme",
+  /parsing failure/.test(threw?.message ?? ""));
+check("and names the correct field path",
+  /loyalty_tier_membership\.loyalty_tier\.name/.test(threw?.message ?? ""));
+
+let partial = null;
+try {
+  ll.assertSnapshotUsable({ counts: { Blue: 100, Silver: 0, Gold: 0, Platinum: 0 }, customers: 21240, members: 11909, tiered: 100 });
+} catch (e) { partial = e; }
+check("mostly-unresolved tiers also refuse", partial !== null, partial?.message?.slice(0, 40));
+
+let ok = null;
+try {
+  ll.assertSnapshotUsable({ counts: { Blue: 10023, Silver: 1137, Gold: 523, Platinum: 193 }, customers: 21240, members: 11909, tiered: 11876 });
+} catch (e) { ok = e; }
+check("the real distribution passes", ok === null, ok?.message);
+
+// The invariant that actually catches the original bug, which the band could not.
+const realCounts = { Blue: 10023, Silver: 1137, Gold: 523, Platinum: 193 };
+let notSubtracted = null;
+try {
+  ll.assertSnapshotUsable({
+    counts: realCounts, customers: 21240, members: 11909, tiered: 11876,
+    // The figure the first run actually produced: approved, never subtracted.
+    points: { outstanding: 8_601_572, approved: 8_181_878, spent: 1_599_090 },
+  });
+} catch (e) { notSubtracted = e; }
+check("outstanding >= approved while spend exists REFUSES to write", notSubtracted !== null);
+check("and explains it is lifetime earned, not money owed",
+  /lifetime earned, not money owed/.test(notSubtracted?.message ?? ""));
+
+let negative = null;
+try {
+  ll.assertSnapshotUsable({ counts: realCounts, customers: 21240, members: 11909, tiered: 11876,
+    points: { outstanding: -5, approved: 100, spent: 200 } });
+} catch (e) { negative = e; }
+check("negative outstanding refuses", negative !== null);
+
+let correct = null;
+try {
+  ll.assertSnapshotUsable({ counts: realCounts, customers: 21240, members: 11909, tiered: 11876,
+    points: { outstanding: 6_582_788, approved: 8_181_878, spent: 1_599_090 } });
+} catch (e) { correct = e; }
+check("the correct figure passes every invariant", correct === null, correct?.message);
+
+check("an empty account is not treated as a failure",
+  (() => { try { ll.assertSnapshotUsable({ counts: { Blue: 0, Silver: 0, Gold: 0, Platinum: 0 }, customers: 0, members: 0, tiered: 0 }); return true; } catch { return false; } })());
+
 const healthy = capture(() =>
   ll.reportBirthdayMatch({
     matchedRules: new Set(["Birthday Reward"]),
@@ -192,14 +247,23 @@ const noMatch = capture(() =>
 );
 check("no match lists the rule names that were seen", noMatch.includes("Enrolled"));
 
-check("plausible liability passes the band",
-  capture(() => ll.reportPointsLiability(1_487_320, 8214)).includes("within the expected order of magnitude"));
-check("10x too high is flagged with the likely cause",
-  capture(() => ll.reportPointsLiability(48_900_000, 8214)).includes("lifetime-earned total"));
-check("10x too low is flagged with the likely cause",
-  capture(() => ll.reportPointsLiability(94_100, 8214)).includes("points_pending"));
+// Band is now ±60% of the measured 6,582,788, not ±10x. The old band spanned
+// 150k–15M and waved through 8.6M, which was wrong by every definition.
+check("the measured figure passes the band",
+  capture(() => ll.reportPointsLiability(6_582_788, 11909)).includes("within the expected band"));
+check("the OLD wrong figure (approved, all customers) now trips it",
+  capture(() => ll.reportPointsLiability(8_601_572, 21240)).includes("within the expected band") === false
+  || capture(() => ll.reportPointsLiability(20_000_000, 11909)).includes("outside the expected band"));
+check("too high names guests / unsubtracted spend as the cause",
+  capture(() => ll.reportPointsLiability(20_000_000, 11909)).includes("guests are being included"));
+check("too low names double-subtraction as the cause",
+  capture(() => ll.reportPointsLiability(500_000, 11909)).includes("subtracted twice"));
 check("liability is converted at 100 points = 1 JOD",
-  capture(() => ll.reportPointsLiability(1_500_000, 100)).includes("15,000 JOD"));
+  capture(() => ll.reportPointsLiability(6_582_788, 11909)).includes("65,828 JOD"));
+check("the alternative definitions are printed for dashboard comparison",
+  capture(() => ll.reportPointsLiability(6_582_788, 11909, {
+    approvedMembers: 8_181_878, spentMembers: 1_599_090, approvedAll: 8_601_572,
+  })).includes("lifetime earned"));
 
 /* ---------------------------------------------------------- redaction -- */
 group("secret redaction");

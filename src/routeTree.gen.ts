@@ -10,33 +10,155 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthenticatedActivationsRouteImport } from './routes/_authenticated/activations'
+import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
+import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
+import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
+import { Route as AuthenticatedLoyaltyRouteImport } from './routes/_authenticated/loyalty'
+import { Route as AuthenticatedOverviewRouteImport } from './routes/_authenticated/overview'
+import { Route as AuthenticatedPushRouteImport } from './routes/_authenticated/push'
+import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedActivationsRoute =
+  AuthenticatedActivationsRouteImport.update({
+    id: '/activations',
+    path: '/activations',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCampaignsRoute = AuthenticatedCampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedExportRoute = AuthenticatedExportRouteImport.update({
+  id: '/export',
+  path: '/export',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFlowsRoute = AuthenticatedFlowsRouteImport.update({
+  id: '/flows',
+  path: '/flows',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLoyaltyRoute = AuthenticatedLoyaltyRouteImport.update({
+  id: '/loyalty',
+  path: '/loyalty',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOverviewRoute = AuthenticatedOverviewRouteImport.update({
+  id: '/overview',
+  path: '/overview',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPushRoute = AuthenticatedPushRouteImport.update({
+  id: '/push',
+  path: '/push',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedReportRoute = AuthenticatedReportRouteImport.update({
+  id: '/report',
+  path: '/report',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/activations': typeof AuthenticatedActivationsRoute
+  '/campaigns': typeof AuthenticatedCampaignsRoute
+  '/export': typeof AuthenticatedExportRoute
+  '/flows': typeof AuthenticatedFlowsRoute
+  '/loyalty': typeof AuthenticatedLoyaltyRoute
+  '/overview': typeof AuthenticatedOverviewRoute
+  '/push': typeof AuthenticatedPushRoute
+  '/report': typeof AuthenticatedReportRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/activations': typeof AuthenticatedActivationsRoute
+  '/campaigns': typeof AuthenticatedCampaignsRoute
+  '/export': typeof AuthenticatedExportRoute
+  '/flows': typeof AuthenticatedFlowsRoute
+  '/loyalty': typeof AuthenticatedLoyaltyRoute
+  '/overview': typeof AuthenticatedOverviewRoute
+  '/push': typeof AuthenticatedPushRoute
+  '/report': typeof AuthenticatedReportRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_authenticated/activations': typeof AuthenticatedActivationsRoute
+  '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
+  '/_authenticated/export': typeof AuthenticatedExportRoute
+  '/_authenticated/flows': typeof AuthenticatedFlowsRoute
+  '/_authenticated/loyalty': typeof AuthenticatedLoyaltyRoute
+  '/_authenticated/overview': typeof AuthenticatedOverviewRoute
+  '/_authenticated/push': typeof AuthenticatedPushRoute
+  '/_authenticated/report': typeof AuthenticatedReportRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/activations'
+    | '/campaigns'
+    | '/export'
+    | '/flows'
+    | '/loyalty'
+    | '/overview'
+    | '/push'
+    | '/report'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/activations'
+    | '/campaigns'
+    | '/export'
+    | '/flows'
+    | '/loyalty'
+    | '/overview'
+    | '/push'
+    | '/report'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/login'
+    | '/_authenticated/activations'
+    | '/_authenticated/campaigns'
+    | '/_authenticated/export'
+    | '/_authenticated/flows'
+    | '/_authenticated/loyalty'
+    | '/_authenticated/overview'
+    | '/_authenticated/push'
+    | '/_authenticated/report'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +170,108 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/activations': {
+      id: '/_authenticated/activations'
+      path: '/activations'
+      fullPath: '/activations'
+      preLoaderRoute: typeof AuthenticatedActivationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/campaigns': {
+      id: '/_authenticated/campaigns'
+      path: '/campaigns'
+      fullPath: '/campaigns'
+      preLoaderRoute: typeof AuthenticatedCampaignsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/export': {
+      id: '/_authenticated/export'
+      path: '/export'
+      fullPath: '/export'
+      preLoaderRoute: typeof AuthenticatedExportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/flows': {
+      id: '/_authenticated/flows'
+      path: '/flows'
+      fullPath: '/flows'
+      preLoaderRoute: typeof AuthenticatedFlowsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loyalty': {
+      id: '/_authenticated/loyalty'
+      path: '/loyalty'
+      fullPath: '/loyalty'
+      preLoaderRoute: typeof AuthenticatedLoyaltyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/overview': {
+      id: '/_authenticated/overview'
+      path: '/overview'
+      fullPath: '/overview'
+      preLoaderRoute: typeof AuthenticatedOverviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/push': {
+      id: '/_authenticated/push'
+      path: '/push'
+      fullPath: '/push'
+      preLoaderRoute: typeof AuthenticatedPushRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/report': {
+      id: '/_authenticated/report'
+      path: '/report'
+      fullPath: '/report'
+      preLoaderRoute: typeof AuthenticatedReportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedActivationsRoute: typeof AuthenticatedActivationsRoute
+  AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRoute
+  AuthenticatedExportRoute: typeof AuthenticatedExportRoute
+  AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
+  AuthenticatedLoyaltyRoute: typeof AuthenticatedLoyaltyRoute
+  AuthenticatedOverviewRoute: typeof AuthenticatedOverviewRoute
+  AuthenticatedPushRoute: typeof AuthenticatedPushRoute
+  AuthenticatedReportRoute: typeof AuthenticatedReportRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedActivationsRoute: AuthenticatedActivationsRoute,
+  AuthenticatedCampaignsRoute: AuthenticatedCampaignsRoute,
+  AuthenticatedExportRoute: AuthenticatedExportRoute,
+  AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
+  AuthenticatedLoyaltyRoute: AuthenticatedLoyaltyRoute,
+  AuthenticatedOverviewRoute: AuthenticatedOverviewRoute,
+  AuthenticatedPushRoute: AuthenticatedPushRoute,
+  AuthenticatedReportRoute: AuthenticatedReportRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

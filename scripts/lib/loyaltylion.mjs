@@ -1,6 +1,27 @@
 import { need, optional } from "./env.mjs";
 import { Limiter, httpJson, withRetry, log, int } from "./log.mjs";
 
+/* ===========================================================================
+ * ⚠️  LOYALTYLION SILENTLY IGNORES UNKNOWN QUERY PARAMETERS
+ *
+ * An unsupported filter does NOT return 4xx. It returns HTTP 200 with the
+ * full unfiltered result set. Probed on /v2/customers, all of these were
+ * accepted and all returned results identical to no filter at all:
+ *
+ *     ?enrolled=true            ?filter=enrolled
+ *     ?enrolled_at_min=...      ?has_loyalty_tier=true
+ *
+ * So a filter that "works" — 200, plausible JSON, sensible-looking rows — may
+ * be doing nothing whatsoever. Anyone adding a filter here and testing it by
+ * checking the status code will conclude it works and quietly process the
+ * entire customer list as though it were filtered.
+ *
+ * NEVER validate a LoyaltyLion filter by its status code. Validate it by
+ * comparing the RESULT COUNT against the same request without the filter. If
+ * the counts match, the filter is being ignored. `assertFilterHonoured()`
+ * below does exactly this; use it.
+ * ======================================================================== */
+
 const BASE = "https://api.loyaltylion.com/v2";
 const limiter = new Limiter(120, "LoyaltyLion"); // 20 req/s allowed; we stay well under.
 
@@ -22,6 +43,33 @@ function headers() {
 
 const get = (path, label) =>
   limiter.run(() => withRetry(label, () => httpJson(`${BASE}${path}`, { headers: headers() }, label)));
+
+/**
+ * Proves a query parameter is actually honoured before trusting it.
+ *
+ * Fetches one page with and one without the filter and compares counts. See
+ * the banner at the top of this file: LoyaltyLion answers 200 for parameters
+ * it ignores, so a status code proves nothing.
+ */
+export async function assertFilterHonoured(path, filterQuery, key = "customers") {
+  const sep = path.includes("?") ? "&" : "?";
+  const [filtered, unfiltered] = await Promise.all([
+    get(`${path}${sep}limit=50&${filterQuery}`, "filter probe (with)"),
+    get(`${path}${sep}limit=50`, "filter probe (without)"),
+  ]);
+  const a = (filtered[key] ?? []).length;
+  const b = (unfiltered[key] ?? []).length;
+  const sameIds =
+    a === b && (filtered[key] ?? []).every((x, i) => x.id === (unfiltered[key] ?? [])[i]?.id);
+  if (sameIds) {
+    throw new Error(
+      `LoyaltyLion is IGNORING the filter "${filterQuery}" — it returned HTTP 200 with the same ` +
+        `${a} records as the unfiltered request.\n  Do not trust this filter. Filter client-side instead.`,
+    );
+  }
+  log.ok(`filter "${filterQuery}" is honoured (${a} vs ${b} unfiltered)`);
+  return true;
+}
 
 /** Walks a cursor-paginated collection to the end. */
 async function* paginate(path, key, label) {

@@ -138,6 +138,19 @@ pulls in Realtime, which needs a native WebSocket and therefore Node 22+, and
 a nightly data sync has no use for a websocket. As written the script runs on
 any Node with `fetch` (18+). The frontend still uses `supabase-js` normally.
 
+> ### ⚠️ LoyaltyLion returns HTTP 200 for filters it ignores
+>
+> An unsupported query parameter does **not** error. It returns 200 with the
+> full unfiltered result set. `enrolled=true`, `filter=enrolled`,
+> `enrolled_at_min=...` and `has_loyalty_tier=true` were all accepted on
+> `/v2/customers` and all returned results identical to no filter at all.
+>
+> A filter can therefore look like it works — 200, valid JSON, sensible rows —
+> while doing nothing, and the caller silently processes the entire customer
+> list believing it was filtered. **Never validate a LoyaltyLion filter by its
+> status code.** Compare the result count against the same request without the
+> filter; `assertFilterHonoured()` in `lib/loyaltylion.mjs` does this for you.
+
 **LoyaltyLion has no server-side filter for members.** `/v2/customers` returns
 every Shopify customer — 21,240 here, of which 11,909 are enrolled — and the
 enrolled filter has to be applied client-side. Confirmed by probing: `enrolled`,
@@ -202,21 +215,39 @@ by frontend code — the service-role key bypasses row-level security entirely.
 - `/v2/customers` returns **every Shopify customer**, not just members. Only
   rows with `enrolled === true` are counted. On this account that is 11,909 of
   21,240 — the rest are guests who never joined.
-- **Points outstanding is `points_approved - points_spent`**, over enrolled
-  members only. `points_approved` alone is the lifetime approved total and
-  overstates the liability by whatever has already been redeemed.
+> ### ⚠️ `points_approved` is a BALANCE, not a lifetime total
+>
+> This is the single most misleading field in the LoyaltyLion API, because
+> `points_spent` sits directly beside it and reads like the other half of a
+> pair. **It is not.** `points_approved` is the customer's current spendable
+> balance, already net of redemptions and expiry. `points_spent` is a separate
+> **lifetime** counter. Subtracting it double-counts every redemption ever
+> made and understates the liability by about 25%.
+>
+> Measured against LoyaltyLion's own points accounting export for 2026-08-27,
+> whose "Total Outstanding Points (End of Day)" was **8,776,473**:
+>
+> | Definition | Figure | vs LoyaltyLion |
+> |---|---|---|
+> | `sum(points_approved)`, all customers | 8,601,572 | **-2%** <- correct |
+> | `sum(points_approved)`, members only | 8,184,625 | -7% |
+> | `sum(points_approved - points_spent)` | 6,582,788 | -25% |
+>
+> The 2% residual is timing between our scan and their end-of-day close.
+> Guests are included deliberately: an unenrolled customer's balance is still
+> money owed. Note this differs from the TIER counts, which are members only.
 
-Both figures rest on an assumption, so every run prints the
+Both LoyaltyLion figures rest on an assumption, so every run prints the
 evidence needed to falsify it.
 
-- **Points outstanding** is the sum of `points_approved` across all customers.
-  The run prints the JOD liability at 100 points = 1 JOD and checks it against
-  an expected order of magnitude (~1.5M points ≈ 15,000 JOD). Outside that band
-  it warns, and names the likely cause: too low usually means `points_approved`
-  is already net of spent points or the balance sits in `points_pending`; too
-  high usually means it is a lifetime-earned total rather than a current
-  balance. Override the reference with `LL_POINTS_EXPECTED` if the programme
-  genuinely outgrows the band.
+- **Points outstanding** is `sum(points_approved)` across **all** customers,
+  with no subtraction. Every run prints the JOD liability at 100 points = 1 JOD
+  and checks it against `LL_POINTS_EXPECTED` (8,776,473, +/-20%). That band is a
+  setup-time check only and will need raising as the programme grows; the
+  ongoing guard is a day-over-day comparison against our own previous
+  snapshot, which refuses to write if the balance moves more than 25%
+  overnight. A balance does not move that far in a day, so a jump of that size
+  means the field definition changed, not the business.
 - **Birthday rewards** are matched by looking for "birthday" in the rule name,
   since LoyaltyLion has no dedicated birthday activity type. Because that is a
   guess, the run prints the matched rule names and a histogram of the points

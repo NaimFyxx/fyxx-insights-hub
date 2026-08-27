@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
+import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
 import { Route as AuthenticatedOverviewRouteImport } from './routes/_authenticated/overview'
 
 const IndexRoute = IndexRouteImport.update({
@@ -34,6 +35,11 @@ const AuthenticatedCampaignsRoute = AuthenticatedCampaignsRouteImport.update({
   path: '/campaigns',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFlowsRoute = AuthenticatedFlowsRouteImport.update({
+  id: '/flows',
+  path: '/flows',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedOverviewRoute = AuthenticatedOverviewRouteImport.update({
   id: '/overview',
   path: '/overview',
@@ -44,12 +50,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
+  '/flows': typeof AuthenticatedFlowsRoute
   '/overview': typeof AuthenticatedOverviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
+  '/flows': typeof AuthenticatedFlowsRoute
   '/overview': typeof AuthenticatedOverviewRoute
 }
 export interface FileRoutesById {
@@ -58,19 +66,21 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
+  '/_authenticated/flows': typeof AuthenticatedFlowsRoute
   '/_authenticated/overview': typeof AuthenticatedOverviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/campaigns' | '/overview'
+  fullPaths: '/' | '/login' | '/campaigns' | '/flows' | '/overview'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/campaigns' | '/overview'
+  to: '/' | '/login' | '/campaigns' | '/flows' | '/overview'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/campaigns'
+    | '/_authenticated/flows'
     | '/_authenticated/overview'
   fileRoutesById: FileRoutesById
 }
@@ -110,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCampaignsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/flows': {
+      id: '/_authenticated/flows'
+      path: '/flows'
+      fullPath: '/flows'
+      preLoaderRoute: typeof AuthenticatedFlowsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/overview': {
       id: '/_authenticated/overview'
       path: '/overview'
@@ -122,11 +139,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRoute
+  AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
   AuthenticatedOverviewRoute: typeof AuthenticatedOverviewRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRoute,
+  AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
   AuthenticatedOverviewRoute: AuthenticatedOverviewRoute,
 }
 

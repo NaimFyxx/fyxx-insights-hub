@@ -1,0 +1,92 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useDateRange } from "@/context/date-range-context";
+import { fetchPush } from "@/lib/queries";
+import { num, pct, rate } from "@/lib/format";
+import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
+
+export const Route = createFileRoute("/_authenticated/push")({
+  head: () => ({
+    meta: [
+      { title: "Push — Fyxx Marketing" },
+      { name: "description", content: "Push notification reach grouped by source flow or campaign." },
+      { name: "robots", content: "noindex" },
+      { property: "og:title", content: "Push — Fyxx Marketing" },
+      {
+        property: "og:description",
+        content: "Push notification reach grouped by source flow or campaign.",
+      },
+    ],
+  }),
+  component: PushPage,
+});
+
+function PushPage() {
+  const { range, refreshKey } = useDateRange();
+  const { data, isLoading } = useQuery({
+    queryKey: ["push", range.from, range.to, refreshKey],
+    queryFn: () => fetchPush(range),
+  });
+
+  const rows = useMemo(() => {
+    const map = new Map<string, { name: string; type: string; sent: number; opened: number }>();
+    for (const r of data ?? []) {
+      const key = `${r.source_type}::${r.source_name}`;
+      const cur = map.get(key) ?? { name: r.source_name, type: r.source_type, sent: 0, opened: 0 };
+      cur.sent += r.sent;
+      cur.opened += r.opened;
+      map.set(key, cur);
+    }
+    return [...map.values()].sort((a, b) => b.sent - a.sent);
+  }, [data]);
+
+  const t = rows.reduce((a, r) => ({ sent: a.sent + r.sent, opened: a.opened + r.opened }), {
+    sent: 0,
+    opened: 0,
+  });
+
+  return (
+    <div className="space-y-8">
+      <PageHeader title="Push" subtitle="Grouped by the flow or campaign that sent the notification." />
+      <Panel title="Push notifications">
+        {isLoading ? (
+          <EmptyState>Loading…</EmptyState>
+        ) : rows.length === 0 ? (
+          <EmptyState>No push sends in range.</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>Source</Th>
+                <Th>Type</Th>
+                <Th align="right">Sent</Th>
+                <Th align="right">Opened</Th>
+                <Th align="right">Open rate</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={`${r.type}-${r.name}`}>
+                  <Td>{r.name}</Td>
+                  <Td>{r.type}</Td>
+                  <Td align="right">{num(r.sent)}</Td>
+                  <Td align="right">{num(r.opened)}</Td>
+                  <Td align="right">{pct(rate(r.opened, r.sent))}</Td>
+                </tr>
+              ))}
+              <TotalsRow>
+                <Td>Total</Td>
+                <Td>—</Td>
+                <Td align="right">{num(t.sent)}</Td>
+                <Td align="right">{num(t.opened)}</Td>
+                <Td align="right">{pct(rate(t.opened, t.sent))}</Td>
+              </TotalsRow>
+            </tbody>
+          </Table>
+        )}
+      </Panel>
+    </div>
+  );
+}

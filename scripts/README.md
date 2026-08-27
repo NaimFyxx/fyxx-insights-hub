@@ -172,6 +172,38 @@ of that Amman midnight. So `2026-08-23T21:00:00+00:00` *is* Amman's 24th.
 Both the bounds and the bucket labels are converted explicitly — reading the
 first ten characters of a bucket files the day under the previous date.
 
+## Shopify: the token has write scopes, the script does not
+
+> ### ⚠️ The Shopify token can write to the live store
+>
+> The token minted for this app carries **write scopes as well as read**. The
+> sync script must never use them — it is a reporting job against a live
+> store, and a mutation issued from here would alter real orders or products.
+>
+> `assertReadOnly()` in `lib/shopify.mjs` enforces this. It runs inside
+> `gql()`, which is the only path to the network, so nothing reaches Shopify
+> without passing it.
+>
+> It is an **allowlist, not a blocklist**: every top-level definition must be a
+> `query` or a `fragment`, or the document must be a bare anonymous selection
+> set. Anything else is refused — including operation types that do not exist
+> yet. A blocklist that rejected `mutation` would wave through whatever it had
+> not been taught about; this fails closed.
+>
+> It parses definition by definition rather than pattern-matching the text, so
+> it is not fooled by an operation named `Query`, a field called
+> `mutationCount`, or the word "mutation" inside a string or a comment — and
+> it still catches a mutation smuggled in after a valid query, or hidden
+> behind a commented-out line.
+>
+> Covered by `scripts/test/shopify-readonly.test.mjs`, which also asserts at
+> the source level that `gql()` still calls the guard before sending, so
+> removing the call fails the tests rather than silently re-arming the write
+> scopes.
+>
+> **If a write is ever genuinely needed, it does not belong in this script.**
+> Put it somewhere with its own narrowly-scoped token.
+
 ## Shopify authentication
 
 Shopify removed admin-created custom apps on 1 January 2026, so new apps no

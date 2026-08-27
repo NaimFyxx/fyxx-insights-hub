@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "sync": "node scripts/sync.mjs",
     "sync:dry": "node scripts/sync.mjs --dry-run",
-    "test:sync": "node scripts/test/sync.test.mjs && node scripts/test/shopify-auth.test.mjs"
+    "test:sync": "node scripts/test/sync.test.mjs && node scripts/test/shopify-auth.test.mjs && node scripts/test/shopify-readonly.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

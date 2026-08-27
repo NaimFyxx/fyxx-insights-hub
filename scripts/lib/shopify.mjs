@@ -118,6 +118,9 @@ const headers = async () => ({
  * that the error is real and is allowed through.
  */
 async function gql(query, variables, label, { authRetried = false } = {}) {
+  // Nothing reaches Shopify without passing this.
+  assertReadOnly(query, label);
+
   let res;
   try {
     res = await limiter.run(() =>
@@ -149,6 +152,139 @@ async function gql(query, variables, label, { authRetried = false } = {}) {
     throw new Error(`${label}: ${msg}`);
   }
   return res.data;
+}
+
+/* ===========================================================================
+ * READ-ONLY GUARD
+ *
+ * The Shopify token carries WRITE scopes as well as read. This script must
+ * never use them: it is a reporting sync against a live store, and a mutation
+ * issued from here would alter real orders or products.
+ *
+ * The guard is an ALLOWLIST, not a blocklist. Every top-level definition must
+ * be a `query` or a `fragment`, or the document must be a bare anonymous
+ * selection set. Anything else is refused, including operation types that do
+ * not exist yet. A blocklist of "reject mutation" would pass anything it had
+ * not been taught about; this fails closed instead.
+ *
+ * It runs inside gql(), which is the only path to the network, so nothing can
+ * reach Shopify without passing through it.
+ * ======================================================================== */
+
+/**
+ * Removes comments and string literals so the scanner cannot be fooled by a
+ * mutation hidden inside a string, nor tripped by the word "mutation"
+ * appearing innocently in one.
+ */
+function stripStringsAndComments(src) {
+  let out = "";
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === "#") {                                   // comment to end of line
+      while (i < src.length && src[i] !== "\n") i++;
+      out += " ";
+    } else if (c === '"' && src.slice(i, i + 3) === '"""') {
+      const end = src.indexOf('"""', i + 3);           // block string
+      i = end === -1 ? src.length : end + 2;
+      out += " ";
+    } else if (c === '"') {
+      i++;
+      while (i < src.length && src[i] !== '"') {
+        if (src[i] === "\\") i++;                     // skip escaped char
+        i++;
+      }
+      out += " ";
+    } else out += c;
+  }
+  return out;
+}
+
+/** Operation types this script is permitted to send. Nothing else, ever. */
+const ALLOWED_DEFINITIONS = new Set(["query", "fragment"]);
+
+/** Consumes a balanced {...} / (...) / [...] starting at `i`. Returns the index after it. */
+function consumeBalanced(src, i) {
+  const open = src[i];
+  const close = { "{": "}", "(": ")", "[": "]" }[open];
+  let depth = 0;
+  for (; i < src.length; i++) {
+    if (src[i] === open) depth++;
+    else if (src[i] === close) {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  throw new Error("unbalanced");
+}
+
+/**
+ * Throws unless every top-level definition in the document is read-only.
+ *
+ * Walks definition by definition rather than pattern-matching the text, so
+ * an operation NAME or a field cannot be mistaken for a keyword, and a
+ * keyword cannot hide inside a selection set. Exported for direct testing.
+ */
+export function assertReadOnly(document, label = "graphql") {
+  const src = stripStringsAndComments(String(document ?? ""));
+  if (!src.trim()) throw new Error(`${label}: refusing to send an empty GraphQL document`);
+
+  let i = 0;
+  let sawOperation = false;
+
+  const skipSpace = () => { while (i < src.length && /[\s,]/.test(src[i])) i++; };
+
+  try {
+    skipSpace();
+    while (i < src.length) {
+      if (src[i] === "{") {
+        // Anonymous operation — a bare selection set, always a read.
+        i = consumeBalanced(src, i);
+        sawOperation = true;
+        skipSpace();
+        continue;
+      }
+
+      const word = /^[_A-Za-z][_0-9A-Za-z]*/.exec(src.slice(i));
+      if (!word) {
+        throw new Error(
+          `${label}: refusing to send a GraphQL document with unparseable top-level syntax near "${src.slice(i, i + 24).trim()}".`,
+        );
+      }
+      const keyword = word[0];
+      if (!ALLOWED_DEFINITIONS.has(keyword)) {
+        throw new Error(
+          `${label}: REFUSED — this script is strictly read-only and will not send a "${keyword}" operation.\n` +
+            "  The Shopify token carries write scopes; only `query` and `fragment` are permitted here.\n" +
+            "  If a write is genuinely required, it does not belong in the reporting sync.",
+        );
+      }
+      i += keyword.length;
+
+      // Skip the operation name, variable definitions and directives, then
+      // consume the selection set. Variable defaults may contain braces, so
+      // parens and brackets are traversed whole rather than scanned through.
+      let guard = 0;
+      while (i < src.length && src[i] !== "{") {
+        if (src[i] === "(" || src[i] === "[") i = consumeBalanced(src, i);
+        else i++;
+        if (++guard > src.length) throw new Error("unbalanced");
+      }
+      if (i >= src.length) throw new Error("unbalanced");
+      i = consumeBalanced(src, i);
+      if (keyword === "query") sawOperation = true;
+      skipSpace();
+    }
+  } catch (err) {
+    if (err.message === "unbalanced") {
+      throw new Error(`${label}: refusing to send a GraphQL document with unbalanced braces.`);
+    }
+    throw err;
+  }
+
+  // A document of fragments alone sends nothing useful and suggests the real
+  // operation was lost somewhere; treat it as a mistake rather than run it.
+  if (!sawOperation) throw new Error(`${label}: refusing to send a GraphQL document with no operation.`);
+  return true;
 }
 
 const ORDERS_QUERY = `

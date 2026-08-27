@@ -21,6 +21,19 @@ node scripts/sync.mjs --from … --to … --force            # redo days already
 `--dry-run` fetches everything and prints what it *would* write, touching
 neither the tables nor `sync_log`. Always worth doing first on a new range.
 
+### Diagnosing a figure that looks wrong
+
+```bash
+node scripts/diagnose/loyalty.mjs
+```
+
+Read-only. Dumps a raw LoyaltyLion customer record with personal details
+masked, then scans the full list and prints the population breakdown, the tier
+distribution, and every candidate definition of "points outstanding" side by
+side. Keep it: it is the fastest way to tell a changed API from a changed
+business, and it is what established the field paths documented below. The
+tier-count failure message points at it by name.
+
 Tests (no network or credentials needed):
 
 ```bash
@@ -94,6 +107,35 @@ sync actually did rather than guessing:
 `duration_ms`, `message`.
 
 Failures are logged too, with a redacted message.
+
+## Runtime notes
+
+**No dependencies.** The sync script deliberately avoids
+`@supabase/supabase-js` and talks to PostgREST over plain HTTP. That client
+pulls in Realtime, which needs a native WebSocket and therefore Node 22+, and
+a nightly data sync has no use for a websocket. As written the script runs on
+any Node with `fetch` (18+). The frontend still uses `supabase-js` normally.
+
+**LoyaltyLion has no server-side filter for members.** `/v2/customers` returns
+every Shopify customer — 21,240 here, of which 11,909 are enrolled — and the
+enrolled filter has to be applied client-side. Confirmed by probing: `enrolled`,
+`filter`, `enrolled_at_min` and `has_loyalty_tier` are all **silently ignored**,
+returning results identical to no filter at all. Note the failure mode — an
+unsupported parameter does not error, so a future attempt could look like it
+worked while doing nothing. Verify any new filter by comparing counts, never by
+checking for a 200.
+
+Consequence: a full scan is ~43 pages and about 50 seconds, and that grows with
+the customer list, not the member list. Fine at this size. If it climbs past a
+few minutes, the options are to re-probe for a filter LoyaltyLion may have
+added, or to page by `updated_at_min` and maintain a running tally rather than
+rescanning everything nightly.
+
+**Timezones.** Klaviyo reads a naive `datetime` filter as UTC but buckets
+results in the requested `timezone`, and returns each bucket as the UTC instant
+of that Amman midnight. So `2026-08-23T21:00:00+00:00` *is* Amman's 24th.
+Both the bounds and the bucket labels are converted explicitly — reading the
+first ten characters of a bucket files the day under the previous date.
 
 ## Shopify authentication
 

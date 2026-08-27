@@ -83,7 +83,16 @@ export async function httpJson(url, init, label) {
     if (ra) err.retryAfterMs = Number(ra) * 1000;
     throw err;
   }
-  return res.json();
+  // PostgREST answers `Prefer: return=minimal` with 201 and an empty body,
+  // and .json() on an empty body throws. Treat "no content" as success.
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -1,20 +1,30 @@
-import { createClient } from "@supabase/supabase-js";
 import { need } from "./env.mjs";
-import { log } from "./log.mjs";
-
-let _client = null;
+import { log, httpJson, withRetry } from "./log.mjs";
 
 /**
- * Service-role client. Bypasses row-level security, which is exactly why this
- * key must never reach the browser. Step 1 left every table read-only for
+ * Supabase writes over plain PostgREST HTTP.
+ *
+ * This deliberately does NOT use @supabase/supabase-js. That client pulls in
+ * Realtime, which needs a native WebSocket and therefore Node 22+, and a
+ * nightly data sync has no use for a websocket. Talking to PostgREST directly
+ * keeps the script dependency-free and running on any Node with fetch.
+ *
+ * The service-role key bypasses row-level security, which is exactly why it
+ * must never reach the browser. Step 1 left every table read-only for
  * `authenticated`, so this is the only identity that can write.
  */
-export function db() {
-  if (_client) return _client;
-  const url = need("SUPABASE_URL", "Supabase → Project Settings → API → Project URL");
+function config() {
+  const url = need("SUPABASE_URL", "Supabase → Project Settings → API → Project URL").replace(/\/+$/, "");
   const key = need("SUPABASE_SERVICE_ROLE_KEY", "Supabase → Project Settings → API keys → service_role");
-  _client = createClient(url, key, { auth: { persistSession: false } });
-  return _client;
+  return { url, key };
+}
+
+function authHeaders(key) {
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    "content-type": "application/json",
+  };
 }
 
 /**
@@ -24,13 +34,27 @@ export function db() {
 export async function upsert(table, rows, conflictTarget, { dryRun }) {
   if (!rows.length) return 0;
   if (dryRun) return rows.length;
+  const { url, key } = config();
+
   // Chunked so a wide backfill doesn't build one enormous request body.
   const CHUNK = 500;
   let written = 0;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK);
-    const { error } = await db().from(table).upsert(slice, { onConflict: conflictTarget });
-    if (error) throw new Error(`upsert ${table}: ${error.message}`);
+    await withRetry(`upsert ${table}`, () =>
+      httpJson(
+        `${url}/rest/v1/${table}?on_conflict=${encodeURIComponent(conflictTarget)}`,
+        {
+          method: "POST",
+          headers: {
+            ...authHeaders(key),
+            Prefer: "resolution=merge-duplicates,return=minimal",
+          },
+          body: JSON.stringify(slice),
+        },
+        `upsert ${table}`,
+      ),
+    );
     written += slice.length;
   }
   return written;
@@ -45,41 +69,44 @@ export async function writeSyncLog(entry, { dryRun }) {
   // Logging a failure must never itself throw, or the real error gets buried
   // under a second one about the log write.
   try {
-    await insertSyncLog(entry);
+    const { url, key } = config();
+    await httpJson(
+      `${url}/rest/v1/sync_log`,
+      {
+        method: "POST",
+        headers: { ...authHeaders(key), Prefer: "return=minimal" },
+        body: JSON.stringify({
+          source: entry.source,
+          status: entry.status,
+          message: entry.message ?? null,
+          range_start: entry.rangeStart ?? null,
+          range_end: entry.rangeEnd ?? null,
+          rows_written: entry.rowsWritten ?? 0,
+          duration_ms: entry.durationMs ?? null,
+        }),
+      },
+      "sync_log insert",
+    );
   } catch (err) {
     log.warn(`could not write sync_log (${err.message})`);
   }
 }
 
-async function insertSyncLog(entry) {
-  const { error } = await db().from("sync_log").insert({
-    source: entry.source,
-    status: entry.status,
-    message: entry.message ?? null,
-    range_start: entry.rangeStart ?? null,
-    range_end: entry.rangeEnd ?? null,
-    rows_written: entry.rowsWritten ?? 0,
-    duration_ms: entry.durationMs ?? null,
-  });
-  if (error) throw new Error(error.message);
-}
-
 /**
- * Which days already synced successfully for this source. Drives --resume, so
+ * Which days already synced successfully for this source. Drives resuming, so
  * a backfill that hits Klaviyo's daily cap can be re-run tomorrow and will
  * carry on from where it stopped rather than starting over.
  */
 export async function completedDays(source, from, to) {
-  const { data, error } = await db()
-    .from("sync_log")
-    .select("range_start")
-    .eq("source", source)
-    .eq("status", "success")
-    .gte("range_start", from)
-    .lte("range_start", to);
-  if (error) {
-    log.warn(`could not read resume ledger (${error.message}); treating all days as pending`);
+  try {
+    const { url, key } = config();
+    const q =
+      `select=range_start&source=eq.${encodeURIComponent(source)}&status=eq.success` +
+      `&range_start=gte.${from}&range_start=lte.${to}`;
+    const rows = await httpJson(`${url}/rest/v1/sync_log?${q}`, { headers: authHeaders(key) }, "resume ledger");
+    return new Set((rows ?? []).map((r) => r.range_start));
+  } catch (err) {
+    log.warn(`could not read resume ledger (${err.message}); treating all days as pending`);
     return new Set();
   }
-  return new Set((data ?? []).map((r) => r.range_start));
 }

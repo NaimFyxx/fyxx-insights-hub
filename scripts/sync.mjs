@@ -81,7 +81,9 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
 
   // --- flows: one call per day, send-date basis ---------------------------
   const days = eachDay(from, to);
-  const done = force ? new Set() : await completedDays("klaviyo_flows", from, to);
+  // A dry run touches nothing, not even a read: it must work with no Supabase
+  // credentials at all, so the resume ledger is skipped rather than queried.
+  const done = force || dryRun ? new Set() : await completedDays("klaviyo_flows", from, to);
   const pending = days.filter((d) => !done.has(d));
   if (done.size) log.info(`resuming: ${done.size} day(s) already synced, ${pending.length} to go`);
   if (pending.length > 2) {

@@ -116,6 +116,23 @@ group("klaviyo channel vocabularies");
   check("isPush rejects undefined", !k.isPush(undefined));
 }
 
+/* ------------------------------------------------- amman date mapping -- */
+group("attributed revenue date mapping");
+{
+  const { toAmmanDate } = await import("../lib/klaviyo.mjs");
+  // Klaviyo returns each Amman midnight as its UTC instant. Taking the first
+  // ten characters files the day under the PREVIOUS date, which then falls
+  // outside the requested range and is dropped.
+  check("21:00Z maps to the NEXT Amman day", toAmmanDate("2026-08-23T21:00:00+00:00") === "2026-08-24",
+    toAmmanDate("2026-08-23T21:00:00+00:00"));
+  check("naive slice(0,10) would have been wrong",
+    "2026-08-23T21:00:00+00:00".slice(0, 10) !== toAmmanDate("2026-08-23T21:00:00+00:00"));
+  check("a mid-Amman-day instant maps to that day",
+    toAmmanDate("2026-08-24T12:00:00+00:00") === "2026-08-24");
+  check("just before Amman midnight stays on the earlier day",
+    toAmmanDate("2026-08-24T20:59:59+00:00") === "2026-08-24");
+}
+
 /* ------------------------------------------------------------ limiter -- */
 group("rate limiter");
 {

@@ -6,7 +6,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /**
  * Minimal .env reader. Deliberately dependency-free so the sync script can run
- * in CI with nothing installed but @supabase/supabase-js.
+ * in CI with no dependencies installed at all — the sync script needs none.
  * Real environment variables always win, so GitHub Secrets override any .env.
  */
 export function loadEnv() {

@@ -3,7 +3,8 @@ import { Limiter, httpJson, withRetry, log, money3, int, rate4 } from "./log.mjs
 
 const BASE = "https://a.klaviyo.com/api";
 const REVISION = "2026-07-15";
-const TZ_OFFSET = "+03:00"; // Asia/Amman. Jordan dropped DST in 2022, so this is fixed.
+const TZ_OFFSET = "+03:00";
+const AMMAN_TZ = "Asia/Amman";
 
 /**
  * Klaviyo's values-report endpoints allow 2 requests/minute steady. 31s of
@@ -191,8 +192,18 @@ export async function fetchFlowValuesForDay({ day, conversionMetricId }) {
  * one figure is the thing we agreed never to do.
  * --------------------------------------------------------------------- */
 export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId }) {
-  const endExclusive = new Date(`${to}T00:00:00Z`);
-  endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+  // Klaviyo reads a naive `datetime` filter as UTC but buckets results in the
+  // requested `timezone`. Sending naive Amman midnights therefore starts the
+  // window at 03:00 Amman — losing the first three hours of the opening day —
+  // and adds a spurious partial bucket at the end. Verified against the live
+  // API: naive bounds returned 4 buckets for a 3-day range, UTC instants
+  // returned exactly 3. So convert Amman midnight to its UTC instant here.
+  const ammanMidnightUtc = (day, addDays = 0) => {
+    const d = new Date(`${day}T00:00:00${TZ_OFFSET}`);
+    d.setUTCDate(d.getUTCDate() + addDays);
+    return d.toISOString().slice(0, 19);
+  };
+
   const body = {
     data: {
       type: "metric-aggregate",
@@ -200,22 +211,29 @@ export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId
         metric_id: conversionMetricId,
         measurements: ["sum_value", "count"],
         interval: "day",
-        timezone: "Asia/Amman",
+        timezone: AMMAN_TZ,
         by: ["$attributed_channel"],
         filter: [
-          `greater-or-equal(datetime,${from}T00:00:00)`,
-          `less-than(datetime,${endExclusive.toISOString().slice(0, 10)}T00:00:00)`,
+          `greater-or-equal(datetime,${ammanMidnightUtc(from)})`,
+          `less-than(datetime,${ammanMidnightUtc(to, 1)})`,
         ],
       },
     },
   };
+
   const res = await generalLimiter.run(() =>
     withRetry("metric aggregates", () =>
       httpJson(`${BASE}/metric-aggregates`, { method: "POST", headers: headers(), body: JSON.stringify(body) }, "metric aggregates"),
     ),
   );
-  const dates = (res.data?.attributes?.dates ?? []).map((d) => d.slice(0, 10));
+
+  // Buckets come back as the UTC instant of each Amman midnight, so
+  // "2026-08-23T21:00:00+00:00" IS Amman's 24th. Taking the first ten
+  // characters would file that day's revenue under the 23rd and, since the
+  // 23rd is outside the requested range, drop it entirely. Convert properly.
+  const dates = (res.data?.attributes?.dates ?? []).map(toAmmanDate);
   const byDay = new Map(dates.map((d) => [d, 0]));
+
   for (const row of res.data?.attributes?.data ?? []) {
     // An empty dimension means the order was not attributed to any Klaviyo
     // message. Those are real sales but not Klaviyo's, so they are excluded.
@@ -226,6 +244,10 @@ export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId
   }
   return byDay;
 }
+
+/** The Amman calendar date an instant falls on. */
+export const toAmmanDate = (iso) =>
+  new Date(iso).toLocaleDateString("en-CA", { timeZone: AMMAN_TZ });
 
 /** ------------------------------------------------------------------------
  * Shaping report rows into table rows.

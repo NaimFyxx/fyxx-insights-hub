@@ -19,6 +19,7 @@ import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedLoyaltyRouteImport } from './routes/_authenticated/loyalty'
 import { Route as AuthenticatedOverviewRouteImport } from './routes/_authenticated/overview'
 import { Route as AuthenticatedPushRouteImport } from './routes/_authenticated/push'
+import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -70,6 +71,11 @@ const AuthenticatedPushRoute = AuthenticatedPushRouteImport.update({
   path: '/push',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedReportRoute = AuthenticatedReportRouteImport.update({
+  id: '/report',
+  path: '/report',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/loyalty': typeof AuthenticatedLoyaltyRoute
   '/overview': typeof AuthenticatedOverviewRoute
   '/push': typeof AuthenticatedPushRoute
+  '/report': typeof AuthenticatedReportRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/loyalty': typeof AuthenticatedLoyaltyRoute
   '/overview': typeof AuthenticatedOverviewRoute
   '/push': typeof AuthenticatedPushRoute
+  '/report': typeof AuthenticatedReportRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/_authenticated/loyalty': typeof AuthenticatedLoyaltyRoute
   '/_authenticated/overview': typeof AuthenticatedOverviewRoute
   '/_authenticated/push': typeof AuthenticatedPushRoute
+  '/_authenticated/report': typeof AuthenticatedReportRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/loyalty'
     | '/overview'
     | '/push'
+    | '/report'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/loyalty'
     | '/overview'
     | '/push'
+    | '/report'
   id:
     | '__root__'
     | '/'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/_authenticated/loyalty'
     | '/_authenticated/overview'
     | '/_authenticated/push'
+    | '/_authenticated/report'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -221,6 +233,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPushRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/report': {
+      id: '/_authenticated/report'
+      path: '/report'
+      fullPath: '/report'
+      preLoaderRoute: typeof AuthenticatedReportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -232,6 +251,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLoyaltyRoute: typeof AuthenticatedLoyaltyRoute
   AuthenticatedOverviewRoute: typeof AuthenticatedOverviewRoute
   AuthenticatedPushRoute: typeof AuthenticatedPushRoute
+  AuthenticatedReportRoute: typeof AuthenticatedReportRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -242,6 +262,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLoyaltyRoute: AuthenticatedLoyaltyRoute,
   AuthenticatedOverviewRoute: AuthenticatedOverviewRoute,
   AuthenticatedPushRoute: AuthenticatedPushRoute,
+  AuthenticatedReportRoute: AuthenticatedReportRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

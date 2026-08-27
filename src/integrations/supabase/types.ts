@@ -14,7 +14,279 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activations: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          notes?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      klaviyo_campaigns: {
+        Row: {
+          clicked: number
+          created_at: string
+          id: string
+          name: string
+          opened: number
+          orders: number
+          revenue_jod: number
+          sent: number
+          sent_on: string
+          updated_at: string
+        }
+        Insert: {
+          clicked?: number
+          created_at?: string
+          id?: string
+          name: string
+          opened?: number
+          orders?: number
+          revenue_jod?: number
+          sent?: number
+          sent_on: string
+          updated_at?: string
+        }
+        Update: {
+          clicked?: number
+          created_at?: string
+          id?: string
+          name?: string
+          opened?: number
+          orders?: number
+          revenue_jod?: number
+          sent?: number
+          sent_on?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      klaviyo_flows: {
+        Row: {
+          conversions: number
+          created_at: string
+          date: string
+          flow_name: string
+          id: string
+          opened: number
+          recipients: number
+          revenue_jod: number
+          updated_at: string
+        }
+        Insert: {
+          conversions?: number
+          created_at?: string
+          date: string
+          flow_name: string
+          id?: string
+          opened?: number
+          recipients?: number
+          revenue_jod?: number
+          updated_at?: string
+        }
+        Update: {
+          conversions?: number
+          created_at?: string
+          date?: string
+          flow_name?: string
+          id?: string
+          opened?: number
+          recipients?: number
+          revenue_jod?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      klaviyo_push: {
+        Row: {
+          created_at: string
+          id: string
+          opened: number
+          sent: number
+          sent_on: string
+          source_name: string
+          source_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          opened?: number
+          sent?: number
+          sent_on: string
+          source_name: string
+          source_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          opened?: number
+          sent?: number
+          sent_on?: string
+          source_name?: string
+          source_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ll_snapshots: {
+        Row: {
+          birthday_rewards_issued: number
+          blue_members: number
+          created_at: string
+          gold_members: number
+          id: string
+          platinum_members: number
+          points_outstanding: number
+          redemption_rate: number
+          silver_members: number
+          snapshot_date: string
+          updated_at: string
+        }
+        Insert: {
+          birthday_rewards_issued?: number
+          blue_members?: number
+          created_at?: string
+          gold_members?: number
+          id?: string
+          platinum_members?: number
+          points_outstanding?: number
+          redemption_rate?: number
+          silver_members?: number
+          snapshot_date: string
+          updated_at?: string
+        }
+        Update: {
+          birthday_rewards_issued?: number
+          blue_members?: number
+          created_at?: string
+          gold_members?: number
+          id?: string
+          platinum_members?: number
+          points_outstanding?: number
+          redemption_rate?: number
+          silver_members?: number
+          snapshot_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          month_highlight: string
+          next_month_bullets: string[]
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          month_highlight: string
+          next_month_bullets?: string[]
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          month_highlight?: string
+          next_month_bullets?: string[]
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_daily_sales: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          klaviyo_attributed_revenue_jod: number
+          orders: number
+          people_reached: number
+          total_online_revenue_jod: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          klaviyo_attributed_revenue_jod?: number
+          orders?: number
+          people_reached?: number
+          total_online_revenue_jod?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          klaviyo_attributed_revenue_jod?: number
+          orders?: number
+          people_reached?: number
+          total_online_revenue_jod?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sync_log: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          source: string
+          status: string
+          synced_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          source: string
+          status?: string
+          synced_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          source?: string
+          status?: string
+          synced_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

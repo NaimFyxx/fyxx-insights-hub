@@ -9,7 +9,10 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "sync": "node scripts/sync.mjs",
+    "sync:dry": "node scripts/sync.mjs --dry-run",
+    "test:sync": "node scripts/test/sync.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

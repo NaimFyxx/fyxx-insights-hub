@@ -1,0 +1,110 @@
+/**
+ * Tests for the sync script's pure logic: number handling, row shaping and
+ * secret redaction. No network, no database, no credentials needed.
+ *
+ *   node scripts/test/sync.test.mjs
+ */
+import { money3, rate4, int } from "../lib/log.mjs";
+import { toCampaignRows, toFlowRows } from "../lib/klaviyo.mjs";
+import { toSalesRows } from "../lib/shopify.mjs";
+
+let failed = 0;
+const check = (name, cond, detail = "") => {
+  if (!cond) failed++;
+  console.log(`${cond ? "  ok  " : "FAIL  "}${name}${detail ? `  — ${detail}` : ""}`);
+};
+const group = (n) => console.log(`\n${n}`);
+
+/* -------------------------------------------------- money and rounding -- */
+group("rounding");
+for (const [inp, want] of [
+  [744.0005, 744.001],        // the case plain toFixed(3) gets wrong
+  [9840.4567, 9840.457],
+  [0.0005, 0.001],
+  [1.9995, 2],
+  [-12.3455, -12.346],        // refunds round away from zero, not toward +inf
+  [123456789.12349, 123456789.123],
+]) check(`money3(${inp}) === ${want}`, money3(inp) === want, String(money3(inp)));
+check("money3 survives null/undefined/NaN", money3(null) === 0 && money3(undefined) === 0 && money3(NaN) === 0);
+check("int survives NaN", int(NaN) === 0);
+check("rate4 keeps fractions, not percentages", rate4(0.456792) === 0.4568);
+
+/* ------------------------------------------------------ campaign rows -- */
+group("campaign shaping");
+const meta = new Map([
+  ["camp1", { name: "  End of Summer  VAULT sale ", sentOn: "2026-08-26", channel: "email" }],
+  ["camp2", { name: "Flash Restock Alert", sentOn: "2026-08-20", channel: "push-notification" }],
+  ["camp3", { name: "Never sent draft", sentOn: null, channel: "email" }],
+]);
+const { email, push } = toCampaignRows(
+  [
+    { campaignId: "camp1", messageId: "m1", channel: "email",
+      s: { recipients: 14210, delivered: 14002, opens_unique: 6395, open_rate: 0.456792,
+           clicks_unique: 1278, click_rate: 0.091273, conversions: 124, conversion_rate: 0.008856,
+           conversion_value: 9840.4567 } },
+    { campaignId: "camp2", messageId: "m2", channel: "push-notification",
+      s: { recipients: 1900, delivered: 1880, opens_unique: 589, open_rate: 0.3133,
+           conversions: 7, conversion_value: 412.1239 } },
+    { campaignId: "camp3", messageId: "m3", channel: "email", s: { recipients: 0 } },
+  ],
+  meta,
+);
+check("push goes to klaviyo_push, not klaviyo_campaigns", email.length === 1 && push.length === 1);
+check("campaign name stored verbatim", email[0].name === "  End of Summer  VAULT sale ");
+check("money at 3dp", email[0].revenue_jod === 9840.457);
+check("rates as fractions", email[0].open_rate === 0.4568);
+check("push row has NO click columns", !("clicked" in push[0]) && !("click_rate" in push[0]));
+check("push carries conversions and revenue", push[0].conversions === 7 && push[0].revenue_jod === 412.124);
+check("campaign with no send date is dropped", !email.some((r) => r.campaign_id === "camp3"));
+
+/* ---------------------------------------------------------- flow rows -- */
+group("flow shaping");
+const { flows, push: flowPush } = toFlowRows(
+  [
+    { flowId: "f1", messageId: "fm1", flowName: "Welcome Series", channel: "email",
+      s: { recipients: 310, delivered: 305, opens_unique: 161, open_rate: 0.5279,
+           clicks_unique: 22, click_rate: 0.0721, conversions: 12, conversion_value: 744.0005 } },
+    { flowId: "f2", messageId: "fm2", flowName: "Utility — internal alert", channel: "email",
+      s: { recipients: 0 } },
+    { flowId: "f3", messageId: "fm3", flowName: "Birthday Reward", channel: "push-notification",
+      s: { recipients: 90, delivered: 88, opens_unique: 49, open_rate: 0.5568, conversions: 4, conversion_value: 231.5 } },
+  ],
+  "2026-08-15",
+);
+check("flows with zero sends are not stored", flows.length === 1 && flows[0].flow_name === "Welcome Series");
+check("flow push split out", flowPush.length === 1 && flowPush[0].source_type === "Flow");
+check("flow money at 3dp", flows[0].revenue_jod === 744.001);
+check("flow has the new clicked column", flows[0].clicked === 22);
+check("flow row carries its date", flows[0].date === "2026-08-15");
+
+/* --------------------------------------------------------- sales rows -- */
+group("shopify shaping");
+const sales = toSalesRows(
+  new Map([["2026-08-01", { revenue: 2431.6667, orders: 31 }]]),
+  new Map([["2026-08-01", 512.3339]]),
+  ["2026-08-01", "2026-08-02"],
+);
+check("every day in range gets a row", sales.length === 2);
+check("revenue at 3dp", sales[0].total_online_revenue_jod === 2431.667);
+check("attributed revenue at 3dp", sales[0].klaviyo_attributed_revenue_jod === 512.334);
+check("a day with no orders is zero, not null", sales[1].total_online_revenue_jod === 0 && sales[1].orders === 0);
+
+/* ---------------------------------------------------------- redaction -- */
+group("secret redaction");
+process.env.KLAVIYO_API_KEY = "pk_thisisaverysecretklaviyokey123456";
+process.env.SHOPIFY_ADMIN_TOKEN = "shpat_NOT_A_REAL_TOKEN_test_fixture_only";
+const { redact } = await import("../lib/env.mjs");
+const secrets = [process.env.KLAVIYO_API_KEY, process.env.SHOPIFY_ADMIN_TOKEN];
+for (const c of [
+  `HTTP 401 Authorization: Klaviyo-API-Key ${secrets[0]}`,
+  `X-Shopify-Access-Token: ${secrets[1]}`,
+  new Error(`boom with ${secrets[0]} inside`),
+]) {
+  const out = redact(c);
+  check("secret does not survive redaction", !secrets.some((s) => out.includes(s)), out.slice(0, 60));
+}
+check("unknown key-shaped strings are caught too",
+  !redact("stray shpat_NOT_A_REAL_TOKEN_stray_fixture here").includes("stray_fixture"));
+
+console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
+process.exit(failed ? 1 : 0);

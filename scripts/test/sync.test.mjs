@@ -201,33 +201,46 @@ try {
 } catch (e) { ok = e; }
 check("the real distribution passes", ok === null, ok?.message);
 
-// The invariant that actually catches the original bug, which the band could not.
+// The old "outstanding must be less than approved" invariant was REMOVED: it
+// was built on the wrong reading of points_approved and is false under the
+// correct definition. These assert it is genuinely gone.
 const realCounts = { Blue: 10023, Silver: 1137, Gold: 523, Platinum: 193 };
-let notSubtracted = null;
+let correctDefinition = null;
 try {
   ll.assertSnapshotUsable({
     counts: realCounts, customers: 21240, members: 11909, tiered: 11876,
-    // The figure the first run actually produced: approved, never subtracted.
-    points: { outstanding: 8_601_572, approved: 8_181_878, spent: 1_599_090 },
+    // outstanding === approved is now CORRECT and must not be blocked.
+    points: { outstanding: 8_604_319, approved: 8_604_319, spent: 1_599_090 },
   });
-} catch (e) { notSubtracted = e; }
-check("outstanding >= approved while spend exists REFUSES to write", notSubtracted !== null);
-check("and explains it is lifetime earned, not money owed",
-  /lifetime earned, not money owed/.test(notSubtracted?.message ?? ""));
+} catch (e) { correctDefinition = e; }
+check("outstanding === approved is allowed (old invariant is gone)",
+  correctDefinition === null, correctDefinition?.message);
 
 let negative = null;
 try {
   ll.assertSnapshotUsable({ counts: realCounts, customers: 21240, members: 11909, tiered: 11876,
     points: { outstanding: -5, approved: 100, spent: 200 } });
 } catch (e) { negative = e; }
-check("negative outstanding refuses", negative !== null);
+check("negative outstanding still refuses", negative !== null);
 
-let correct = null;
+let zeroPoints = null;
 try {
   ll.assertSnapshotUsable({ counts: realCounts, customers: 21240, members: 11909, tiered: 11876,
-    points: { outstanding: 6_582_788, approved: 8_181_878, spent: 1_599_090 } });
-} catch (e) { correct = e; }
-check("the correct figure passes every invariant", correct === null, correct?.message);
+    points: { outstanding: 0, approved: 0, spent: 0 } });
+} catch (e) { zeroPoints = e; }
+check("members holding zero points between them refuses", zeroPoints !== null);
+
+// Day-over-day check, which replaces the removed invariant.
+let jumped = null;
+try { ll.checkDailyMove(20_000_000, { snapshot_date: "2026-08-26", points_outstanding: 8_600_000 }); }
+catch (e) { jumped = e; }
+check("a 133% overnight jump refuses to write", jumped !== null);
+check("and blames the definition, not the business",
+  /definition has not changed/.test(jumped?.message ?? ""));
+check("ordinary daily movement passes",
+  (() => { try { ll.checkDailyMove(8_650_000, { snapshot_date: "2026-08-26", points_outstanding: 8_600_000 }); return true; } catch { return false; } })());
+check("no previous snapshot is not an error",
+  (() => { try { ll.checkDailyMove(8_650_000, null); return true; } catch { return false; } })());
 
 check("an empty account is not treated as a failure",
   (() => { try { ll.assertSnapshotUsable({ counts: { Blue: 0, Silver: 0, Gold: 0, Platinum: 0 }, customers: 0, members: 0, tiered: 0 }); return true; } catch { return false; } })());
@@ -264,23 +277,17 @@ const noMatch = capture(() =>
 );
 check("no match lists the rule names that were seen", noMatch.includes("Enrolled"));
 
-// Band is now ±60% of the measured 6,582,788, not ±10x. The old band spanned
-// 150k–15M and waved through 8.6M, which was wrong by every definition.
-check("the measured figure passes the band",
-  capture(() => ll.reportPointsLiability(6_582_788, 11909)).includes("within the expected band"));
-check("the OLD wrong figure (approved, all customers) now trips it",
-  capture(() => ll.reportPointsLiability(8_601_572, 21240)).includes("within the expected band") === false
-  || capture(() => ll.reportPointsLiability(20_000_000, 11909)).includes("outside the expected band"));
-check("too high names guests / unsubtracted spend as the cause",
-  capture(() => ll.reportPointsLiability(20_000_000, 11909)).includes("guests are being included"));
-check("too low names double-subtraction as the cause",
-  capture(() => ll.reportPointsLiability(500_000, 11909)).includes("subtracted twice"));
-check("liability is converted at 100 points = 1 JOD",
-  capture(() => ll.reportPointsLiability(6_582_788, 11909)).includes("65,828 JOD"));
-check("the alternative definitions are printed for dashboard comparison",
-  capture(() => ll.reportPointsLiability(6_582_788, 11909, {
-    approvedMembers: 8_181_878, spentMembers: 1_599_090, approvedAll: 8_601_572,
-  })).includes("lifetime earned"));
+// Band now sits on LoyaltyLion's own accounting figure, 8,776,473.
+check("the correct figure passes the band",
+  capture(() => ll.reportPointsLiability(8_604_319, 21240)).includes("within the expected band"));
+check("the rejected approved-minus-spent figure trips it",
+  capture(() => ll.reportPointsLiability(6_585_035, 21240)).includes("outside the expected band"));
+check("the run states points_approved is a balance",
+  capture(() => ll.reportPointsLiability(8_604_319, 21240)).includes("CURRENT BALANCE"));
+check("and warns not to subtract points_spent",
+  capture(() => ll.reportPointsLiability(8_604_319, 21240)).includes("Do not subtract points_spent"));
+check("liability converts at 100 points = 1 JOD",
+  capture(() => ll.reportPointsLiability(8_604_319, 21240)).includes("86,043 JOD"));
 
 /* ---------------------------------------------------------- redaction -- */
 group("secret redaction");

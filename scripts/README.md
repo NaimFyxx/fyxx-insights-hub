@@ -21,6 +21,28 @@ node scripts/sync.mjs --from … --to … --force            # redo days already
 `--dry-run` fetches everything and prints what it *would* write, touching
 neither the tables nor `sync_log`. Always worth doing first on a new range.
 
+### Backfilling points history
+
+```bash
+node scripts/import-ll-export.mjs path/to/export.csv --dry-run
+node scripts/import-ll-export.mjs path/to/export.csv
+```
+
+LoyaltyLion's REST API exposes **no** programme-level accounting endpoint —
+`/v2/metrics`, `/v2/analytics`, `/v2/insights` and `/v2/reports` all 404, and
+`llms.txt` lists only customer-level resources. Their MCP connector does serve
+a metrics series, but it authenticates separately from the API key and is not
+reachable from CI, so it cannot drive the nightly job. A year of history
+therefore has to come from their points accounting export.
+
+The importer validates before writing: it checks every required column is
+present (failing loudly rather than importing zeros), reconciles each day from
+its own movement columns, and reports gaps in the series. Imported rows are
+marked `points_source='ll_export'` and are authoritative — LoyaltyLion's own
+end-of-day close, as opposed to the nightly `customer_scan`. Tier counts are
+never touched by the import: they cannot be reconstructed historically, which
+is the whole reason the nightly snapshot exists.
+
 ### Diagnosing a figure that looks wrong
 
 ```bash

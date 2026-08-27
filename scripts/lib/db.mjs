@@ -110,3 +110,16 @@ export async function completedDays(source, from, to) {
     return new Set();
   }
 }
+
+/** The most recent snapshot before `before`, for day-over-day comparison. */
+export async function previousSnapshot(before) {
+  try {
+    const { url, key } = config();
+    const q = `select=snapshot_date,points_outstanding&snapshot_date=lt.${before}&order=snapshot_date.desc&limit=1`;
+    const rows = await httpJson(`${url}/rest/v1/ll_snapshots?${q}`, { headers: authHeaders(key) }, "previous snapshot");
+    return (rows ?? [])[0] ?? null;
+  } catch (err) {
+    log.warn(`could not read the previous snapshot (${err.message}); skipping the day-over-day check`);
+    return null;
+  }
+}

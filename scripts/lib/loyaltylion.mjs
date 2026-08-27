@@ -83,10 +83,16 @@ export async function fetchSnapshot() {
     }
   }
 
-  // Outstanding balance is approved MINUS already-spent. points_approved on
-  // its own is the lifetime approved total, so using it alone counts points
-  // that were redeemed long ago and are no longer owed to anyone.
-  const pointsOutstanding = int(approvedMembers - spentMembers);
+  // points_approved IS the current balance, already net of spend and expiry.
+  // points_spent is a separate LIFETIME counter and must not be subtracted.
+  // Established against LoyaltyLion's own points accounting export for
+  // 2026-08-27, which reported 8,776,473 outstanding:
+  //     approved, all customers   8,604,319   -2%   <- this definition
+  //     approved, members only    8,184,625   -7%
+  //     approved minus spent      6,585,035  -25%
+  // The residual 2% is timing between our scan and their end-of-day close.
+  // Guests are included because their balances are part of the liability.
+  const pointsOutstanding = int(approvedAll);
 
   reportPopulation({ customers, members, tiered, counts, unknownTiers });
   reportPointsLiability(pointsOutstanding, members, {
@@ -140,26 +146,20 @@ export function assertSnapshotUsable({ counts, customers, members, tiered, point
     );
   }
 
-  // --- structural invariants -------------------------------------------
-  // A magnitude band cannot catch a wrong DEFINITION. The figure this run
-  // originally produced (approved-only, all customers) was 8,601,572 — only
-  // 31% above the correct 6,582,788, so it sits comfortably inside any band
-  // loose enough to allow normal growth. These invariants catch it exactly,
-  // because they test the RELATIONSHIP between the figures, not their size.
+  // --- points sanity ----------------------------------------------------
   const p = points ?? {};
-  if (p.spent > 0 && p.outstanding >= p.approved) {
-    throw new Error(
-      `Refusing to write: points_outstanding (${p.outstanding.toLocaleString("en-US")}) is not less than ` +
-        `points_approved (${p.approved.toLocaleString("en-US")}) even though ${p.spent.toLocaleString("en-US")} ` +
-        "points have been spent.\n  points_spent is not being subtracted — the figure is lifetime earned, not money owed.",
-    );
-  }
+  // NOTE: there was previously an invariant here asserting that outstanding
+  // must be strictly less than approved whenever spend existed. That was
+  // built on the wrong reading of points_approved (see reportPointsLiability)
+  // and is FALSE under the correct definition — outstanding IS approved — so
+  // it would block every valid run. Removed deliberately; do not reinstate.
   if (p.outstanding != null && p.outstanding < 0) {
     throw new Error(`Refusing to write: points_outstanding is negative (${p.outstanding.toLocaleString("en-US")}).`);
   }
-  if (members > 0 && customers > 0 && members === customers) {
-    log.warn(
-      "every customer is enrolled, which is unusual — check the `enrolled` filter is actually being applied.",
+  if (members > 0 && p.outstanding === 0) {
+    throw new Error(
+      `Refusing to write: ${members.toLocaleString("en-US")} members hold zero points between them.\n` +
+        "  That is a parsing failure, not an empty programme — check points_approved is still present.",
     );
   }
 
@@ -308,18 +308,44 @@ export const POINTS_PER_JOD = 100;
  * the programme genuinely grows past the band.
  */
 /**
- * Expected points outstanding, used to catch a wrong DEFINITION rather than a
- * change in the business.
+ * >>> READ THIS BEFORE TOUCHING points_approved <<<
  *
- * The first real scan measured 6,582,788 points outstanding across 11,909
- * enrolled members (approved minus spent). The band is deliberately narrow:
- * the previous ±10x band spanned 150k–15M and waved through a figure that was
- * wrong by every definition, which made it worse than no check at all. ±60%
- * is wide enough for ordinary growth between nightly runs and narrow enough
- * that picking the wrong points field trips it immediately.
+ * `points_approved` is the customer's CURRENT SPENDABLE BALANCE. It is
+ * already net of redemptions and expiry. It is NOT a lifetime total.
+ *
+ * This is the most misleading field in the LoyaltyLion API, because
+ * `points_spent` sits right next to it and reads like the other half of a
+ * pair. It is not: `points_spent` is a separate LIFETIME counter. Subtracting
+ * it double-counts every redemption ever made and understates the liability
+ * by about 25%.
+ *
+ * The evidence, against LoyaltyLion's own points accounting export for
+ * 2026-08-27, whose "Total Outstanding Points (End of Day)" was 8,776,473:
+ *
+ *     sum(points_approved), ALL customers   8,604,319    -2%   <- correct
+ *     sum(points_approved), members only    8,184,625    -7%
+ *     sum(points_approved - points_spent)   6,585,035   -25%   <- was used
+ *
+ * The 2% residual is timing between our scan and their end-of-day close.
+ * Guests are included on purpose: an unenrolled customer's balance is still
+ * money owed. Note this differs from the TIER counts, which are members only.
  */
-export const POINTS_EXPECTED = Number(process.env.LL_POINTS_EXPECTED ?? 6_582_788);
-export const POINTS_TOLERANCE = Number(process.env.LL_POINTS_TOLERANCE ?? 0.6);
+export const POINTS_EXPECTED = Number(process.env.LL_POINTS_EXPECTED ?? 8_776_473);
+export const POINTS_TOLERANCE = Number(process.env.LL_POINTS_TOLERANCE ?? 0.2);
+
+/**
+ * Largest day-over-day move in points outstanding treated as plausible.
+ *
+ * This is the ONGOING guard. The static band above is only a setup-time
+ * sanity check and will need raising as the programme grows; this one
+ * compares against our own last snapshot and keeps working indefinitely.
+ *
+ * This replaces the structural invariant that the corrected definition
+ * invalidated. It is a weaker check but a real one, and unlike a static band
+ * it compares against our OWN most recent snapshot, so it keeps working as
+ * the programme grows. Daily movement observed so far is well under 1%.
+ */
+export const MAX_DAILY_POINTS_MOVE = Number(process.env.LL_MAX_DAILY_MOVE ?? 0.25);
 
 export function reportPointsLiability(points, members, parts = {}) {
   const jod = (p) => (p / POINTS_PER_JOD).toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -330,30 +356,42 @@ export function reportPointsLiability(points, members, parts = {}) {
   log.info("");
   log.info("── points outstanding ─────────────────────────────────────");
   log.ok(`  ${n(points)} points  =  ${jod(points)} JOD currently owed`);
-  log.info(`  definition: sum(points_approved - points_spent) over ENROLLED members only`);
+  log.info("  definition: sum(points_approved) across ALL customers");
+  log.info("  points_approved is a CURRENT BALANCE, already net of spend and expiry.");
+  log.info("  Do not subtract points_spent — that is a separate lifetime counter.");
 
-  // Show the alternatives, so a mismatch against the LoyaltyLion dashboard
-  // can be diagnosed by reading rather than by re-instrumenting the script.
   if (parts.approvedMembers != null) {
-    log.info("  other definitions, for comparison against the dashboard:");
-    log.info(`      approved only, members    ${n(parts.approvedMembers).padStart(12)} pts = ${jod(parts.approvedMembers).padStart(7)} JOD  (lifetime earned)`);
-    log.info(`      approved only, ALL people ${n(parts.approvedAll).padStart(12)} pts = ${jod(parts.approvedAll).padStart(7)} JOD  (includes guests)`);
-    log.info(`      already redeemed          ${n(parts.spentMembers).padStart(12)} pts = ${jod(parts.spentMembers).padStart(7)} JOD  (NOT a liability)`);
+    log.info("  rejected definitions, kept visible so the mistake is not repeated:");
+    log.info(`      members only              ${n(parts.approvedMembers).padStart(12)} pts = ${jod(parts.approvedMembers).padStart(7)} JOD  (excludes guest balances)`);
+    log.info(`      approved minus spent      ${n(points - parts.spentMembers).padStart(12)} pts = ${jod(points - parts.spentMembers).padStart(7)} JOD  (double-counts redemptions)`);
   }
-  log.info(`  across ${n(members)} enrolled members`);
 
   if (points < low || points > high) {
-    log.warn(
-      `outside the expected band ${n(low)}–${n(high)} points (${jod(low)}–${jod(high)} JOD).`,
-    );
-    log.warn(
-      points < low
-        ? "TOO LOW: check whether points_spent is being subtracted twice, or members are being over-filtered."
-        : "TOO HIGH: check whether guests are being included, or points_spent is no longer being subtracted.",
-    );
-    log.warn("Compare against LoyaltyLion before trusting it. Adjust LL_POINTS_EXPECTED if the programme genuinely grew.");
+    log.warn(`outside the expected band ${n(low)}–${n(high)} points (${jod(low)}–${jod(high)} JOD).`);
+    log.warn("Compare against LoyaltyLion's points accounting export before trusting it.");
+    log.warn("If the programme genuinely grew, raise LL_POINTS_EXPECTED.");
   } else {
     log.ok(`within the expected band ${n(low)}–${n(high)} points`);
   }
   log.info("───────────────────────────────────────────────────────────");
+}
+
+/**
+ * Compares today's figure against our own most recent snapshot. A balance
+ * that leaps overnight means the definition moved, not the business.
+ */
+export function checkDailyMove(points, previous) {
+  if (!previous || !previous.points_outstanding) return;
+  const prev = Number(previous.points_outstanding);
+  const move = (points - prev) / prev;
+  const pct = (move * 100).toFixed(1);
+  if (Math.abs(move) > MAX_DAILY_POINTS_MOVE) {
+    throw new Error(
+      `Refusing to write: points_outstanding moved ${pct}% since ${previous.snapshot_date} ` +
+        `(${prev.toLocaleString("en-US")} -> ${points.toLocaleString("en-US")}).\n` +
+        "  A balance does not move that far overnight. Check the field definition has not changed.\n" +
+        `  If this is genuine, raise LL_MAX_DAILY_MOVE (currently ${MAX_DAILY_POINTS_MOVE}).`,
+    );
+  }
+  log.ok(`points moved ${pct}% since ${previous.snapshot_date} — plausible`);
 }

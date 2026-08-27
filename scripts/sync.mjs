@@ -14,7 +14,7 @@
  */
 import { loadEnv, redact } from "./lib/env.mjs";
 import { log, money3 } from "./lib/log.mjs";
-import { upsert, writeSyncLog, completedDays } from "./lib/db.mjs";
+import { upsert, writeSyncLog, completedDays, previousSnapshot } from "./lib/db.mjs";
 import * as klaviyo from "./lib/klaviyo.mjs";
 import * as ll from "./lib/loyaltylion.mjs";
 import * as shopify from "./lib/shopify.mjs";
@@ -172,6 +172,10 @@ async function syncLoyalty({ from, to, dryRun }) {
   // zero tier counts would look like real data and would silently break every
   // "vs prior month" comparison built on top of it.
   ll.assertSnapshotUsable(snap);
+
+  // Compare against our own last snapshot. A balance that leaps overnight
+  // means the field definition moved, not the business.
+  if (!dryRun) ll.checkDailyMove(snap.pointsOutstanding, await previousSnapshot(snapshotDate));
 
   const period = await ll.fetchPeriodActivity(from, to);
   const row = ll.toSnapshotRow(snap, period, snapshotDate);

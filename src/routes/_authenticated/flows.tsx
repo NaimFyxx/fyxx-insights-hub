@@ -1,0 +1,151 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useDateRange } from "@/context/date-range-context";
+import { fetchFlows } from "@/lib/queries";
+import { jod, num, pct, rate } from "@/lib/format";
+import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
+
+export const Route = createFileRoute("/_authenticated/flows")({
+  head: () => ({
+    meta: [
+      { title: "Flows — Fyxx Marketing" },
+      { name: "description", content: "Live Klaviyo flows with sends in the selected range." },
+      { name: "robots", content: "noindex" },
+      { property: "og:title", content: "Flows — Fyxx Marketing" },
+      { property: "og:description", content: "Live Klaviyo flows with sends in the selected range." },
+    ],
+  }),
+  component: FlowsPage,
+});
+
+type Agg = {
+  flow_name: string;
+  recipients: number;
+  opened: number;
+  conversions: number;
+  revenue: number;
+};
+
+type SortKey = "flow_name" | "recipients" | "open_rate" | "conversion_rate" | "revenue";
+
+function FlowsPage() {
+  const { range, refreshKey } = useDateRange();
+  const [sortKey, setSortKey] = useState<SortKey>("revenue");
+  const [asc, setAsc] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["flows", range.from, range.to, refreshKey],
+    queryFn: () => fetchFlows(range),
+  });
+
+  const rows = useMemo(() => {
+    const map = new Map<string, Agg>();
+    for (const r of data ?? []) {
+      const cur = map.get(r.flow_name) ?? {
+        flow_name: r.flow_name,
+        recipients: 0,
+        opened: 0,
+        conversions: 0,
+        revenue: 0,
+      };
+      cur.recipients += r.recipients;
+      cur.opened += r.opened;
+      cur.conversions += r.conversions;
+      cur.revenue += Number(r.revenue_jod);
+      map.set(r.flow_name, cur);
+    }
+    const list = [...map.values()].filter((f) => f.recipients > 0);
+    const value = (f: Agg) => {
+      switch (sortKey) {
+        case "flow_name":
+          return f.flow_name;
+        case "recipients":
+          return f.recipients;
+        case "open_rate":
+          return rate(f.opened, f.recipients);
+        case "conversion_rate":
+          return rate(f.conversions, f.recipients);
+        default:
+          return f.revenue;
+      }
+    };
+    return list.sort((a, b) => {
+      const va = value(a);
+      const vb = value(b);
+      const cmp = typeof va === "string" ? va.localeCompare(vb as string) : (va as number) - (vb as number);
+      return asc ? cmp : -cmp;
+    });
+  }, [data, sortKey, asc]);
+
+  const t = rows.reduce(
+    (acc, r) => ({
+      recipients: acc.recipients + r.recipients,
+      opened: acc.opened + r.opened,
+      conversions: acc.conversions + r.conversions,
+      revenue: acc.revenue + r.revenue,
+    }),
+    { recipients: 0, opened: 0, conversions: 0, revenue: 0 },
+  );
+
+  const header = (key: SortKey, label: string, align: "left" | "right" = "right") => (
+    <Th
+      align={align}
+      active={sortKey === key}
+      onClick={() => {
+        if (sortKey === key) setAsc(!asc);
+        else {
+          setSortKey(key);
+          setAsc(false);
+        }
+      }}
+    >
+      {label}
+      {sortKey === key ? (asc ? " ↑" : " ↓") : ""}
+    </Th>
+  );
+
+  return (
+    <div className="space-y-8">
+      <PageHeader title="Flows" subtitle="Aggregated per flow across the selected range." />
+      <Panel title="Live flows">
+        {isLoading ? (
+          <EmptyState>Loading…</EmptyState>
+        ) : rows.length === 0 ? (
+          <EmptyState>No flow sends in range.</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                {header("flow_name", "Flow", "left")}
+                {header("recipients", "Recipients")}
+                {header("open_rate", "Open rate")}
+                {header("conversion_rate", "Conversion rate")}
+                {header("revenue", "Revenue JOD")}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.flow_name}>
+                  <Td>{r.flow_name}</Td>
+                  <Td align="right">{num(r.recipients)}</Td>
+                  <Td align="right">{pct(rate(r.opened, r.recipients))}</Td>
+                  <Td align="right">{pct(rate(r.conversions, r.recipients), 2)}</Td>
+                  <Td align="right">{jod(r.revenue)}</Td>
+                </tr>
+              ))}
+              <TotalsRow>
+                <Td>Total</Td>
+                <Td align="right">{num(t.recipients)}</Td>
+                <Td align="right">{pct(rate(t.opened, t.recipients))}</Td>
+                <Td align="right">{pct(rate(t.conversions, t.recipients), 2)}</Td>
+                <Td align="right">{jod(t.revenue)}</Td>
+              </TotalsRow>
+            </tbody>
+          </Table>
+        )}
+      </Panel>
+    </div>
+  );
+}

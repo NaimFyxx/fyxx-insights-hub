@@ -200,6 +200,34 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
  * send event to collect distinct profiles. Runs one day at a time and resumes,
  * exactly like the flow reports, so a long backfill spans several nights.
  */
+/**
+ * Marketing-influenced orders. Cheap compared with reach: the events are
+ * orders and clicks, thousands a month rather than hundreds of thousands.
+ */
+async function syncInfluence({ from, to, dryRun }) {
+  const started = Date.now();
+  const metricId = await klaviyo.findPlacedOrderMetricId();
+  const rows = await klaviyo.fetchOrderInfluence({ from, to, conversionMetricId: metricId });
+
+  if (dryRun) {
+    log.info("Influence — would write:");
+    preview("klaviyo_order_influence", rows, ["date", "sub_channel", "revenue_jod", "hours_since_click"]);
+    const within72 = rows.filter((r) => r.hours_since_click !== null && r.hours_since_click <= 72);
+    const rev = within72.reduce((a, r) => a + r.revenue_jod, 0);
+    log.info(`  within 72h: ${within72.length} order(s), ${money3(rev)} JOD`);
+    return rows.length;
+  }
+  const w = await upsert("klaviyo_order_influence", rows, "order_id", { dryRun });
+  await writeSyncLog(
+    { source: "klaviyo_order_influence", status: "success", rangeStart: from, rangeEnd: to, rowsWritten: w,
+      message: `${w} orders, ${rows.filter((r) => r.hours_since_click !== null).length} with a prior click`,
+      durationMs: Date.now() - started },
+    { dryRun },
+  );
+  log.ok(`Influence: ${w} order row(s)`);
+  return w;
+}
+
 /** Monthly gross margin from Shopify's own analytics. One query per year. */
 async function syncMargin({ from, to, dryRun }) {
   const started = Date.now();
@@ -345,7 +373,7 @@ async function main() {
   if (from > to) throw new Error(`--from (${from}) is after --to (${to})`);
 
   const sources = args.only ?? ["klaviyo", "shopify", "loyaltylion"];
-  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin"].includes(s));
+  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin", "influence"].includes(s));
   if (unknown.length) throw new Error(`--only: unknown source(s) ${unknown.join(", ")}`);
 
   preflight(sources, args.dryRun);
@@ -374,6 +402,16 @@ async function main() {
       failures.push(["shopify", err]);
       log.error(`Shopify failed — ${redact(err.message)}`);
       if (!args.dryRun) await writeSyncLog({ source: "shopify_daily_sales", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
+    }
+  }
+
+  if (sources.includes("influence")) {
+    try {
+      totalRows += await syncInfluence({ from, to, dryRun: args.dryRun });
+    } catch (err) {
+      failures.push(["influence", err]);
+      log.error(`Influence failed — ${redact(err.message)}`);
+      if (!args.dryRun) await writeSyncLog({ source: "klaviyo_order_influence", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
     }
   }
 
@@ -425,7 +463,7 @@ function preflight(sources, dryRun) {
     required.push(["SUPABASE_URL", "Supabase → Project Settings → API → Project URL"]);
     required.push(["SUPABASE_SERVICE_ROLE_KEY", "Supabase → Project Settings → API keys → service_role"]);
   }
-  if (sources.includes("klaviyo") || sources.includes("reach"))
+  if (sources.includes("klaviyo") || sources.includes("reach") || sources.includes("influence"))
     required.push(["KLAVIYO_API_KEY", "Klaviyo → Settings → Account → API keys → Create Private API Key (campaigns:read, flows:read, metrics:read, events:read)"]);
   const missing = required.filter(([k]) => !process.env[k]);
 
@@ -471,7 +509,7 @@ function preflight(sources, dryRun) {
 
 function readmeUsage() {
   return `Usage: node scripts/sync.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach,margin]
+                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach,margin,influence]
 
   --max-days N   cap how many flow days one run attempts, so a long backfill
                  can span several runs within Klaviyo's 225/day limit

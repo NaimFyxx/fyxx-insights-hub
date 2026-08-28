@@ -89,6 +89,20 @@ const dayEnd = (d) => `${d}T23:59:59${TZ_OFFSET}`;
  * The Placed Order metric. Every conversion figure in this file is measured
  * against it, per your instruction.
  * --------------------------------------------------------------------- */
+export async function findMetricIdByName(name) {
+  let url = "/metrics";
+  let pages = 0;
+  while (url && pages < 10) {
+    const res = await get(url, "metrics");
+    const hit = (res.data ?? []).find((m) => m.attributes?.name === name);
+    if (hit) return hit.id;
+    const next = res.links?.next;
+    url = next ? next.replace(BASE, "") : null;
+    pages++;
+  }
+  throw new Error(`Klaviyo metric "${name}" not found`);
+}
+
 export async function findPlacedOrderMetricId() {
   let url = `/metrics?filter=${encodeURIComponent('equals(integration.name,"Shopify")')}`;
   let res;
@@ -376,6 +390,103 @@ export async function fetchDailyReach(day, metricIds) {
     })
     // A day with no sends on a channel writes nothing rather than an empty row.
     .filter((r) => r.event_count > 0);
+}
+
+/* ------------------------------------------------------------------------
+ * MARKETING-INFLUENCED ORDERS
+ *
+ * Our own model, not Klaviyo's attribution: did this customer click a Klaviyo
+ * email shortly before ordering? Klaviyo's own attribution cannot be split by
+ * channel; this can, because the order carries one. The two must never be
+ * reconciled — see the table comment.
+ * --------------------------------------------------------------------- */
+
+/** Days of click history to look back before the order window. */
+export const INFLUENCE_LOOKBACK_DAYS = 7;
+
+/** Shopify sourceName -> our sub_channel, for the Klaviyo side of the join. */
+function subChannelFromKlaviyoSource(src) {
+  const s = String(src ?? "");
+  if (s === "web") return "Website";
+  if (/appmaker|shopney|mobile app/i.test(s)) return "Mobile App";
+  if (/odoo|point of sale|^pos$/i.test(s)) return "POS";
+  if (/draft|iphone|android/i.test(s)) return "Draft Orders";
+  return "Unknown";
+}
+
+async function pullEvents(metricId, fromIso, toIso, take, label) {
+  const filter = `and(equals(metric_id,"${metricId}"),greater-or-equal(datetime,${fromIso}),less-than(datetime,${toIso}))`;
+  let path = `/events?filter=${encodeURIComponent(filter)}&page%5Bsize%5D=200`;
+  const out = [];
+  let pages = 0;
+  while (path && pages < 4000) {
+    const res = await get(path, label);
+    for (const e of res.data ?? []) out.push(take(e));
+    const next = res.links?.next;
+    path = next ? next.replace(BASE, "") : null;
+    pages++;
+  }
+  return out;
+}
+
+export async function fetchOrderInfluence({ from, to, conversionMetricId }) {
+  const clickMetric = await findMetricIdByName("Clicked Email");
+
+  // Clicks are pulled with a lookback so an order early in the range can still
+  // see a click that happened before it.
+  const lookbackFrom = new Date(`${from}T00:00:00Z`);
+  lookbackFrom.setUTCDate(lookbackFrom.getUTCDate() - INFLUENCE_LOOKBACK_DAYS);
+  const endExclusive = new Date(`${to}T00:00:00Z`);
+  endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+  const endIso = `${endExclusive.toISOString().slice(0, 10)}T00:00:00`;
+
+  const clicks = await pullEvents(
+    clickMetric, `${lookbackFrom.toISOString().slice(0, 10)}T00:00:00`, endIso,
+    (e) => ({ profile: e.relationships?.profile?.data?.id, t: Date.parse(e.attributes?.datetime) }),
+    "influence clicks",
+  );
+  const orders = await pullEvents(
+    conversionMetricId, `${from}T00:00:00`, endIso,
+    (e) => ({
+      orderId: String(e.attributes?.event_properties?.$event_id ?? ""),
+      profile: e.relationships?.profile?.data?.id,
+      t: Date.parse(e.attributes?.datetime),
+      value: Number(e.attributes?.event_properties?.$value ?? 0),
+      src: e.attributes?.event_properties?.["Source Name"],
+    }),
+    "influence orders",
+  );
+
+  const byProfile = new Map();
+  for (const c of clicks) {
+    if (!c.profile || !Number.isFinite(c.t)) continue;
+    const arr = byProfile.get(c.profile) ?? [];
+    arr.push(c.t);
+    byProfile.set(c.profile, arr);
+  }
+  for (const arr of byProfile.values()) arr.sort((a, b) => a - b);
+
+  const rows = [];
+  for (const o of orders) {
+    if (!o.orderId || !Number.isFinite(o.t)) continue;
+    // Most recent click at or before the order. Clicks AFTER the order are
+    // ignored: they cannot have caused it.
+    let last = null;
+    for (const t of byProfile.get(o.profile) ?? []) {
+      if (t <= o.t) last = t;
+      else break;
+    }
+    rows.push({
+      order_id: o.orderId,
+      ordered_at: new Date(o.t).toISOString(),
+      date: toAmmanDate(o.t),
+      sub_channel: subChannelFromKlaviyoSource(o.src),
+      revenue_jod: money3(o.value),
+      hours_since_click: last === null ? null : Number(((o.t - last) / 3600000).toFixed(2)),
+    });
+  }
+  log.ok(`influence: ${orders.length} orders, ${clicks.length} clicks, ${rows.filter((r) => r.hours_since_click !== null).length} with a prior click`);
+  return rows;
 }
 
 /** The Amman calendar date an instant falls on. */

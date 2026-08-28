@@ -420,6 +420,110 @@ export async function fetchDailySales(from, to) {
  * Attribution is deliberately NOT written here. It is whole-account and cannot
  * be split by channel, so it lives in klaviyo_attributed_daily.
  */
+/* ------------------------------------------------------------------------
+ * MARGIN
+ *
+ * ShopifyQL's `sales_channel` is a THIRD channel vocabulary, distinct from
+ * Order.sourceName and from Klaviyo's Source Name. Every value observed across
+ * 2025-2026 is mapped below; anything new is reported rather than dropped.
+ *
+ * Note "Shopify Mobile for iPhone" — 347k JOD in 2025 — has no sourceName
+ * equivalent at all. Those are draft orders created from the Shopify admin
+ * apps, which the order API reports simply as shopify_draft_order. Validated
+ * against our own 2025 revenue: mapped Draft Orders came within 0.2%.
+ * --------------------------------------------------------------------- */
+export const SALES_CHANNEL_MAP = {
+  "Online Store":               "Website",
+  "Appmaker.xyz - Mobile app":  "Mobile App",
+  "Shopney - Mobile App":       "Mobile App",
+  "Point of Sale":              "POS",
+  "Odoo Connector":             "POS",
+  "Draft Orders":               "Draft Orders",
+  "Shopify Mobile for iPhone":  "Draft Orders",
+  "Shopify Mobile for Android": "Draft Orders",
+  "Shopify Web":                "Draft Orders",
+};
+
+/** ShopifyQL, which is a GraphQL query and so passes the read-only guard. */
+async function shopifyql(sql, label) {
+  const data = await gql(
+    `query Ql($q: String!) { shopifyqlQuery(query: $q) { parseErrors tableData { rows columns { name } } } }`,
+    { q: sql },
+    label,
+  );
+  const r = data?.shopifyqlQuery;
+  if (r?.parseErrors && (Array.isArray(r.parseErrors) ? r.parseErrors.length : true)) {
+    throw new Error(`${label}: ShopifyQL rejected the query — ${JSON.stringify(r.parseErrors).slice(0, 200)}`);
+  }
+  const cols = (r?.tableData?.columns ?? []).map((c) => c.name);
+  return (r?.tableData?.rows ?? []).map((row) =>
+    Object.fromEntries((Array.isArray(row) ? row : cols.map((c) => row[c])).map((v, i) => [cols[i], v])),
+  );
+}
+
+/**
+ * Monthly margin per sub-channel. Shopify caps a ShopifyQL range at one year,
+ * same as Klaviyo's reports, so multi-year ranges are chunked.
+ */
+export async function fetchMonthlyMargin(from, to) {
+  const out = new Map();     // `${month}|${sub_channel}` -> row
+  const unmapped = new Map();
+
+  for (const chunk of yearChunks(from, to)) {
+    const sql =
+      `FROM sales SHOW net_sales, gross_profit ` +
+      `GROUP BY month, sales_channel SINCE ${chunk.from} UNTIL ${chunk.to}`;
+    const rows = await shopifyql(sql, `margin ${chunk.from}..${chunk.to}`);
+    for (const r of rows) {
+      const raw = String(r.sales_channel ?? "").trim();
+      const sub = SALES_CHANNEL_MAP[raw];
+      if (!sub) {
+        unmapped.set(raw, (unmapped.get(raw) ?? 0) + Number(r.net_sales ?? 0));
+        continue;
+      }
+      const month = String(r.month ?? "").slice(0, 10);
+      if (!month) continue;
+      const key = `${month}|${sub}`;
+      const cur = out.get(key) ?? { month, sub_channel: sub, net: 0, profit: 0, sources: new Set() };
+      cur.net += Number(r.net_sales ?? 0);
+      cur.profit += Number(r.gross_profit ?? 0);
+      cur.sources.add(raw);
+      out.set(key, cur);
+    }
+  }
+
+  if (unmapped.size) {
+    log.warn(`ShopifyQL sales_channel value(s) not in SALES_CHANNEL_MAP, EXCLUDED from margin:`);
+    for (const [name, net] of unmapped) log.warn(`    ${name}  (${money3(net)} JOD net)`);
+    log.warn("  Add them to SALES_CHANNEL_MAP in lib/shopify.mjs — margin is understated until you do.");
+  }
+
+  return [...out.values()].map((v) => ({
+    month: v.month,
+    sub_channel: v.sub_channel,
+    net_sales_jod: money3(v.net),
+    gross_profit_jod: money3(v.profit),
+    source_channels: [...v.sources].sort(),
+  }));
+}
+
+/** Shopify rejects a ShopifyQL range longer than a year, as Klaviyo does. */
+function yearChunks(from, to) {
+  const chunks = [];
+  let start = from;
+  while (start <= to) {
+    const d = new Date(`${start}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 359);
+    const end = d.toISOString().slice(0, 10);
+    chunks.push({ from: start, to: end < to ? end : to });
+    if (end >= to) break;
+    const n = new Date(`${end}T12:00:00Z`);
+    n.setUTCDate(n.getUTCDate() + 1);
+    start = n.toISOString().slice(0, 10);
+  }
+  return chunks;
+}
+
 export function toSalesRows(byDay, days) {
   const rows = [];
   for (const date of days) {

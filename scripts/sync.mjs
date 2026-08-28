@@ -200,6 +200,29 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
  * send event to collect distinct profiles. Runs one day at a time and resumes,
  * exactly like the flow reports, so a long backfill spans several nights.
  */
+/** Monthly gross margin from Shopify's own analytics. One query per year. */
+async function syncMargin({ from, to, dryRun }) {
+  const started = Date.now();
+  const rows = await shopify.fetchMonthlyMargin(from, to);
+  if (dryRun) {
+    log.info("Margin — would write:");
+    preview("shopify_margin_monthly", rows, ["month", "sub_channel", "net_sales_jod", "gross_profit_jod"]);
+    for (const r of rows.slice(0, 3)) {
+      const m = r.net_sales_jod > 0 ? (100 * r.gross_profit_jod / r.net_sales_jod).toFixed(1) : "-";
+      log.info(`      ${r.month} ${r.sub_channel.padEnd(13)} margin ${m}%  from [${r.source_channels.join(", ")}]`);
+    }
+    return rows.length;
+  }
+  const w = await upsert("shopify_margin_monthly", rows, "month,sub_channel", { dryRun });
+  await writeSyncLog(
+    { source: "shopify_margin_monthly", status: "success", rangeStart: from, rangeEnd: to, rowsWritten: w,
+      message: `${w} month/channel rows`, durationMs: Date.now() - started },
+    { dryRun },
+  );
+  log.ok(`Margin: ${w} month/channel row(s)`);
+  return w;
+}
+
 async function syncReach({ from, to, dryRun, force, maxDays }) {
   const started = Date.now();
   const metricIds = await klaviyo.resolveReachMetricIds();
@@ -322,7 +345,7 @@ async function main() {
   if (from > to) throw new Error(`--from (${from}) is after --to (${to})`);
 
   const sources = args.only ?? ["klaviyo", "shopify", "loyaltylion"];
-  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach"].includes(s));
+  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin"].includes(s));
   if (unknown.length) throw new Error(`--only: unknown source(s) ${unknown.join(", ")}`);
 
   preflight(sources, args.dryRun);
@@ -351,6 +374,16 @@ async function main() {
       failures.push(["shopify", err]);
       log.error(`Shopify failed — ${redact(err.message)}`);
       if (!args.dryRun) await writeSyncLog({ source: "shopify_daily_sales", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
+    }
+  }
+
+  if (sources.includes("margin")) {
+    try {
+      totalRows += await syncMargin({ from, to, dryRun: args.dryRun });
+    } catch (err) {
+      failures.push(["margin", err]);
+      log.error(`Margin failed — ${redact(err.message)}`);
+      if (!args.dryRun) await writeSyncLog({ source: "shopify_margin_monthly", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
     }
   }
 
@@ -398,7 +431,7 @@ function preflight(sources, dryRun) {
 
   // Shopify accepts either the Dev Dashboard client credentials (current) or a
   // legacy shpat_ token, if one still exists from an admin-created custom app.
-  if (sources.includes("shopify")) {
+  if (sources.includes("shopify") || sources.includes("margin")) {
     const hasLegacy = Boolean(process.env.SHOPIFY_ADMIN_TOKEN);
     const hasId = Boolean(process.env.SHOPIFY_CLIENT_ID);
     const hasSecret = Boolean(process.env.SHOPIFY_CLIENT_SECRET);
@@ -438,7 +471,7 @@ function preflight(sources, dryRun) {
 
 function readmeUsage() {
   return `Usage: node scripts/sync.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach]
+                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach,margin]
 
   --max-days N   cap how many flow days one run attempts, so a long backfill
                  can span several runs within Klaviyo's 225/day limit

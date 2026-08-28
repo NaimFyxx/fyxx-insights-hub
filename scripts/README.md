@@ -147,6 +147,65 @@ groupings arrive from the report endpoints and metadata from the list endpoint.
 > business one. This is the single most likely source of a confident wrong
 > conclusion in this dataset.
 
+> ### ⚠️ A THIRD channel vocabulary: ShopifyQL `sales_channel`
+>
+> Three systems, three names for the same channel, none of which error when you
+> use the wrong one:
+>
+> | Sub-channel | Shopify `Order.sourceName` | Klaviyo `Source Name` | ShopifyQL `sales_channel` |
+> |---|---|---|---|
+> | Website | `web` | `web` | `Online Store` |
+> | Mobile App | `5382175`, `2653365` | `Appmaker.xyz - Mobile app` | `Appmaker.xyz - Mobile app`, `Shopney - Mobile App` |
+> | POS | `pos`, `179433` | `Odoo Connector` | `Point of Sale`, `Odoo Connector` |
+> | Draft Orders | `shopify_draft_order` | `shopify_draft_order` | `Draft Orders`, `Shopify Mobile for iPhone`, `Shopify Mobile for Android`, `Shopify Web` |
+>
+> **`Shopify Mobile for iPhone` was 347k JOD in 2025 and has no `sourceName`
+> equivalent at all** — those are draft orders created from the Shopify admin
+> apps, which the order API reports simply as `shopify_draft_order`. Four
+> ShopifyQL channels collapse into our one Draft Orders bucket.
+>
+> Mapping validated against our own 2025 revenue, ex-VAT: Draft Orders within
+> 0.2%, POS 0.04%, Mobile App 2.6%, Website 3.3% — residuals consistent with
+> returns, which ShopifyQL nets off and our order totals do not.
+
+## Margin
+
+`shopify_margin_monthly`, one row per month per sub-channel, from Shopify's own
+`gross_profit`. **Margin = `gross_profit_jod / net_sales_jod`.**
+
+**Why Shopify's figure and not our own:** cost is not on the order. `LineItem`
+has no cost field, and `variant.inventoryItem.unitCost` is *today's* cost —
+applying it historically would erase a real decline. Shopify snapshots cost at
+time of sale, which we cannot reproduce. It also means the dashboard agrees
+with Shopify's own reports.
+
+**Realised, not shelf.** `net_sales` is ex-VAT and after discounts (~4.9%) and
+returns (~14.5%). Zeid's `(RSP ex-VAT − cost) ÷ RSP ex-VAT` on shelf prices
+gives a higher number. Same arithmetic, different revenue base — always label
+it realised.
+
+**Cost coverage: 98.2% of revenue.** 89.4% of *variants* carry a cost, but the
+uncosted ones are low-volume; measured on August, only 1.8% of revenue lacks
+one, and the largest uncosted lines are `Tip` and `By The Glass Card Top-Up`,
+which genuinely have no cost. Note the failure mode: a missing cost counts as
+zero cost and **inflates** margin rather than leaving a visible gap.
+
+Margin by sub-channel, Jan 2025 – Aug 2026:
+
+| Sub-channel | Net sales | Gross profit | Margin |
+|---|---|---|---|
+| POS | 940,177 | 420,660 | **44.7%** |
+| Mobile App | 872,993 | 211,385 | 24.2% |
+| Website | 135,859 | 32,701 | 24.1% |
+| Draft Orders | 1,287,130 | 278,492 | **21.6%** |
+
+Draft Orders is the largest channel by revenue and the *lowest* margin; POS is
+roughly double it. Two things worth raising separately: blended margin fell from
+33.1% (Jan 2026) to 27.5% (Aug 2026) with the drop landing in April, and returns
+run at ~14.5% of gross sales, which feeds straight into realised margin. If that
+returns figure is inflated by cancelled orders or Webkul refund artefacts rather
+than genuine returns, the margin decline is partly an artefact too.
+
 ## Frontend contract (for Step 4)
 
 Decisions made while building the data layer that the dashboard must honour.
@@ -255,6 +314,27 @@ sync actually did rather than guessing:
 
 Failures are logged too, with a redacted message.
 
+> ### ⚠️ The project is in Tokyo, not Frankfurt
+>
+> `ap-northeast-1` was a setup mistake, not a decision. Amman → Tokyo is roughly
+> 9,000 km against 2,800 km to Frankfurt, so every database round trip carries
+> perhaps 200ms more latency than it needs to. A page making several queries
+> feels it.
+>
+> **If the dashboard ever feels sluggish, check this before optimising queries.**
+> The slowness would be distance, not the SQL.
+>
+> Supabase cannot move a project between regions in place. Migrating means a new
+> project in `eu-central-1`, restoring a dump into it, and re-pointing
+> everything: `.env`, the five GitHub Secrets, `SUPABASE_DB_URL`, and Lovable's
+> connection. The data itself is the cheap part.
+>
+> Worth knowing: **once the weekly dumps are working, migrating stops being
+> expensive.** The original argument against it was the cost of re-running a
+> 20-hour backfill. With a restorable dump that argument goes away — it becomes
+> a restore plus an afternoon of re-pointing credentials. Revisit it then if the
+> latency ever actually bothers anyone.
+
 ## Backups: which connection string
 
 `pg_dump` must use the **session-mode pooler**, and the hostname must carry the
@@ -271,6 +351,14 @@ Why not the other two:
 | Direct `db.<ref>.supabase.co` | 5432 | **Unusable.** IPv6-only without the paid IPv4 add-on; GitHub Actions runners are IPv4-only |
 | Session pooler | 5432 | **Correct.** Supports the session semantics pg_dump needs |
 | Transaction pooler | 6543 | **Unusable.** No prepared statements, which pg_dump requires |
+
+**A caveat to write down now rather than rediscover during a restore:** Supabase's
+own docs recommend the **direct** connection for `pg_dump`, and we cannot use it
+— it is IPv6-only without the paid add-on and Actions runners are IPv4. Session
+mode is the documented fallback and provides the session semantics `pg_dump`
+needs, but it is not the recommended path. If a restore ever behaves oddly, that
+is the first thing to suspect, and taking a dump from a machine with IPv6 over
+the direct connection is the comparison to make.
 
 A wrong region gives a misleading error that looks like a credentials problem:
 

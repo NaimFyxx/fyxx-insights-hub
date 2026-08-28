@@ -113,6 +113,40 @@ groupings arrive from the report endpoints and metadata from the list endpoint.
 > one system's name for a thing is not another's, and neither errors when you
 > use the wrong one.
 
+> ### ⚠️ POS changed DEFINITION on 2026-02-27, not just provider
+>
+> The POS column means two different things either side of that date, and
+> nothing in the data says so.
+>
+> | Period | Source | What a POS order means |
+> |---|---|---|
+> | up to 2026-02-26 | `pos` (Shopify POS) | **every** retail order |
+> | from 2026-02-27 | `179433` (Odoo Connector) | **only** retail orders with a customer attached in Odoo |
+>
+> The Odoo connector syncs only orders with an identified customer. Anonymous
+> walk-ins never reach Shopify at all, so they are not missing data that could
+> be recovered — they were never captured. Do not attempt to correct or
+> estimate the gap.
+>
+> Measured like-for-like on April–July (avoiding Ramadan, which moves between
+> February and March across these two years):
+>
+> | | Orders | Revenue | AOV |
+> |---|---|---|---|
+> | Apr–Jul **2025**, all retail | 5,207 | 300,584 JOD | 57.7 |
+> | Apr–Jul **2026**, identified only | 1,094 | 89,254 JOD | 81.6 |
+> | identified share | **21.0%** | **29.7%** | **+41%** |
+>
+> So roughly **four in five retail orders are anonymous walk-ins**, and the
+> identified fifth spends ~41% more per order. Both figures assume footfall was
+> broadly stable year on year.
+>
+> **Any range crossing 2026-02-27 must carry a warning**, and the UI must show a
+> caption when POS is toggled on and the range spans that date. A 2025-vs-2026
+> POS comparison shows a ~79% collapse that is a definition change, not a
+> business one. This is the single most likely source of a confident wrong
+> conclusion in this dataset.
+
 ## Frontend contract (for Step 4)
 
 Decisions made while building the data layer that the dashboard must honour.

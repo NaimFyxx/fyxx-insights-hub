@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const NAV = [
   { to: "/overview", label: "Overview" },
+  { to: "/online", label: "Online channels" },
   { to: "/campaigns", label: "Email campaigns" },
   { to: "/flows", label: "Flows" },
   { to: "/push", label: "Push" },

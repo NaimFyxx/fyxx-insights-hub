@@ -17,6 +17,7 @@ import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
 import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
 import { Route as AuthenticatedLoyaltyRouteImport } from './routes/_authenticated/loyalty'
+import { Route as AuthenticatedOnlineRouteImport } from './routes/_authenticated/online'
 import { Route as AuthenticatedOverviewRouteImport } from './routes/_authenticated/overview'
 import { Route as AuthenticatedPushRouteImport } from './routes/_authenticated/push'
 import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
@@ -61,6 +62,11 @@ const AuthenticatedLoyaltyRoute = AuthenticatedLoyaltyRouteImport.update({
   path: '/loyalty',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedOnlineRoute = AuthenticatedOnlineRouteImport.update({
+  id: '/online',
+  path: '/online',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedOverviewRoute = AuthenticatedOverviewRouteImport.update({
   id: '/overview',
   path: '/overview',
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/export': typeof AuthenticatedExportRoute
   '/flows': typeof AuthenticatedFlowsRoute
   '/loyalty': typeof AuthenticatedLoyaltyRoute
+  '/online': typeof AuthenticatedOnlineRoute
   '/overview': typeof AuthenticatedOverviewRoute
   '/push': typeof AuthenticatedPushRoute
   '/report': typeof AuthenticatedReportRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/export': typeof AuthenticatedExportRoute
   '/flows': typeof AuthenticatedFlowsRoute
   '/loyalty': typeof AuthenticatedLoyaltyRoute
+  '/online': typeof AuthenticatedOnlineRoute
   '/overview': typeof AuthenticatedOverviewRoute
   '/push': typeof AuthenticatedPushRoute
   '/report': typeof AuthenticatedReportRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/_authenticated/flows': typeof AuthenticatedFlowsRoute
   '/_authenticated/loyalty': typeof AuthenticatedLoyaltyRoute
+  '/_authenticated/online': typeof AuthenticatedOnlineRoute
   '/_authenticated/overview': typeof AuthenticatedOverviewRoute
   '/_authenticated/push': typeof AuthenticatedPushRoute
   '/_authenticated/report': typeof AuthenticatedReportRoute
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/flows'
     | '/loyalty'
+    | '/online'
     | '/overview'
     | '/push'
     | '/report'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/flows'
     | '/loyalty'
+    | '/online'
     | '/overview'
     | '/push'
     | '/report'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/_authenticated/export'
     | '/_authenticated/flows'
     | '/_authenticated/loyalty'
+    | '/_authenticated/online'
     | '/_authenticated/overview'
     | '/_authenticated/push'
     | '/_authenticated/report'
@@ -219,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLoyaltyRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/online': {
+      id: '/_authenticated/online'
+      path: '/online'
+      fullPath: '/online'
+      preLoaderRoute: typeof AuthenticatedOnlineRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/overview': {
       id: '/_authenticated/overview'
       path: '/overview'
@@ -249,6 +268,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
   AuthenticatedLoyaltyRoute: typeof AuthenticatedLoyaltyRoute
+  AuthenticatedOnlineRoute: typeof AuthenticatedOnlineRoute
   AuthenticatedOverviewRoute: typeof AuthenticatedOverviewRoute
   AuthenticatedPushRoute: typeof AuthenticatedPushRoute
   AuthenticatedReportRoute: typeof AuthenticatedReportRoute
@@ -260,6 +280,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedExportRoute: AuthenticatedExportRoute,
   AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
   AuthenticatedLoyaltyRoute: AuthenticatedLoyaltyRoute,
+  AuthenticatedOnlineRoute: AuthenticatedOnlineRoute,
   AuthenticatedOverviewRoute: AuthenticatedOverviewRoute,
   AuthenticatedPushRoute: AuthenticatedPushRoute,
   AuthenticatedReportRoute: AuthenticatedReportRoute,

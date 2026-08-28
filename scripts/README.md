@@ -204,6 +204,34 @@ first ten characters of a bucket files the day under the previous date.
 > **If a write is ever genuinely needed, it does not belong in this script.**
 > Put it somewhere with its own narrowly-scoped token.
 
+## Getting a permanent Shopify token
+
+```bash
+npm run shopify:install
+```
+
+Run once, from a machine with a browser signed into the Shopify admin. It
+starts a temporary local server, prints an install URL, verifies `state` and
+Shopify's HMAC on the callback, exchanges the code, and prints the token once.
+The token is never written to disk and never passed through the logger.
+
+**Register the redirect URI first**, exactly as the script prints it:
+`http://localhost:3456/callback`, at Dev Dashboard → Fyxx Insights Hub →
+Configuration → URLs → Allowed redirection URL(s). It must match character for
+character, which is why the port is fixed rather than chosen at random — the
+script refuses to move to a free port instead of failing.
+
+Offline (permanent) tokens come from omitting `grant_options[]`. Only **custom
+and merchant-created** apps get non-expiring tokens; public apps must use
+expiring ones. If the response carries `expires_in`, the script says so
+loudly — that means the app is set to public distribution.
+
+**Scopes are frozen at mint time.** A token carries only the scopes it was
+created with, so needing another later means re-running this. The script
+checks what was granted and warns if `read_all_orders` is missing, because
+without it Shopify silently returns only the last 60 days and backfills come
+back empty rather than erroring.
+
 ## Shopify authentication
 
 Shopify removed admin-created custom apps on 1 January 2026, so new apps no

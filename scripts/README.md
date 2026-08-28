@@ -113,6 +113,36 @@ groupings arrive from the report endpoints and metadata from the list endpoint.
 > one system's name for a thing is not another's, and neither errors when you
 > use the wrong one.
 
+## Frontend contract (for Step 4)
+
+Decisions made while building the data layer that the dashboard must honour.
+
+**Default channel toggles: Online Sales ON, Draft Orders ON, POS OFF.**
+Draft Orders is not a rounding error — it was 2,444 JOD on 24 Aug 2026, second
+only to the app. Defaulting it off would understate the business badly. POS is
+off by default because it is a different sales motion, not because it is small.
+
+**Attributed revenue is whole-account and cannot follow the channel toggles.**
+Its numerator is fixed while the denominator changes, so the share must carry a
+caption saying exactly that. Wording agreed:
+
+> **Klaviyo-attributed share — 19.6%**
+> 1,387.250 JOD attributed by Klaviyo across all channels, against
+> 7,060.927 JOD from the channels selected (Website, Mobile App). Attribution
+> cannot be split by channel, so the numerator is fixed while the denominator
+> follows your filters.
+
+**Two revenue bases must never be summed or compared.** `klaviyo_campaigns` and
+`klaviyo_flows` carry SEND-date revenue; `klaviyo_attributed_daily` carries
+ORDER-date revenue. Label them distinctly wherever both appear.
+
+**`shopify_daily_sales.klaviyo_attributed_revenue_jod` is dead.** Read
+`klaviyo_attributed_daily` instead. The column is retained only so the current
+frontend keeps rendering, and should be dropped during Step 4.
+
+**`total_online_revenue_jod` is misnamed.** It is now per-channel revenue, not
+online-only. Rename it to `revenue_jod` during Step 4.
+
 ## Idempotency
 
 Every write is an upsert against a unique index:

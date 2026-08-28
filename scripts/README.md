@@ -117,10 +117,18 @@ groupings arrive from the report endpoints and metadata from the list endpoint.
 
 Decisions made while building the data layer that the dashboard must honour.
 
-**Default channel toggles: Online Sales ON, Draft Orders ON, POS OFF.**
-Draft Orders is not a rounding error — it was 2,444 JOD on 24 Aug 2026, second
-only to the app. Defaulting it off would understate the business badly. POS is
-off by default because it is a different sales motion, not because it is small.
+**Default channel toggles: Online Sales only — Website ON, Mobile App ON,
+Draft Orders OFF, POS OFF.**
+
+This default deliberately excludes a large share of real revenue. Over
+2025-01-01 to 2026-08-28, Draft Orders alone was **39.3% of revenue**
+(1,491,908 JOD) and POS a further 28.8%, so the default view shows roughly a
+third of the business.
+
+That is an accepted trade-off, not an oversight — but it means the omission
+must never be silent. **The caption naming the included channels is mandatory
+on first load, not only after the user changes a toggle.** A revenue figure
+must never be ambiguous about what it covers.
 
 **Attributed revenue is whole-account and cannot follow the channel toggles.**
 Its numerator is fixed while the denominator changes, so the share must carry a

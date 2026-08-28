@@ -1,0 +1,142 @@
+name: Nightly data sync
+
+# ---------------------------------------------------------------------------
+# Pulls Klaviyo, LoyaltyLion and Shopify into Supabase.
+#
+# IMPORTANT: this nightly write is also what stops the free-tier Supabase
+# project from pausing after a week of inactivity. It must stay here and must
+# NOT be moved into Supabase's own scheduler — a paused project cannot run its
+# own cron, so scheduling it there would be self-defeating.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # 23:00 UTC = 02:00 Asia/Amman. Jordan dropped DST in 2022 and sits at
+    # UTC+3 all year, so this single expression is correct year-round.
+    - cron: "0 23 * * *"
+
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "Start date YYYY-MM-DD (blank = trailing 3 days)"
+        required: false
+        type: string
+      to:
+        description: "End date YYYY-MM-DD (blank = today, Amman time)"
+        required: false
+        type: string
+      sources:
+        description: "Which sources to run"
+        required: false
+        default: "klaviyo,shopify,loyaltylion"
+        type: choice
+        options:
+          - "klaviyo,shopify,loyaltylion"
+          - "klaviyo,shopify"
+          - "klaviyo"
+          - "shopify"
+          - "loyaltylion"
+      dry_run:
+        description: "Fetch and report only — write nothing"
+        required: false
+        default: false
+        type: boolean
+      force:
+        description: "Re-sync days already recorded as successful"
+        required: false
+        default: false
+        type: boolean
+
+# One run at a time. Two syncs overlapping would fight over the same rows and
+# the resume ledger, and a manual backfill could collide with the nightly job.
+concurrency:
+  group: data-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # A 90-day Klaviyo backfill runs ~45 minutes at 2 requests/minute. The
+    # default 360-minute cap would apply anyway; this makes the intent explicit
+    # and stops a hung run burning six hours of minutes.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          # No cache and no install step: the sync script has zero
+          # dependencies by design and needs only a Node with fetch.
+
+      - name: Show what this run will do
+        run: |
+          echo "from    : ${FROM:-trailing 3 days}"
+          echo "to      : ${TO:-today (Amman)}"
+          echo "sources : $SOURCES"
+          echo "dry run : $DRY_RUN"
+          echo "force   : $FORCE"
+        env:
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          FORCE: ${{ inputs.force || false }}
+
+      - name: Run sync
+        id: sync
+        env:
+          # Secrets are passed as environment variables and never interpolated
+          # into a command line, so they cannot leak via the run log's echoed
+          # command or via `ps`.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KLAVIYO_API_KEY: ${{ secrets.KLAVIYO_API_KEY }}
+          LOYALTYLION_API_KEY: ${{ secrets.LOYALTYLION_API_KEY }}
+          SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN || 'drynksapp.myshopify.com' }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          set -o pipefail
+          args=(--only "$SOURCES")
+          [ -n "$FROM" ] && args+=(--from "$FROM")
+          [ -n "$TO" ]   && args+=(--to "$TO")
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          [ "$FORCE" = "true" ]   && args+=(--force)
+          node scripts/sync.mjs "${args[@]}" 2>&1 | tee sync-output.txt
+
+      - name: Write run summary
+        # Runs even on failure, so a bad night is readable without opening logs.
+        if: always()
+        run: |
+          {
+            echo "### Data sync — ${{ job.status }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Range | ${FROM:-trailing 3 days} → ${TO:-today} |"
+            echo "| Sources | \`$SOURCES\` |"
+            echo "| Dry run | $DRY_RUN |"
+            echo ""
+            echo "<details><summary>Output</summary>"
+            echo ""
+            echo '```'
+            # The script redacts secrets on every line, but truncate anyway so
+            # a runaway log cannot blow the 1 MB summary limit.
+            tail -c 60000 sync-output.txt 2>/dev/null || echo "(no output captured)"
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}

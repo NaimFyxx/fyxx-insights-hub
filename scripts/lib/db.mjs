@@ -33,6 +33,22 @@ function authHeaders(key) {
  */
 export async function upsert(table, rows, conflictTarget, { dryRun }) {
   if (!rows.length) return 0;
+
+  // Postgres refuses ON CONFLICT DO UPDATE when the same command carries the
+  // same key twice: "cannot affect row a second time". Klaviyo emits duplicate
+  // Placed Order events for ~2% of orders — identical in every field — which
+  // is enough to fail an entire 44,000-row write after the pull has already
+  // cost twenty minutes. De-duplicate here rather than in each caller, so no
+  // future source can rediscover this.
+  const keyCols = conflictTarget.split(",").map((c) => c.trim());
+  const seen = new Map();
+  for (const r of rows) seen.set(keyCols.map((c) => r[c]).join("\u0000"), r);  // last wins
+  const deduped = [...seen.values()];
+  if (deduped.length !== rows.length) {
+    log.warn(`${table}: ${rows.length - deduped.length} duplicate row(s) on (${conflictTarget}) collapsed before writing`);
+  }
+  rows = deduped;
+
   if (dryRun) return rows.length;
   const { url, key } = config();
 

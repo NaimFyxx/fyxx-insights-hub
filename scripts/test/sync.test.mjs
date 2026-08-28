@@ -160,6 +160,34 @@ group("attributed revenue date mapping");
     toAmmanDate("2026-08-24T20:59:59+00:00") === "2026-08-24");
 }
 
+/* ------------------------------------------------------------- upsert -- */
+group("upsert de-duplication");
+{
+  // Regression: Klaviyo emits duplicate Placed Order events, and Postgres
+  // rejects the whole command rather than the duplicate row. A 44,000-row
+  // write died this way after a 20-minute pull.
+  const { upsert } = await import("../lib/db.mjs");
+  const orig = { warn: console.warn };
+  console.warn = () => {};
+  const rows = [
+    { order_id: "A", v: 1 }, { order_id: "B", v: 2 }, { order_id: "A", v: 1 },
+  ];
+  // dryRun returns the row count it WOULD write, after de-duplication.
+  const n = await upsert("t", rows, "order_id", { dryRun: true });
+  console.warn = orig.warn;
+  check("duplicates collapse before the write", n === 2, `would write ${n}`);
+
+  console.warn = () => {};
+  const composite = await upsert("t", [
+    { a: 1, b: "x" }, { a: 1, b: "y" }, { a: 1, b: "x" },
+  ], "a,b", { dryRun: true });
+  console.warn = orig.warn;
+  check("composite keys dedupe on the whole key", composite === 2, `would write ${composite}`);
+
+  const clean = await upsert("t", [{ order_id: "A" }, { order_id: "B" }], "order_id", { dryRun: true });
+  check("distinct rows are untouched", clean === 2);
+}
+
 /* ---------------------------------------------------------- retry -- */
 group("retry survives the failures a long backfill actually hits");
 {

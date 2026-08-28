@@ -70,15 +70,17 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # A 90-day Klaviyo backfill runs ~45 minutes at 2 requests/minute. The
-    # default 360-minute cap would apply anyway; this makes the intent explicit
-    # and stops a hung run burning six hours of minutes.
-    timeout-minutes: 120
+    # Sized against a real run: the first backfill night took 1h42m with
+    # REACH_MAX_DAYS at 40, which left only 18 minutes under the old 120-minute
+    # cap. Raising the reach rate would have been silently killed mid-run.
+    # 330 leaves room to raise it while staying under GitHub's 360-minute
+    # ceiling for a job.
+    timeout-minutes: 330
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           # No cache and no install step: the sync script has zero
@@ -239,7 +241,7 @@ jobs:
 
       - name: Upload dump
         if: ${{ (github.event.schedule == '0 1 * * 0' || inputs.backup == true) && env.BACKUP_FILE != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: db-backup-${{ env.BACKUP_FILE }}
           path: ${{ env.BACKUP_FILE }}

@@ -255,6 +255,30 @@ sync actually did rather than guessing:
 
 Failures are logged too, with a redacted message.
 
+## Backups: which connection string
+
+`pg_dump` must use the **session-mode pooler**, and the hostname must carry the
+project's **own region**:
+
+    postgres://postgres.<project-ref>:<password>@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
+
+This project is in **ap-northeast-1 (Tokyo)**, Postgres **17.6**.
+
+Why not the other two:
+
+| Method | Port | Verdict |
+|---|---|---|
+| Direct `db.<ref>.supabase.co` | 5432 | **Unusable.** IPv6-only without the paid IPv4 add-on; GitHub Actions runners are IPv4-only |
+| Session pooler | 5432 | **Correct.** Supports the session semantics pg_dump needs |
+| Transaction pooler | 6543 | **Unusable.** No prepared statements, which pg_dump requires |
+
+A wrong region gives a misleading error that looks like a credentials problem:
+
+    FATAL: (ENOTFOUND) tenant/user postgres.<ref> not found
+
+The tenant exists — just in a different region's pooler. Check the region in
+Project Settings before assuming the password is wrong.
+
 ## Runtime notes
 
 **No dependencies.** The sync script deliberately avoids

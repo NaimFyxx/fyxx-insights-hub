@@ -12,12 +12,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export function loadEnv() {
   const path = resolve(ROOT, ".env");
   if (!existsSync(path)) return;
+  const malformed = [];
   for (const raw of readFileSync(path, "utf8").split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const eq = line.indexOf("=");
-    if (eq === -1) continue;
+    if (eq === -1) { malformed.push(line); continue; }
     const key = line.slice(0, eq).trim();
+    // A line that is not KEY=value is usually a shell command pasted in by
+    // mistake. That is dangerous, not merely useless: anything that runs
+    // `source .env` will EXECUTE it. Say so rather than skipping in silence.
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) { malformed.push(line); continue; }
     let val = line.slice(eq + 1).trim();
     if (
       (val.startsWith('"') && val.endsWith('"')) ||
@@ -25,7 +30,16 @@ export function loadEnv() {
     ) {
       val = val.slice(1, -1);
     }
-    if (process.env[key] === undefined) process.env[key] = val;
+    // An empty placeholder must not shadow a real value later in the file.
+    if (val === "") continue;
+    if (!process.env[key]) process.env[key] = val;
+  }
+
+  if (malformed.length) {
+    console.warn(`\n! .env has ${malformed.length} line(s) that are not KEY=value and were IGNORED:`);
+    for (const l of malformed.slice(0, 5)) console.warn(`    ${l.slice(0, 70)}${l.length > 70 ? "…" : ""}`);
+    console.warn("  If you meant to paste a value, the line must read KEY=value with no spaces");
+    console.warn("  around the =. A shell command left in .env is a hazard: `source .env` RUNS it.\n");
   }
 }
 

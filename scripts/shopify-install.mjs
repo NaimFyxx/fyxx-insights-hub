@@ -25,11 +25,37 @@
  * is included from the start because without it Shopify silently returns only
  * the last 60 days and backfills come back empty rather than erroring.
  */
+import { appendFileSync, readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import { loadEnv, need, optional } from "./lib/env.mjs";
 
 loadEnv();
+
+const WRITE_ENV = process.argv.includes("--write-env");
+const ENV_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env");
+
+/**
+ * Writes the token straight into .env, so it never has to be copied by hand.
+ * Shuttling a secret through a terminal and a clipboard is where it gets
+ * pasted into the wrong place — including into .env as a shell command, which
+ * then RUNS whenever anything sources the file.
+ */
+function writeToEnv(token) {
+  const line = `SHOPIFY_ADMIN_TOKEN=${token}`;
+  let existing = existsSync(ENV_PATH) ? readFileSync(ENV_PATH, "utf8") : "";
+  if (/^SHOPIFY_ADMIN_TOKEN=.+$/m.test(existing)) {
+    throw new Error(
+      ".env already has a non-empty SHOPIFY_ADMIN_TOKEN. Refusing to add a second one.\n" +
+        "  Remove or comment out the existing line first, then re-run with --write-env.",
+    );
+  }
+  const prefix = existing.length && !existing.endsWith("\n") ? "\n" : "";
+  appendFileSync(ENV_PATH, `${prefix}${line}\n`);
+  return ENV_PATH;
+}
 
 const SHOP = optional("SHOPIFY_STORE_DOMAIN") || "drynksapp.myshopify.com";
 const PORT = Number(optional("SHOPIFY_OAUTH_PORT") ?? 3456);
@@ -196,9 +222,17 @@ async function main() {
     }
   }
   console.log("");
-  console.log("  Paste this into .env as SHOPIFY_ADMIN_TOKEN — shown once, not saved:");
-  console.log("");
-  console.log(`SHOPIFY_ADMIN_TOKEN=${json.access_token}`);
+  if (WRITE_ENV) {
+    const path = writeToEnv(json.access_token);
+    console.log(`  ✓ Written straight into ${path} as SHOPIFY_ADMIN_TOKEN.`);
+    console.log("    Not shown here, and never copied by hand.");
+  } else {
+    console.log("  Copy the WHOLE line below into .env, exactly as it appears.");
+    console.log("  It is a variable assignment, not a command — do not paste anything else.");
+    console.log("  (Or re-run with --write-env and the script will do it for you.)");
+    console.log("");
+    console.log(`SHOPIFY_ADMIN_TOKEN=${json.access_token}`);
+  }
   console.log("");
   console.log("  Then clear SHOPIFY_CLIENT_SECRET if you no longer need the 24h flow.");
   console.log("─".repeat(72));

@@ -28,6 +28,12 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 }
 
 
+// Public project values (publishable/anon key — safe in the browser). Used as a
+// last-resort fallback when the build-time env injection is unavailable.
+const FALLBACK_SUPABASE_URL = 'https://gpnglfdusrymnookeclg.supabase.co';
+const FALLBACK_SUPABASE_PUBLISHABLE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwbmdsZmR1c3J5bW5vb2tlY2xnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4MjI3NTcsImV4cCI6MjEwMzM5ODc1N30.dNzfw3Pg6dr96pofNycPY3PNzhzBRpjkq1jpHW2-Mho';
+
 function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
   // Fall back to process.env for SSR (server-side rendering)
@@ -35,12 +41,15 @@ function createSupabaseClient() {
     // @ts-ignore - literal form so Vite statically inlines the value at build time
     import.meta.env.VITE_SUPABASE_URL ||
     import.meta.env['VITE_SUPABASE_URL'] ||
-    (typeof process !== 'undefined' ? process.env['SUPABASE_URL'] : undefined);
+    (typeof process !== 'undefined' ? process.env['SUPABASE_URL'] : undefined) ||
+    FALLBACK_SUPABASE_URL;
   const SUPABASE_PUBLISHABLE_KEY =
     // @ts-ignore - literal form so Vite statically inlines the value at build time
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
-    (typeof process !== 'undefined' ? process.env['SUPABASE_PUBLISHABLE_KEY'] : undefined);
+    (typeof process !== 'undefined' ? process.env['SUPABASE_PUBLISHABLE_KEY'] : undefined) ||
+    FALLBACK_SUPABASE_PUBLISHABLE_KEY;
+
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [

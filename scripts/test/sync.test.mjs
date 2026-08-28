@@ -160,6 +160,28 @@ group("attributed revenue date mapping");
     toAmmanDate("2026-08-24T20:59:59+00:00") === "2026-08-24");
 }
 
+/* ---------------------------------------------------------- retry -- */
+group("retry survives the failures a long backfill actually hits");
+{
+  const { withRetry } = await import("../lib/log.mjs");
+  const orig = { log: console.log, warn: console.warn };
+  const quiet = async (fn) => { console.log = console.warn = () => {}; try { return await fn(); } finally { Object.assign(console, orig); } };
+
+  // A dropped connection: TypeError with the reason on .cause, no status.
+  let calls = 0;
+  const netErr = () => { const e = new TypeError("fetch failed"); e.cause = { code: "ECONNRESET" }; throw e; };
+  const got = await quiet(() => withRetry("net", async () => { calls++; if (calls < 3) netErr(); return "recovered"; }, { tries: 5 }));
+  check("a dropped connection is retried, not fatal", got === "recovered", `after ${calls} attempts`);
+
+  // A 400 is a real error and must NOT be retried into oblivion.
+  let bad = 0;
+  let threw = null;
+  try {
+    await quiet(() => withRetry("bad", async () => { bad++; const e = new Error("bad request"); e.status = 400; throw e; }, { tries: 4 }));
+  } catch (e) { threw = e; }
+  check("a 400 fails immediately rather than retrying", threw !== null && bad === 1, `attempts=${bad}`);
+}
+
 /* ------------------------------------------------------------ limiter -- */
 group("rate limiter");
 {

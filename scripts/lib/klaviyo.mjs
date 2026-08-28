@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { need } from "./env.mjs";
 import { Limiter, httpJson, withRetry, log, money3, int, rate4 } from "./log.mjs";
 
@@ -267,6 +268,114 @@ export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId
     dates.forEach((d, i) => byDay.set(d, (byDay.get(d) ?? 0) + Number(values[i] ?? 0)));
   }
   return byDay;
+}
+
+/* ------------------------------------------------------------------------
+ * UNIQUE REACH
+ *
+ * Klaviyo cannot answer "how many distinct people did we reach" for a range:
+ * metric_id takes one metric so email and push cannot be combined, and there
+ * is no filter to isolate flow traffic as a single group. Counts also cannot
+ * be summed across days, because the same people recur.
+ *
+ * SETS can be unioned though, so we store the daily set of profile identifiers
+ * and let Postgres do the union for whatever range is asked for. That makes any
+ * range — including a report export for an arbitrary month — a database query
+ * rather than a 20-minute crawl.
+ *
+ * Identifiers are hashed before they are stored. We never keep a raw Klaviyo
+ * profile id or an email; the hash is only ever compared with other hashes.
+ * --------------------------------------------------------------------- */
+
+/** Metrics that count as "reached". Resolved by name, never hardcoded ids. */
+export const REACH_METRICS = { email: "Received Email", push: "Received Push" };
+
+export async function resolveReachMetricIds() {
+  const found = {};
+  let url = "/metrics";
+  let pages = 0;
+  while (url && pages < 10) {
+    const res = await get(url, "metrics");
+    for (const m of res.data ?? []) {
+      for (const [channel, name] of Object.entries(REACH_METRICS)) {
+        if (m.attributes?.name === name) found[channel] = m.id;
+      }
+    }
+    const next = res.links?.next;
+    url = next ? next.replace(BASE, "") : null;
+    pages++;
+  }
+  const missing = Object.keys(REACH_METRICS).filter((c) => !found[c]);
+  if (missing.length) {
+    throw new Error(`Klaviyo metric(s) not found: ${missing.map((c) => REACH_METRICS[c]).join(", ")}`);
+  }
+  return found;
+}
+
+/**
+ * 48-bit hash of a profile id. Non-reversible, and small enough to stay inside
+ * JavaScript's safe integer range so it survives JSON without precision loss.
+ * Collision odds at this scale are negligible: ~50k ids in a 2^48 space is
+ * about one chance in 200,000 of a single collision.
+ */
+export function hashProfileId(id) {
+  const d = createHash("sha256").update(String(id)).digest();
+  return d.readUIntBE(0, 6);
+}
+
+/**
+ * One day of reach, split into the four buckets the dashboard needs:
+ * email/campaign, email/flow, push/campaign, push/flow.
+ *
+ * `$flow` present on the event means it came from a flow; absent means a
+ * campaign. Verified against the aggregate endpoint, which splits the same way.
+ */
+export async function fetchDailyReach(day, metricIds) {
+  const next = new Date(`${day}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const dayEnd = next.toISOString().slice(0, 10);
+
+  const buckets = new Map();
+  const key = (channel, source) => `${channel}|${source}`;
+  for (const channel of Object.keys(metricIds)) {
+    for (const source of ["campaign", "flow"]) {
+      buckets.set(key(channel, source), { hashes: new Set(), events: 0 });
+    }
+  }
+
+  for (const [channel, metricId] of Object.entries(metricIds)) {
+    const filter = `and(equals(metric_id,"${metricId}"),greater-or-equal(datetime,${day}T00:00:00),less-than(datetime,${dayEnd}T00:00:00))`;
+    let path = `/events?filter=${encodeURIComponent(filter)}&page%5Bsize%5D=200`;
+    let pages = 0;
+    while (path && pages < 2000) {
+      const res = await get(path, `reach ${channel} ${day}`);
+      for (const e of res.data ?? []) {
+        const profileId = e.relationships?.profile?.data?.id;
+        const source = e.attributes?.event_properties?.$flow ? "flow" : "campaign";
+        const b = buckets.get(key(channel, source));
+        b.events++;
+        if (profileId) b.hashes.add(hashProfileId(profileId));
+      }
+      const nextLink = res.links?.next;
+      path = nextLink ? nextLink.replace(BASE, "") : null;
+      pages++;
+    }
+  }
+
+  return [...buckets.entries()]
+    .map(([k, v]) => {
+      const [channel, source] = k.split("|");
+      return {
+        date: day,
+        channel,
+        source,
+        profile_hashes: [...v.hashes],
+        profile_count: v.hashes.size,
+        event_count: v.events,
+      };
+    })
+    // A day with no sends on a channel writes nothing rather than an empty row.
+    .filter((r) => r.event_count > 0);
 }
 
 /** The Amman calendar date an instant falls on. */

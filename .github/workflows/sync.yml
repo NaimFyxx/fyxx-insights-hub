@@ -158,6 +158,33 @@ jobs:
             --max-days "$MAX_DAYS" 2>&1 | tee -a sync-output.txt
 
       # ---------------------------------------------------------------------
+      # Unique reach.
+      #
+      # Walks every send event for a day to collect distinct profiles, roughly
+      # two minutes a day. Stored as daily SETS so any range is a union in
+      # Postgres rather than a fresh crawl — that is what keeps a report export
+      # for an arbitrary month instant instead of a twenty-minute wait.
+      #
+      # Same BACKFILL_FROM variable as the flows: while it is set, this chips
+      # away at history a bounded number of days per night.
+      # ---------------------------------------------------------------------
+      - name: Unique reach
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KLAVIYO_API_KEY: ${{ secrets.KLAVIYO_API_KEY }}
+          BACKFILL_FROM: ${{ vars.BACKFILL_FROM }}
+          REACH_MAX_DAYS: ${{ vars.REACH_MAX_DAYS || '40' }}
+        run: |
+          set -o pipefail
+          # Yesterday always, plus backfill days while BACKFILL_FROM is set.
+          FROM="${BACKFILL_FROM:-$(date -u -d 'yesterday' +%Y-%m-%d)}"
+          echo "Reach from $FROM, up to $REACH_MAX_DAYS day(s) this run."
+          node scripts/sync.mjs --only reach --from "$FROM" \
+            --max-days "$REACH_MAX_DAYS" 2>&1 | tee -a sync-output.txt
+
+      # ---------------------------------------------------------------------
       # Weekly database dump.
       #
       # Stored as a workflow ARTIFACT, deliberately not committed to the repo:

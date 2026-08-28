@@ -55,17 +55,27 @@ export class Limiter {
 }
 
 /** Retries on 429 and 5xx with exponential backoff, honouring Retry-After. */
-export async function withRetry(label, fn, { tries = 5 } = {}) {
+export async function withRetry(label, fn, { tries = 8 } = {}) {
   let delay = 2000;
   for (let attempt = 1; attempt <= tries; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const status = err?.status;
-      const retryable = status === 429 || (status >= 500 && status < 600) || err?.code === "ETIMEDOUT";
+      // A dropped connection surfaces as `TypeError: fetch failed` with the
+      // real reason on err.cause — no status, no top-level code. Without this
+      // a single blip aborts a backfill that takes hours, which is exactly
+      // when a blip is most likely.
+      const netCode = err?.code ?? err?.cause?.code;
+      const networkFailure =
+        err?.name === "TypeError" ||
+        ["ETIMEDOUT", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "EHOSTUNREACH", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"].includes(netCode);
+      const retryable = status === 429 || (status >= 500 && status < 600) || networkFailure;
       if (!retryable || attempt === tries) throw err;
       const wait = err?.retryAfterMs ?? delay;
-      log.warn(`${label} failed (${status ?? err?.code}), retry ${attempt}/${tries - 1} in ${Math.round(wait / 1000)}s`);
+      log.warn(
+        `${label} failed (${status ?? netCode ?? err?.name ?? "unknown"}), retry ${attempt}/${tries - 1} in ${Math.round(wait / 1000)}s`,
+      );
       await new Promise((r) => setTimeout(r, wait));
       delay = Math.min(delay * 2, 60000);
     }

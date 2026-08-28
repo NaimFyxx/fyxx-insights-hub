@@ -195,6 +195,60 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   return { rows: cw + flowRows.length + pushRows.length, attributed };
 }
 
+/**
+ * Unique reach. Slow — roughly two minutes per day — because it walks every
+ * send event to collect distinct profiles. Runs one day at a time and resumes,
+ * exactly like the flow reports, so a long backfill spans several nights.
+ */
+async function syncReach({ from, to, dryRun, force, maxDays }) {
+  const started = Date.now();
+  const metricIds = await klaviyo.resolveReachMetricIds();
+  log.ok(`reach metrics resolved: ${Object.entries(metricIds).map(([c, i]) => `${c}=${i}`).join(", ")}`);
+
+  const days = eachDay(from, to);
+  const done = force || dryRun ? new Set() : await completedDays("klaviyo_reach", from, to);
+  const allPending = days.filter((d) => !done.has(d));
+  const pending = Number.isFinite(maxDays) ? allPending.slice(0, Math.max(0, maxDays)) : allPending;
+  const deferred = allPending.length - pending.length;
+
+  if (done.size) log.info(`reach: ${done.size} day(s) already stored`);
+  if (pending.length) log.info(`reach: ${pending.length} day(s) this run, roughly ${Math.ceil(pending.length * 2)} minute(s)`);
+  if (deferred > 0) log.warn(`reach: ${deferred} day(s) deferred to later runs`);
+
+  let written = 0;
+  let i = 0;
+  for (const day of pending) {
+    i++;
+    const rows = await klaviyo.fetchDailyReach(day, metricIds);
+    const people = rows.reduce((a, r) => a + r.profile_count, 0);
+    const sends = rows.reduce((a, r) => a + r.event_count, 0);
+
+    if (!dryRun) {
+      const w = await upsert("klaviyo_reach_daily", rows, "date,channel,source", { dryRun });
+      written += w;
+      await writeSyncLog(
+        { source: "klaviyo_reach", status: "success", rangeStart: day, rangeEnd: day, rowsWritten: w,
+          message: `${sends} sends, ${people} profile rows across ${rows.length} bucket(s)` },
+        { dryRun },
+      );
+    }
+    log.progress(i, pending.length, `reach days (${day}: ${sends} sends)`);
+  }
+
+  if (dryRun) {
+    log.info("Reach — would write per day: one row per channel and source, holding hashed profile ids.");
+    return pending.length;
+  }
+  await writeSyncLog(
+    { source: "klaviyo_reach_summary", status: "success", rangeStart: from, rangeEnd: to,
+      rowsWritten: written, message: `${pending.length} day(s) processed, ${deferred} deferred`,
+      durationMs: Date.now() - started },
+    { dryRun },
+  );
+  log.ok(`Reach: ${pending.length} day(s) stored${deferred ? `, ${deferred} still outstanding` : ""}`);
+  return written;
+}
+
 async function syncShopify({ from, to, dryRun, attributed }) {
   const started = Date.now();
 
@@ -268,7 +322,7 @@ async function main() {
   if (from > to) throw new Error(`--from (${from}) is after --to (${to})`);
 
   const sources = args.only ?? ["klaviyo", "shopify", "loyaltylion"];
-  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion"].includes(s));
+  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach"].includes(s));
   if (unknown.length) throw new Error(`--only: unknown source(s) ${unknown.join(", ")}`);
 
   preflight(sources, args.dryRun);
@@ -300,6 +354,16 @@ async function main() {
     }
   }
 
+  if (sources.includes("reach")) {
+    try {
+      totalRows += await syncReach({ from, to, dryRun: args.dryRun, force: args.force, maxDays: args.maxDays });
+    } catch (err) {
+      failures.push(["reach", err]);
+      log.error(`Reach failed — ${redact(err.message)}`);
+      if (!args.dryRun) await writeSyncLog({ source: "klaviyo_reach", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
+    }
+  }
+
   if (sources.includes("loyaltylion")) {
     try {
       totalRows += await syncLoyalty({ from, to, dryRun: args.dryRun });
@@ -328,8 +392,8 @@ function preflight(sources, dryRun) {
     required.push(["SUPABASE_URL", "Supabase → Project Settings → API → Project URL"]);
     required.push(["SUPABASE_SERVICE_ROLE_KEY", "Supabase → Project Settings → API keys → service_role"]);
   }
-  if (sources.includes("klaviyo"))
-    required.push(["KLAVIYO_API_KEY", "Klaviyo → Settings → Account → API keys → Create Private API Key (campaigns:read, flows:read, metrics:read)"]);
+  if (sources.includes("klaviyo") || sources.includes("reach"))
+    required.push(["KLAVIYO_API_KEY", "Klaviyo → Settings → Account → API keys → Create Private API Key (campaigns:read, flows:read, metrics:read, events:read)"]);
   const missing = required.filter(([k]) => !process.env[k]);
 
   // Shopify accepts either the Dev Dashboard client credentials (current) or a
@@ -374,7 +438,7 @@ function preflight(sources, dryRun) {
 
 function readmeUsage() {
   return `Usage: node scripts/sync.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion]
+                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach]
 
   --max-days N   cap how many flow days one run attempts, so a long backfill
                  can span several runs within Klaviyo's 225/day limit

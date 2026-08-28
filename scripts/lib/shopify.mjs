@@ -33,17 +33,19 @@ function endpoint() {
  * --------------------------------------------------------------------- */
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000; // refresh 5 min early, never mid-request
-let token = { value: null, expiresAt: 0, legacy: false };
+let token = { value: null, expiresAt: 0, permanent: false };
 
 async function accessToken({ force = false } = {}) {
-  // A legacy app token, if one is still configured, never expires.
-  const legacy = optional("SHOPIFY_ADMIN_TOKEN");
-  if (legacy) {
-    if (!token.legacy) {
-      log.info("Shopify: using the legacy SHOPIFY_ADMIN_TOKEN");
-      token.legacy = true;
+  // A permanent offline token, if configured, never expires and is preferred:
+  // no exchange per run, and no 24h clock to outlive during a long backfill.
+  // Minted by scripts/shopify-install.mjs.
+  const permanent = optional("SHOPIFY_ADMIN_TOKEN");
+  if (permanent) {
+    if (!token.permanent) {
+      log.ok("Shopify: using the permanent SHOPIFY_ADMIN_TOKEN (no exchange needed)");
+      token.permanent = true;
     }
-    return legacy;
+    return permanent;
   }
 
   if (!force && token.value && Date.now() < token.expiresAt - REFRESH_MARGIN_MS) {

@@ -244,6 +244,19 @@ than genuine returns, the margin decline is partly an artefact too.
 > | Shopify without `read_all_orders` | An empty result for anything over 60 days |
 > | Klaviyo `mobile_push` vs `push-notification` | A 400 blaming "channel", not the vocabulary |
 > | Klaviyo duplicate order events | A plausible count, 2% too high |
+> | **Shopify order search ignores `source_name`** | HTTP 200 and the full unfiltered set |
+>
+> **The Shopify one is worth spelling out**, because it produces a confident
+> wrong answer about the very thing this project splits by. Querying
+> `orders(query: "source_name:web ...")` returns HTTP 200 and results — but the
+> filter is not applied. Verified: three orders returned by a `source_name:web`
+> search (#163007, #162563, #162518) are all `shopify_draft_order`. Anyone
+> checking "what drove the website spike" that way gets Draft Orders back and
+> believes it is Website.
+>
+> **Use the stored `shopify_daily_sales` rows for channel questions**, not order
+> search. Those come from `Order.sourceName` read off each order individually,
+> which is accurate.
 >
 > None of these announce themselves. Assume any new integration does the same
 > until measured: compare counts against a known quantity rather than checking

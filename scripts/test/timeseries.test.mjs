@@ -87,5 +87,36 @@ check("website is flagged as noisy", webNote !== null && /±16%/.test(webNote), 
 check("the app is not flagged", appNote === null);
 check("too few buckets produces no claim", m.noiseNote([{ app:{orders:1}, web:{orders:1} }], "web", "weekly") === null);
 
+group("concentration flag — the real 8 August case");
+{
+  // Actual stored rows for Website, week of 3 Aug 2026. Order count was NORMAL
+  // at 49; two orders on the 8th were 30% of the week. A revenue line cannot
+  // show that, which is the entire point of this flag.
+  const wk = [
+    { date:"2026-08-03", sub_channel:"Website", total_online_revenue_jod:324.16,  orders:7,  top_order_values:[112.35,50,40.95,34,32] },
+    { date:"2026-08-04", sub_channel:"Website", total_online_revenue_jod:381.15,  orders:8,  top_order_values:[136,84.15,36,36,29] },
+    { date:"2026-08-05", sub_channel:"Website", total_online_revenue_jod:282.11,  orders:6,  top_order_values:[149.48,36.95,30,29,19.38] },
+    { date:"2026-08-06", sub_channel:"Website", total_online_revenue_jod:739.39,  orders:10, top_order_values:[183.7,110,105.7,82.5,63.99] },
+    { date:"2026-08-07", sub_channel:"Website", total_online_revenue_jod:219.746, orders:6,  top_order_values:[50,45.496,43,29.25,27] },
+    { date:"2026-08-08", sub_channel:"Website", total_online_revenue_jod:1191.28, orders:8,  top_order_values:[533.58,470,53.97,43.98,34] },
+    { date:"2026-08-09", sub_channel:"Website", total_online_revenue_jod:154.656, orders:4,  top_order_values:[56.99,47,29.676,20.99] },
+  ];
+  const c = m.concentrationOf(wk, "2026-08-03", "Website", "weekly");
+  check("the real spike week is flagged", c !== null, c?.note?.slice(0, 70));
+  check("it names a small number of orders", c !== null && c.topN <= 4, `topN=${c?.topN}`);
+  check("and a share of at least 30%", c !== null && c.share >= 30, `${c?.share?.toFixed(0)}%`);
+
+  // A normal week must NOT be flagged, or the warning becomes noise.
+  const normal = Array.from({ length: 7 }, (_, i) => ({
+    date: `2026-07-2${i}`, sub_channel: "Website", total_online_revenue_jod: 260, orders: 7,
+    top_order_values: [45, 42, 40, 38, 35],
+  }));
+  check("an ordinary week is not flagged", m.concentrationOf(normal, m.bucketOf("2026-07-20","weekly"), "Website", "weekly") === null);
+
+  check("works for any channel, not just the two online ones",
+    m.concentrationOf([{ date:"2026-08-03", sub_channel:"Draft Orders", total_online_revenue_jod:5000, orders:12,
+      top_order_values:[3364.22,900,300,100,50] }], "2026-08-03", "Draft Orders", "weekly") !== null);
+}
+
 console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
 process.exit(failed ? 1 : 0);

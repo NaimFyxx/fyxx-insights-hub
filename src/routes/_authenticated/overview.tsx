@@ -7,6 +7,7 @@ import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { describeChannels } from "@/lib/channels";
 import { ChannelBar } from "@/components/layout/ChannelBar";
+import { ConcentrationNotice } from "@/components/fyxx/ConcentrationNotice";
 import { RevenueLineChart } from "@/components/charts/RevenueLineChart";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 
@@ -140,6 +141,8 @@ function OverviewPage() {
         />
         <StatTile label="Loyalty members" value={num(members)} delta={deltaPct(members, membersPrev)} />
       </div>
+
+      <ConcentrationNotice rows={selSales} channels={channels} />
 
       <Panel title={`Daily revenue — Klaviyo attributed vs ${describeChannels(channels)}`}>
         {linePoints.length ? <RevenueLineChart data={linePoints} /> : <EmptyState>No data in range.</EmptyState>}

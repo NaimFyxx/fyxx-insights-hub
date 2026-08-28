@@ -115,6 +115,11 @@ export function noiseNote(points: SeriesPoint[], channel: "app" | "web", g: Gran
 /**
  * Flags buckets where a handful of orders carried the revenue.
  *
+ * Verified against a real case: Website revenue for the week of 3 Aug 2026 was
+ * 3,292 JOD against a ~1,600 norm, and order count was NORMAL at 49. Two orders
+ * on 8 August (533.58 and 470 JOD) were 30% of the week. Nothing in a revenue
+ * line distinguishes that from demand.
+ *
  * Six bulk orders in one week — case quantities to a venue — look identical to
  * broad growth in a revenue line. This compares the largest few order totals
  * in a bucket against the bucket's revenue, so a spike can be labelled with
@@ -125,7 +130,7 @@ export type Concentration = { topN: number; share: number; note: string } | null
 export function concentrationOf(
   rows: DailySales[],
   bucketKey: string,
-  channelName: "Mobile App" | "Website",
+  channelName: string,
   g: Granularity,
 ): Concentration {
   const inBucket = rows.filter(
@@ -166,4 +171,19 @@ export function sameRangeLastYear(from: string, to: string): { from: string; to:
     return d.toISOString().slice(0, 10);
   };
   return { from: shift(from), to: shift(to) };
+}
+
+/** The largest concentration in any bucket of a range, for a summary notice. */
+export function worstConcentration(
+  rows: DailySales[],
+  channelName: string,
+  g: Granularity,
+): { bucket: string; c: NonNullable<Concentration> } | null {
+  const buckets = [...new Set(rows.filter((r) => r.sub_channel === channelName).map((r) => bucketOf(r.date, g)))];
+  let worst: { bucket: string; c: NonNullable<Concentration> } | null = null;
+  for (const b of buckets) {
+    const c = concentrationOf(rows, b, channelName, g);
+    if (c && (!worst || c.share > worst.c.share)) worst = { bucket: b, c };
+  }
+  return worst;
 }

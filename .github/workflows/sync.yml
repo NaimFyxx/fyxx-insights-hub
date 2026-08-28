@@ -14,6 +14,12 @@ on:
     # 23:00 UTC = 02:00 Asia/Amman. Jordan dropped DST in 2022 and sits at
     # UTC+3 all year, so this single expression is correct year-round.
     - cron: "0 23 * * *"
+    # Weekly database dump, Sundays 01:00 UTC = 04:00 Amman, well clear of the
+    # nightly sync. The Supabase free tier includes NO backups of any kind —
+    # not short retention, none — and point-in-time recovery is Pro-only. The
+    # backfilled history costs ~20 hours of rate-limited Klaviyo calls to
+    # rebuild, so this is the only thing standing between us and that.
+    - cron: "0 1 * * 0"
 
   workflow_dispatch:
     inputs:
@@ -43,6 +49,11 @@ on:
         type: boolean
       force:
         description: "Re-sync days already recorded as successful"
+        required: false
+        default: false
+        type: boolean
+      backup:
+        description: "Also take a database dump on this run"
         required: false
         default: false
         type: boolean
@@ -145,6 +156,70 @@ jobs:
             --only klaviyo \
             --from "$BACKFILL_FROM" \
             --max-days "$MAX_DAYS" 2>&1 | tee -a sync-output.txt
+
+      # ---------------------------------------------------------------------
+      # Weekly database dump.
+      #
+      # Stored as a workflow ARTIFACT, deliberately not committed to the repo:
+      #   * the dump contains every table including the hashed profile-ID sets,
+      #     and a repo is the wrong place for that even gitignored — one
+      #     `git add -A` publishes it permanently and irreversibly;
+      #   * ~60 MB weekly would bloat git history forever, and pruning it later
+      #     means rewriting published history;
+      #   * artifacts have built-in retention and are limited to people with
+      #     repo access, which a committed file is not.
+      #
+      # Encrypted at rest with BACKUP_PASSPHRASE on top of that access control.
+      # NOTE: lose that passphrase and the dumps are unrecoverable — store it
+      # in the same password manager as the dashboard login.
+      # ---------------------------------------------------------------------
+      - name: Database dump
+        if: ${{ github.event.schedule == '0 1 * * 0' || inputs.backup == true }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL is not set. Supabase Dashboard > Project Settings > Database > Connection string (URI)."
+            exit 1
+          fi
+          if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::BACKUP_PASSPHRASE is not set. Refusing to upload an unencrypted dump."
+            exit 1
+          fi
+
+          # Match the server major version; a mismatched pg_dump refuses to run.
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+
+          STAMP="$(date -u +%Y-%m-%d)"
+          # Only the public schema: Supabase's internal schemas are managed and
+          # are not ours to restore.
+          pg_dump --schema=public --no-owner --no-privileges --format=custom \
+                  --file="fyxx-${STAMP}.dump" "$SUPABASE_DB_URL"
+
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in "fyxx-${STAMP}.dump" -out "fyxx-${STAMP}.dump.enc" \
+            -pass env:BACKUP_PASSPHRASE
+          rm -f "fyxx-${STAMP}.dump"
+
+          SIZE=$(du -h "fyxx-${STAMP}.dump.enc" | cut -f1)
+          echo "BACKUP_FILE=fyxx-${STAMP}.dump.enc" >> "$GITHUB_ENV"
+          echo "BACKUP_SIZE=${SIZE}" >> "$GITHUB_ENV"
+          echo "Dump written: fyxx-${STAMP}.dump.enc (${SIZE}, encrypted)"
+
+      - name: Upload dump
+        if: ${{ (github.event.schedule == '0 1 * * 0' || inputs.backup == true) && env.BACKUP_FILE != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          # ~13 weekly dumps retained, so one bad dump never leaves us with
+          # nothing to fall back to.
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Write run summary
         # Runs even on failure, so a bad night is readable without opening logs.

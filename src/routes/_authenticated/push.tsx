@@ -31,21 +31,30 @@ function PushPage() {
   });
 
   const rows = useMemo(() => {
-    const map = new Map<string, { name: string; type: string; sent: number; opened: number }>();
+    const map = new Map<string, { name: string; type: string; sent: number; delivered: number; opened: number; conversions: number; revenue: number }>();
     for (const r of data ?? []) {
       const key = `${r.source_type}::${r.source_name}`;
-      const cur = map.get(key) ?? { name: r.source_name, type: r.source_type, sent: 0, opened: 0 };
+      const cur = map.get(key) ?? { name: r.source_name, type: r.source_type, sent: 0, delivered: 0, opened: 0, conversions: 0, revenue: 0 };
       cur.sent += r.sent;
+      cur.delivered += r.delivered;
       cur.opened += r.opened;
+      cur.conversions += r.conversions;
+      cur.revenue += Number(r.revenue_jod);
       map.set(key, cur);
     }
     return [...map.values()].sort((a, b) => b.sent - a.sent);
   }, [data]);
 
-  const t = rows.reduce((a, r) => ({ sent: a.sent + r.sent, opened: a.opened + r.opened }), {
-    sent: 0,
-    opened: 0,
-  });
+  const t = rows.reduce(
+    (a, r) => ({
+      sent: a.sent + r.sent,
+      delivered: a.delivered + r.delivered,
+      opened: a.opened + r.opened,
+      conversions: a.conversions + r.conversions,
+      revenue: a.revenue + r.revenue,
+    }),
+    { sent: 0, delivered: 0, opened: 0, conversions: 0, revenue: 0 },
+  );
 
   return (
     <div className="space-y-8">
@@ -73,7 +82,7 @@ function PushPage() {
                   <Td>{r.type}</Td>
                   <Td align="right">{num(r.sent)}</Td>
                   <Td align="right">{num(r.opened)}</Td>
-                  <Td align="right">{pct(rate(r.opened, r.sent))}</Td>
+                  <Td align="right">{pct(rate(r.opened, r.delivered))}</Td>
                 </tr>
               ))}
               <TotalsRow>
@@ -81,7 +90,7 @@ function PushPage() {
                 <Td>—</Td>
                 <Td align="right">{num(t.sent)}</Td>
                 <Td align="right">{num(t.opened)}</Td>
-                <Td align="right">{pct(rate(t.opened, t.sent))}</Td>
+                <Td align="right">{pct(rate(t.opened, t.delivered))}</Td>
               </TotalsRow>
             </tbody>
           </Table>

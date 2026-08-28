@@ -35,12 +35,13 @@ function CampaignsPage() {
   const t = rows.reduce(
     (acc, r) => ({
       sent: acc.sent + r.sent,
+      delivered: acc.delivered + r.delivered,
       opened: acc.opened + r.opened,
       clicked: acc.clicked + r.clicked,
       orders: acc.orders + r.orders,
       revenue: acc.revenue + Number(r.revenue_jod),
     }),
-    { sent: 0, opened: 0, clicked: 0, orders: 0, revenue: 0 },
+    { sent: 0, delivered: 0, opened: 0, clicked: 0, orders: 0, revenue: 0 },
   );
 
   return (
@@ -87,9 +88,9 @@ function CampaignsPage() {
                   <Td>{format(parseISO(r.sent_on), "d MMM yyyy")}</Td>
                   <Td align="right">{num(r.sent)}</Td>
                   <Td align="right">{num(r.opened)}</Td>
-                  <Td align="right">{pct(rate(r.opened, r.sent))}</Td>
+                  <Td align="right">{pct(Number(r.open_rate) * 100)}</Td>
                   <Td align="right">{num(r.clicked)}</Td>
-                  <Td align="right">{pct(rate(r.clicked, r.sent))}</Td>
+                  <Td align="right">{pct(Number(r.click_rate) * 100)}</Td>
                   <Td align="right">{num(r.orders)}</Td>
                   <Td align="right">{jod(Number(r.revenue_jod))}</Td>
                 </tr>
@@ -99,9 +100,9 @@ function CampaignsPage() {
                 <Td>—</Td>
                 <Td align="right">{num(t.sent)}</Td>
                 <Td align="right">{num(t.opened)}</Td>
-                <Td align="right">{pct(rate(t.opened, t.sent))}</Td>
+                <Td align="right">{pct(rate(t.opened, t.delivered))}</Td>
                 <Td align="right">{num(t.clicked)}</Td>
-                <Td align="right">{pct(rate(t.clicked, t.sent))}</Td>
+                <Td align="right">{pct(rate(t.clicked, t.delivered))}</Td>
                 <Td align="right">{num(t.orders)}</Td>
                 <Td align="right">{jod(t.revenue)}</Td>
               </TotalsRow>

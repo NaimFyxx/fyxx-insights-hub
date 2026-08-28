@@ -20,10 +20,15 @@ export type Campaign = {
   name: string;
   sent_on: string;
   sent: number;
+  delivered: number;
   opened: number;
   clicked: number;
   orders: number;
   revenue_jod: number;
+  /** Klaviyo's own rates, computed off DELIVERED. Stored as fractions. */
+  open_rate: number;
+  click_rate: number;
+  conversion_rate: number;
 };
 
 export type FlowRow = {
@@ -31,9 +36,14 @@ export type FlowRow = {
   flow_name: string;
   date: string;
   recipients: number;
+  delivered: number;
   opened: number;
+  clicked: number;
   conversions: number;
   revenue_jod: number;
+  open_rate: number;
+  click_rate: number;
+  conversion_rate: number;
 };
 
 export type PushRow = {
@@ -42,11 +52,16 @@ export type PushRow = {
   source_type: string;
   sent_on: string;
   sent: number;
+  delivered: number;
   opened: number;
+  open_rate: number;
+  conversions: number;
+  revenue_jod: number;
 };
 
 export type Snapshot = {
   snapshot_date: string;
+  points_source: string;
   blue_members: number;
   silver_members: number;
   gold_members: number;

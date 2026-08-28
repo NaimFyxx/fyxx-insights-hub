@@ -23,7 +23,10 @@ export const Route = createFileRoute("/_authenticated/flows")({
 type Agg = {
   flow_name: string;
   recipients: number;
+  /** Klaviyo computes its rates off delivered, so totals must too. */
+  delivered: number;
   opened: number;
+  clicked: number;
   conversions: number;
   revenue: number;
 };
@@ -46,12 +49,16 @@ function FlowsPage() {
       const cur = map.get(r.flow_name) ?? {
         flow_name: r.flow_name,
         recipients: 0,
+        delivered: 0,
         opened: 0,
+        clicked: 0,
         conversions: 0,
         revenue: 0,
       };
       cur.recipients += r.recipients;
+      cur.delivered += r.delivered;
       cur.opened += r.opened;
+      cur.clicked += r.clicked;
       cur.conversions += r.conversions;
       cur.revenue += Number(r.revenue_jod);
       map.set(r.flow_name, cur);
@@ -64,9 +71,9 @@ function FlowsPage() {
         case "recipients":
           return f.recipients;
         case "open_rate":
-          return rate(f.opened, f.recipients);
+          return rate(f.opened, f.delivered);
         case "conversion_rate":
-          return rate(f.conversions, f.recipients);
+          return rate(f.conversions, f.delivered);
         default:
           return f.revenue;
       }
@@ -82,11 +89,13 @@ function FlowsPage() {
   const t = rows.reduce(
     (acc, r) => ({
       recipients: acc.recipients + r.recipients,
+      delivered: acc.delivered + r.delivered,
       opened: acc.opened + r.opened,
+      clicked: acc.clicked + r.clicked,
       conversions: acc.conversions + r.conversions,
       revenue: acc.revenue + r.revenue,
     }),
-    { recipients: 0, opened: 0, conversions: 0, revenue: 0 },
+    { recipients: 0, delivered: 0, opened: 0, clicked: 0, conversions: 0, revenue: 0 },
   );
 
   const header = (key: SortKey, label: string, align: "left" | "right" = "right") => (
@@ -130,16 +139,16 @@ function FlowsPage() {
                 <tr key={r.flow_name}>
                   <Td>{r.flow_name}</Td>
                   <Td align="right">{num(r.recipients)}</Td>
-                  <Td align="right">{pct(rate(r.opened, r.recipients))}</Td>
-                  <Td align="right">{pct(rate(r.conversions, r.recipients), 2)}</Td>
+                  <Td align="right">{pct(rate(r.opened, r.delivered))}</Td>
+                  <Td align="right">{pct(rate(r.conversions, r.delivered), 2)}</Td>
                   <Td align="right">{jod(r.revenue)}</Td>
                 </tr>
               ))}
               <TotalsRow>
                 <Td>Total</Td>
                 <Td align="right">{num(t.recipients)}</Td>
-                <Td align="right">{pct(rate(t.opened, t.recipients))}</Td>
-                <Td align="right">{pct(rate(t.conversions, t.recipients), 2)}</Td>
+                <Td align="right">{pct(rate(t.opened, t.delivered))}</Td>
+                <Td align="right">{pct(rate(t.conversions, t.delivered), 2)}</Td>
                 <Td align="right">{jod(t.revenue)}</Td>
               </TotalsRow>
             </tbody>

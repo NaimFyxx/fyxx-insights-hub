@@ -200,7 +200,19 @@ Margin by sub-channel, Jan 2025 – Aug 2026:
 | Draft Orders | 1,287,130 | 278,492 | **21.6%** |
 
 Draft Orders is the largest channel by revenue and the *lowest* margin; POS is
-roughly double it. Two things worth raising separately: blended margin fell from
+roughly double it.
+
+> **This shapes the marketing-influenced work below.** Draft Orders at 21.6%
+> against POS at 44.7% means the marketing case for phone orders **cannot be
+> about profit contribution** — it is the lowest-margin channel in the business.
+> Frame it as **volume and customer acquisition**, and say so before anyone
+> checks. A case built on profit would collapse the moment someone pulled this
+> table.
+>
+> Also worth knowing: **Mobile App (24.2%) and Website (24.1%) are within 0.1
+> points of each other.** The two online channels differ in scale, not
+> efficiency — so an argument for shifting volume between them cannot rest on
+> margin either. Two things worth raising separately: blended margin fell from
 33.1% (Jan 2026) to 27.5% (Aug 2026) with the drop landing in April, and returns
 run at ~14.5% of gross sales, which feeds straight into realised margin. If that
 returns figure is inflated by cancelled orders or Webkul refund artefacts rather

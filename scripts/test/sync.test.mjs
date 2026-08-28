@@ -338,6 +338,30 @@ check("and warns not to subtract points_spent",
 check("liability converts at 100 points = 1 JOD",
   capture(() => ll.reportPointsLiability(8_604_319, 21240)).includes("86,043 JOD"));
 
+/* --------------------------------------------------- channel captions -- */
+group("channel captions");
+{
+  // Read the TS source directly: these are tiny pure functions and the rules
+  // they encode (never omit the caption, never allow an empty selection) are
+  // the kind that get quietly broken later.
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const src = readFileSync(fileURLToPath(new URL("../../src/lib/channels.ts", import.meta.url)), "utf8");
+  check("default is Online Sales only", /DEFAULT_CHANNELS[^=]*=\s*\["Website", "Mobile App"\]/.test(src));
+  check("Draft Orders is NOT on by default", !/DEFAULT_CHANNELS[\s\S]{0,80}Draft Orders/.test(src));
+  check("POS definition-change date recorded", /POS_DEFINITION_CHANGED = "2026-02-27"/.test(src));
+  check("warning fires only when POS is selected", /if \(!selected\.includes\("POS"\)\) return null/.test(src));
+  check("warning fires only when the range spans the date",
+    /from < POS_DEFINITION_CHANGED && to >= POS_DEFINITION_CHANGED/.test(src));
+
+  const ctx = readFileSync(fileURLToPath(new URL("../../src/context/date-range-context.tsx", import.meta.url)), "utf8");
+  check("deselecting the last channel is ignored", /return next\.length \? next : cur/.test(ctx));
+
+  const bar = readFileSync(fileURLToPath(new URL("../../src/components/layout/TopBar.tsx", import.meta.url)), "utf8");
+  check("caption is unconditional, not behind a condition",
+    /Showing <span[^>]*>\{describeChannels\(channels\)\}/.test(bar));
+}
+
 /* ---------------------------------------------------------- redaction -- */
 group("secret redaction");
 process.env.KLAVIYO_API_KEY = "pk_thisisaverysecretklaviyokey123456";

@@ -5,6 +5,7 @@ import { fetchAttributed, fetchCampaigns, fetchDailySales, fetchFlows, fetchPush
 import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { describeChannels } from "@/lib/channels";
 import { RevenueLineChart } from "@/components/charts/RevenueLineChart";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/overview")({
 const sum = (rows: number[]) => rows.reduce((a, b) => a + b, 0);
 
 function OverviewPage() {
-  const { range, refreshKey } = useDateRange();
+  const { range, refreshKey, channels } = useDateRange();
   const prev = previousRange(range);
 
   const q = useQuery({
@@ -73,10 +74,12 @@ function OverviewPage() {
   const klaviyoNow = sum(d.attributed.map((x) => Number(x.revenue_jod)));
   const klaviyoPrev = sum(d.prevAttributed.map((x) => Number(x.revenue_jod)));
 
-  // shopify_daily_sales has one row per channel per day, so this sums across
-  // every channel row in range rather than assuming one row per day.
-  const onlineNow = sum(d.sales.map((x) => Number(x.total_online_revenue_jod)));
-  const onlinePrev = sum(d.prevSales.map((x) => Number(x.total_online_revenue_jod)));
+  // One row per channel per day, so sum the SELECTED channels only.
+  const inSelection = (r: { sub_channel: string }) => channels.includes(r.sub_channel as never);
+  const selSales = d.sales.filter(inSelection);
+  const selPrevSales = d.prevSales.filter(inSelection);
+  const onlineNow = sum(selSales.map((x) => Number(x.total_online_revenue_jod)));
+  const onlinePrev = sum(selPrevSales.map((x) => Number(x.total_online_revenue_jod)));
 
   const shareNow = onlineNow > 0 ? (klaviyoNow / onlineNow) * 100 : 0;
   const sharePrev = onlinePrev > 0 ? (klaviyoPrev / onlinePrev) * 100 : 0;
@@ -94,7 +97,7 @@ function OverviewPage() {
   // otherwise each day appears once per channel.
   const attributedByDate = new Map(d.attributed.map((a) => [a.date, Number(a.revenue_jod)]));
   const totalByDate = new Map<string, number>();
-  for (const s of d.sales) {
+  for (const s of selSales) {
     totalByDate.set(s.date, (totalByDate.get(s.date) ?? 0) + Number(s.total_online_revenue_jod));
   }
   const linePoints = [...totalByDate.keys()].sort().map((date) => ({
@@ -130,12 +133,12 @@ function OverviewPage() {
           label="Klaviyo-attributed share"
           value={pct(shareNow)}
           delta={deltaPct(shareNow, sharePrev)}
-          note={`${jod(klaviyoNow)} attributed across all channels, against ${jod(onlineNow)} from every channel. Attribution cannot be split by channel.`}
+          note={`${jod(klaviyoNow)} attributed by Klaviyo across ALL channels, against ${jod(onlineNow)} from ${describeChannels(channels)}. Attribution cannot be split by channel, so the numerator is fixed while the denominator follows your filters.`}
         />
         <StatTile label="Loyalty members" value={num(members)} delta={deltaPct(members, membersPrev)} />
       </div>
 
-      <Panel title="Daily revenue — Klaviyo attributed vs total online">
+      <Panel title={`Daily revenue — Klaviyo attributed vs ${describeChannels(channels)}`}>
         {linePoints.length ? <RevenueLineChart data={linePoints} /> : <EmptyState>No data in range.</EmptyState>}
       </Panel>
 

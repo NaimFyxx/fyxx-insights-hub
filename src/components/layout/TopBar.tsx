@@ -4,10 +4,12 @@ import { RotateCw } from "lucide-react";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchLastSync } from "@/lib/queries";
 import { PRESETS, rangeLabel } from "@/lib/ranges";
+import { SUB_CHANNELS, describeChannels, posDefinitionWarning } from "@/lib/channels";
 import { cn } from "@/lib/utils";
 
 export function TopBar() {
-  const { range, preset, setPreset, setCustom, refresh, refreshKey } = useDateRange();
+  const { range, preset, setPreset, setCustom, refresh, refreshKey, channels, toggleChannel } = useDateRange();
+  const posWarning = posDefinitionWarning(channels, range.from, range.to);
   const { data: sync } = useQuery({
     queryKey: ["sync_log", refreshKey],
     queryFn: fetchLastSync,
@@ -67,6 +69,42 @@ export function TopBar() {
           </button>
         </div>
       </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-border px-6 py-2">
+        <span className="label-xs text-muted-foreground">Channels</span>
+        <div className="flex flex-wrap items-center gap-1">
+          {SUB_CHANNELS.map((c) => {
+            const on = channels.includes(c);
+            return (
+              <button
+                key={c}
+                onClick={() => toggleChannel(c)}
+                aria-pressed={on}
+                className={cn(
+                  "label-xs rounded-sm border px-3 py-1",
+                  on
+                    ? "border-foreground bg-secondary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
+        {/* Always rendered, including on first load. The default view hides
+            roughly two thirds of revenue, so a figure must never be ambiguous
+            about what it covers. */}
+        <p className="text-xs text-muted-foreground">
+          Showing <span className="text-foreground">{describeChannels(channels)}</span>
+        </p>
+      </div>
+
+      {posWarning ? (
+        <p className="border-t border-border bg-secondary/40 px-6 py-2 text-xs text-muted-foreground">
+          ⚠️ {posWarning}
+        </p>
+      ) : null}
     </header>
   );
 }

@@ -128,6 +128,38 @@ Every write is an upsert against a unique index:
 Keys are the APIs' own ids, never names, so renaming a flow updates its row
 instead of creating a duplicate. Re-running any range is always safe.
 
+## Long backfills finish on their own
+
+Klaviyo allows **225 values-report calls a day** and flows need one call per
+day of history, so a 600-day backfill cannot complete in one run. It is not
+left to someone remembering to re-trigger it.
+
+Set the repository variable **`BACKFILL_FROM`** (Settings → Secrets and
+variables → Actions → *Variables*, not Secrets) to e.g. `2025-01-01`. From then
+on the nightly Action does its trailing-3-day job and then spends the rest of
+its daily quota working through the backfill, up to `--max-days` (default 190,
+leaving headroom under the cap). Days already recorded as successful in
+`sync_log` are skipped, so it stops doing work once the range is full.
+
+Each run reports how much is left:
+
+```
+resuming: 190 day(s) already synced
+190 flow day(s) this run, ~99 minute(s) at 2 calls/min
+! 230 day(s) deferred to later runs (~2 more run(s) to finish the backfill)
+```
+
+**Clear `BACKFILL_FROM` once it reports no days outstanding.** Leaving it set is
+harmless — every night it finds nothing to do — but clearing it makes the
+nightly run finish in seconds again.
+
+To check progress at any time:
+
+```sql
+select count(*) as days_done, min(range_start) as earliest, max(range_start) as latest
+from sync_log where source = 'klaviyo_flows' and status = 'success';
+```
+
 ## Resuming a backfill
 
 Klaviyo's values-report endpoints allow **2 requests per minute** and **225 per

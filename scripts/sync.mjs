@@ -24,7 +24,7 @@ loadEnv();
 /* ------------------------------------------------------------------ CLI -- */
 
 function parseArgs(argv) {
-  const a = { dryRun: false, force: false, only: null, from: null, to: null };
+  const a = { dryRun: false, force: false, only: null, from: null, to: null, maxDays: null };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--dry-run") a.dryRun = true;
@@ -32,6 +32,7 @@ function parseArgs(argv) {
     else if (k === "--from") a.from = argv[++i];
     else if (k === "--to") a.to = argv[++i];
     else if (k === "--only") a.only = argv[++i].split(",").map((s) => s.trim());
+    else if (k === "--max-days") a.maxDays = Number(argv[++i]);
     else if (k === "--help" || k === "-h") a.help = true;
     else throw new Error(`Unknown argument: ${k}`);
   }
@@ -74,7 +75,7 @@ function preview(table, rows, sampleCols) {
 
 /* ------------------------------------------------------------- the sync -- */
 
-async function syncKlaviyo({ from, to, dryRun, force }) {
+async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   const started = Date.now();
   const metricId = await klaviyo.findPlacedOrderMetricId();
 
@@ -88,11 +89,23 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
   // A dry run touches nothing, not even a read: it must work with no Supabase
   // credentials at all, so the resume ledger is skipped rather than queried.
   const done = force || dryRun ? new Set() : await completedDays("klaviyo_flows", from, to);
-  const pending = days.filter((d) => !done.has(d));
-  if (done.size) log.info(`resuming: ${done.size} day(s) already synced, ${pending.length} to go`);
-  if (pending.length > 2) {
+  const allPending = days.filter((d) => !done.has(d));
+
+  // Klaviyo allows 225 values-report calls per day. A long backfill therefore
+  // has to span several runs. --max-days caps how many flow days one run
+  // attempts, so the nightly Action can chip away at a backfill automatically
+  // instead of someone remembering to re-trigger it.
+  const pending = maxDays ? allPending.slice(0, maxDays) : allPending;
+  const deferred = allPending.length - pending.length;
+
+  if (done.size) log.info(`resuming: ${done.size} day(s) already synced`);
+  if (pending.length) {
     const mins = Math.ceil((pending.length * 31) / 60);
-    log.info(`flow reports are rate limited to 2/min — this will take about ${mins} minute(s)`);
+    log.info(`${pending.length} flow day(s) this run, ~${mins} minute(s) at 2 calls/min`);
+  }
+  if (deferred > 0) {
+    const runs = Math.ceil(deferred / (maxDays || 1));
+    log.warn(`${deferred} day(s) deferred to later runs (~${runs} more run(s) to finish the backfill)`);
   }
 
   const flowRows = [];
@@ -117,6 +130,13 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
       );
     }
     log.progress(dayIndex, pending.length, "flow days");
+  }
+
+  if (deferred > 0) {
+    log.warn(`backfill INCOMPLETE: ${deferred} flow day(s) still outstanding after this run.`);
+    log.warn("  The nightly Action continues automatically; nothing to trigger by hand.");
+  } else if (allPending.length) {
+    log.ok("backfill complete for this range — no flow days outstanding");
   }
 
   // --- attributed revenue: event-date basis, a different question ---------
@@ -238,7 +258,7 @@ async function main() {
 
   if (sources.includes("klaviyo")) {
     try {
-      const r = await syncKlaviyo({ from, to, dryRun: args.dryRun, force: args.force });
+      const r = await syncKlaviyo({ from, to, dryRun: args.dryRun, force: args.force, maxDays: args.maxDays });
       attributed = r.attributed;
       totalRows += r.rows;
     } catch (err) {
@@ -333,6 +353,9 @@ function preflight(sources, dryRun) {
 function readmeUsage() {
   return `Usage: node scripts/sync.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD]
                             [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion]
+
+  --max-days N   cap how many flow days one run attempts, so a long backfill
+                 can span several runs within Klaviyo's 225/day limit
 
 Defaults to the trailing 3 days. See scripts/README.md.`;
 }

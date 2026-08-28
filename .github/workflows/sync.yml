@@ -113,6 +113,39 @@ jobs:
           [ "$FORCE" = "true" ]   && args+=(--force)
           node scripts/sync.mjs "${args[@]}" 2>&1 | tee sync-output.txt
 
+      # ---------------------------------------------------------------------
+      # Backfill continuation.
+      #
+      # Klaviyo allows 225 values-report calls a day, so a 600-day backfill
+      # cannot finish in one run. Rather than relying on someone remembering to
+      # re-trigger it each day — which is exactly the thing that gets forgotten
+      # and leaves a third of a backfill — the nightly job chips away at it
+      # automatically until it is done.
+      #
+      # Set the repository variable BACKFILL_FROM (Settings > Secrets and
+      # variables > Actions > Variables) to e.g. 2025-01-01 to arm it. The step
+      # skips itself when the variable is unset, and the sync skips days already
+      # recorded as successful, so it stops doing work once the range is full.
+      # Clear the variable when the backfill is done.
+      # ---------------------------------------------------------------------
+      - name: Continue backfill
+        if: ${{ vars.BACKFILL_FROM != '' && inputs.dry_run != true }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KLAVIYO_API_KEY: ${{ secrets.KLAVIYO_API_KEY }}
+          BACKFILL_FROM: ${{ vars.BACKFILL_FROM }}
+          # 190 leaves headroom under Klaviyo's 225/day cap for the nightly
+          # trailing-3-day run and the campaign report that precede this.
+          MAX_DAYS: ${{ vars.BACKFILL_MAX_DAYS || '190' }}
+        run: |
+          set -o pipefail
+          echo "Continuing backfill from $BACKFILL_FROM, up to $MAX_DAYS flow days this run."
+          node scripts/sync.mjs \
+            --only klaviyo \
+            --from "$BACKFILL_FROM" \
+            --max-days "$MAX_DAYS" 2>&1 | tee -a sync-output.txt
+
       - name: Write run summary
         # Runs even on failure, so a bad night is readable without opening logs.
         if: always()

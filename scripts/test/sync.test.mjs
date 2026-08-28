@@ -97,6 +97,18 @@ check("revenue at 3dp", sales[0].total_online_revenue_jod === 2431.667);
 check("attributed revenue at 3dp", sales[0].klaviyo_attributed_revenue_jod === 512.334);
 check("a day with no orders is zero, not null", sales[1].total_online_revenue_jod === 0 && sales[1].orders === 0);
 
+// Running --only shopify leaves attribution unknown. Writing 0 there would
+// wipe real revenue already stored, so the column must be omitted entirely.
+const noAttribution = toSalesRows(new Map([["2026-08-01", { revenue: 100, orders: 2 }]]), null, ["2026-08-01"]);
+check("with no Klaviyo run, the attribution column is OMITTED, not zeroed",
+  !("klaviyo_attributed_revenue_jod" in noAttribution[0]), Object.keys(noAttribution[0]).join(","));
+check("but the Shopify figures are still written",
+  noAttribution[0].total_online_revenue_jod === 100 && noAttribution[0].orders === 2);
+check("with a Klaviyo run, the column IS present",
+  "klaviyo_attributed_revenue_jod" in sales[0]);
+check("and a genuine zero is still written as zero",
+  toSalesRows(new Map(), new Map([["2026-08-01", 0]]), ["2026-08-01"])[0].klaviyo_attributed_revenue_jod === 0);
+
 /* --------------------------------------------------- channel vocabularies -- */
 group("klaviyo channel vocabularies");
 {

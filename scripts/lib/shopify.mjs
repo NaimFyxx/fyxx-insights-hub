@@ -353,14 +353,23 @@ export async function fetchDailySales(from, to) {
 }
 
 export function toSalesRows(byDay, attributedByDay, days) {
+  // When Klaviyo did not run (e.g. `--only shopify`), we have NO attributed
+  // figure — which is not the same as an attributed figure of zero. Writing a
+  // zero would silently destroy real revenue already stored for these days.
+  // Omitting the column entirely leaves the existing value untouched, because
+  // the upsert only updates columns present in the payload.
+  const haveAttribution = attributedByDay instanceof Map;
   return days.map((date) => {
     const s = byDay.get(date) ?? { revenue: 0, orders: 0 };
-    return {
+    const row = {
       date,
       total_online_revenue_jod: money3(s.revenue),
-      // Event-date basis, so it lines up with the order dates above.
-      klaviyo_attributed_revenue_jod: money3(attributedByDay?.get(date) ?? 0),
       orders: s.orders,
     };
+    if (haveAttribution) {
+      // Event-date basis, so it lines up with the order dates above.
+      row.klaviyo_attributed_revenue_jod = money3(attributedByDay.get(date) ?? 0);
+    }
+    return row;
   });
 }

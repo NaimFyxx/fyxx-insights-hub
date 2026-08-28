@@ -143,6 +143,12 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
 
 async function syncShopify({ from, to, dryRun, attributed }) {
   const started = Date.now();
+  if (!attributed) {
+    log.warn(
+      "Klaviyo did not run, so there is no attributed-revenue figure for this range.\n" +
+        "  klaviyo_attributed_revenue_jod will be LEFT AS IT IS rather than zeroed.",
+    );
+  }
   const byDay = await shopify.fetchDailySales(from, to);
   const rows = shopify.toSalesRows(byDay, attributed, eachDay(from, to));
 

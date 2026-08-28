@@ -385,9 +385,24 @@ group("channel captions");
   const ctx = readFileSync(fileURLToPath(new URL("../../src/context/date-range-context.tsx", import.meta.url)), "utf8");
   check("deselecting the last channel is ignored", /return next\.length \? next : cur/.test(ctx));
 
-  const bar = readFileSync(fileURLToPath(new URL("../../src/components/layout/TopBar.tsx", import.meta.url)), "utf8");
+  const bar = readFileSync(fileURLToPath(new URL("../../src/components/layout/ChannelBar.tsx", import.meta.url)), "utf8");
   check("caption is unconditional, not behind a condition",
     /Showing <span[^>]*>\{describeChannels\(channels\)\}/.test(bar));
+
+  // The bar used to sit in the global top bar while only one page honoured it,
+  // so on nine pages you could click controls that did nothing. It must be
+  // rendered by the pages that consume it, never globally.
+  const top = readFileSync(fileURLToPath(new URL("../../src/components/layout/TopBar.tsx", import.meta.url)), "utf8");
+  check("channel toggles are NOT in the global top bar",
+    !/toggleChannel/.test(top) && !/SUB_CHANNELS/.test(top));
+
+  const overview = readFileSync(fileURLToPath(new URL("../../src/routes/_authenticated/overview.tsx", import.meta.url)), "utf8");
+  check("the page that honours the toggles renders them", /<ChannelBar \/>/.test(overview));
+
+  const online = readFileSync(fileURLToPath(new URL("../../src/routes/_authenticated/online.tsx", import.meta.url)), "utf8");
+  check("the online page does NOT render the global bar it ignores",
+    !/<ChannelBar \/>/.test(online));
+  check("the online page has its own scope control instead", /setScope/.test(online));
 }
 
 /* ---------------------------------------------------------- redaction -- */

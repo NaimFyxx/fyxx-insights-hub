@@ -62,7 +62,11 @@ function eachDay(from, to) {
 function preview(table, rows, sampleCols) {
   log.info(`  ${table}: ${rows.length} row${rows.length === 1 ? "" : "s"}`);
   for (const r of rows.slice(0, 3)) {
-    const bits = sampleCols.map((c) => `${c}=${r[c]}`).join("  ");
+    // A column absent from the payload is deliberately not written; say so
+    // rather than printing "undefined", which reads like a bug.
+    const bits = sampleCols
+      .map((c) => `${c}=${c in r ? r[c] : "(left unchanged)"}`)
+      .join("  ");
     log.info(`      ${bits}`);
   }
   if (rows.length > 3) log.info(`      … and ${rows.length - 3} more`);

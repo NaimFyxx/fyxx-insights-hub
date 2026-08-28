@@ -55,9 +55,9 @@ export type Database = {
         Relationships: []
       }
       shopify_daily_sales: {
-        Row: { channel: string; created_at: string; date: string; id: string; klaviyo_attributed_revenue_jod: number; orders: number; people_reached: number; source_name: string; sub_channel: string; total_online_revenue_jod: number; updated_at: string }
-        Insert: { channel?: string; created_at?: string; date: string; id?: string; klaviyo_attributed_revenue_jod?: number; orders?: number; people_reached?: number; source_name?: string; sub_channel?: string; total_online_revenue_jod?: number; updated_at?: string }
-        Update: { channel?: string; created_at?: string; date?: string; id?: string; klaviyo_attributed_revenue_jod?: number; orders?: number; people_reached?: number; source_name?: string; sub_channel?: string; total_online_revenue_jod?: number; updated_at?: string }
+        Row: { channel: string; created_at: string; date: string; id: string; klaviyo_attributed_revenue_jod: number; orders: number; people_reached: number; source_name: string; sub_channel: string; top_order_values: number[]; total_online_revenue_jod: number; updated_at: string }
+        Insert: { channel?: string; created_at?: string; date: string; id?: string; klaviyo_attributed_revenue_jod?: number; orders?: number; people_reached?: number; source_name?: string; sub_channel?: string; top_order_values?: number[]; total_online_revenue_jod?: number; updated_at?: string }
+        Update: { channel?: string; created_at?: string; date?: string; id?: string; klaviyo_attributed_revenue_jod?: number; orders?: number; people_reached?: number; source_name?: string; sub_channel?: string; top_order_values?: number[]; total_online_revenue_jod?: number; updated_at?: string }
         Relationships: []
       }
       sync_log: {

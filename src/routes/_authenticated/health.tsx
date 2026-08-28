@@ -24,13 +24,14 @@ const STATE_LABEL: Record<SourceHealth["state"], string> = {
   ok: "OK",
   stale: "Stale",
   failing: "FAILING",
+  paused: "Paused — daily quota",
   never: "Never run",
 };
 
 function StateBadge({ state }: { state: SourceHealth["state"] }) {
   const cls =
     state === "ok" ? "text-foreground"
-    : state === "stale" ? "text-muted-foreground"
+    : state === "stale" || state === "paused" ? "text-muted-foreground"
     : "text-destructive font-medium";
   return <span className={cls}>{STATE_LABEL[state]}</span>;
 }
@@ -60,7 +61,9 @@ function HealthPage() {
     );
   }
 
-  const problems = data.health.filter((h) => h.state !== "ok");
+  // "paused" is expected behaviour during a backfill, not something to chase.
+  const problems = data.health.filter((h) => h.state !== "ok" && h.state !== "paused");
+  const paused = data.health.filter((h) => h.state === "paused");
 
   return (
     <div className="space-y-8">
@@ -79,6 +82,14 @@ function HealthPage() {
           All sources ran successfully and recently.
         </p>
       )}
+
+      {paused.length ? (
+        <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
+          {paused.map((p) => p.label).join(", ")} stopped on Klaviyo&apos;s daily quota. That is
+          expected during a backfill — work already done is saved and the next nightly run continues.
+          Nothing to fix.
+        </p>
+      ) : null}
 
       <Panel title="Sources">
         <Table>

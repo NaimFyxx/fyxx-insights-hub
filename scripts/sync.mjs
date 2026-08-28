@@ -13,7 +13,7 @@
  * success in sync_log are skipped unless --force is passed.
  */
 import { loadEnv, redact } from "./lib/env.mjs";
-import { log, money3 } from "./lib/log.mjs";
+import { log, money3, QuotaExhaustedError } from "./lib/log.mjs";
 import { upsert, writeSyncLog, completedDays, previousSnapshot } from "./lib/db.mjs";
 import * as klaviyo from "./lib/klaviyo.mjs";
 import * as ll from "./lib/loyaltylion.mjs";
@@ -128,9 +128,32 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   const flowRows = [];
   const flowPush = [];
   let dayIndex = 0;
+  let quotaStopped = false;
   for (const day of pending) {
     dayIndex++;
-    const results = await klaviyo.fetchFlowValuesForDay({ day, conversionMetricId: metricId });
+    let results;
+    try {
+      results = await klaviyo.fetchFlowValuesForDay({ day, conversionMetricId: metricId });
+    } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        // Not a failure. Everything already committed stays committed and the
+        // next scheduled run picks up from here.
+        quotaStopped = true;
+        log.warn("");
+        log.warn(`QUOTA EXHAUSTED after ${dayIndex - 1} of ${pending.length} flow day(s) this run.`);
+        log.warn("  Klaviyo allows 225 values-report calls a day and they are spent.");
+        log.warn("  Days already fetched are saved. The next scheduled run continues automatically.");
+        if (!dryRun) {
+          await writeSyncLog(
+            { source: "klaviyo_flows", status: "quota_exhausted", rangeStart: day, rangeEnd: day, rowsWritten: 0,
+              message: `stopped after ${dayIndex - 1} day(s); daily Klaviyo quota spent, resumes next run` },
+            { dryRun },
+          );
+        }
+        break;
+      }
+      throw err;
+    }
     const { flows, push } = klaviyo.toFlowRows(results, day);
     flowRows.push(...flows);
     flowPush.push(...push);
@@ -149,7 +172,9 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
     log.progress(dayIndex, pending.length, "flow days");
   }
 
-  if (deferred > 0) {
+  if (quotaStopped) {
+    log.warn(`backfill paused by quota: ${allPending.length - (dayIndex - 1)} flow day(s) still outstanding.`);
+  } else if (deferred > 0) {
     log.warn(`backfill INCOMPLETE: ${deferred} flow day(s) still outstanding after this run.`);
     log.warn("  The nightly Action continues automatically; nothing to trigger by hand.");
   } else if (allPending.length) {

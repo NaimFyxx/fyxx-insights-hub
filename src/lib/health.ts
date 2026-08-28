@@ -30,7 +30,7 @@ export type SourceHealth = {
   /** Latest date actually covered, which is not the same as when it last ran. */
   coveredThrough: string | null;
   hoursSinceSuccess: number | null;
-  state: "ok" | "stale" | "failing" | "never";
+  state: "ok" | "stale" | "failing" | "paused" | "never";
 };
 
 /** Recent sync_log, enough to see the last success even after failures. */
@@ -63,6 +63,10 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
 
     let state: SourceHealth["state"] = "ok";
     if (!lastSuccess) state = "never";
+    // A daily-quota stop is a normal pause, not a fault: work already done is
+    // saved and the next scheduled run continues. Showing it as FAILING would
+    // send someone debugging a job that is behaving correctly.
+    else if (lastRun && lastRun.status === "quota_exhausted") state = "paused";
     else if (lastRun && lastRun.status !== "success") state = "failing";
     else if (hours !== null && hours > s.staleAfterHours) state = "stale";
 

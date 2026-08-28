@@ -112,6 +112,52 @@ export function noiseNote(points: SeriesPoint[], channel: "app" | "web", g: Gran
   );
 }
 
+/**
+ * Flags buckets where a handful of orders carried the revenue.
+ *
+ * Six bulk orders in one week — case quantities to a venue — look identical to
+ * broad growth in a revenue line. This compares the largest few order totals
+ * in a bucket against the bucket's revenue, so a spike can be labelled with
+ * the number of orders behind it instead of being read as a trend.
+ */
+export type Concentration = { topN: number; share: number; note: string } | null;
+
+export function concentrationOf(
+  rows: DailySales[],
+  bucketKey: string,
+  channelName: "Mobile App" | "Website",
+  g: Granularity,
+): Concentration {
+  const inBucket = rows.filter(
+    (r) => r.sub_channel === channelName && bucketOf(r.date, g) === bucketKey,
+  );
+  const revenue = inBucket.reduce((a, r) => a + Number(r.total_online_revenue_jod), 0);
+  if (revenue <= 0) return null;
+
+  const tops = inBucket
+    .flatMap((r) => (r.top_order_values ?? []).map(Number))
+    .sort((a, b) => b - a);
+  if (!tops.length) return null;
+
+  // How many of the largest orders it takes to reach a third of the bucket.
+  let acc = 0;
+  let n = 0;
+  for (const v of tops) {
+    if (acc >= revenue / 3) break;
+    acc += v;
+    n++;
+  }
+  const share = (acc / revenue) * 100;
+  // Only worth saying when a genuinely small number of orders dominates.
+  if (n > 6 || share < 30) return null;
+  const period = g === "daily" ? "day" : g === "weekly" ? "week" : "month";
+  return {
+    topN: n,
+    share,
+    note: `${n} order${n === 1 ? "" : "s"} account for ${Math.round(share)}% of ${channelName} revenue this ${period} — a spike here is those orders, not broader demand.`,
+  };
+}
+
 /** The same calendar range a year earlier, for year-on-year comparison. */
 export function sameRangeLastYear(from: string, to: string): { from: string; to: string } {
   const shift = (iso: string) => {

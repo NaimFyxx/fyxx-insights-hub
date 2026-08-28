@@ -33,7 +33,14 @@ export function DualAxisChart({
 }) {
   const appColor = CHART_BLACK;
   const webColor = CHART_PINK;
-  const fmt = (v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)));
+  // Rounding to whole thousands produced duplicate labels ("3k, 3k, 2k"),
+  // which defeats the point of having two axes. One decimal below 10k keeps
+  // adjacent ticks distinguishable; above that the values are far enough apart.
+  const fmt = (v: number) => {
+    if (Math.abs(v) >= 10000) return `${Math.round(v / 1000)}k`;
+    if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+    return String(Math.round(v));
+  };
 
   return (
     <div>
@@ -41,10 +48,10 @@ export function DualAxisChart({
         <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
           <CartesianGrid stroke={CHART_GRID} vertical={false} />
           <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: "#666666" }} minTickGap={24} />
-          <YAxis yAxisId="app" orientation="left" tickFormatter={fmt}
-                 tick={{ fontSize: 11, fill: appColor }} width={52} />
-          <YAxis yAxisId="web" orientation="right" tickFormatter={fmt}
-                 tick={{ fontSize: 11, fill: webColor }} width={52} />
+          <YAxis yAxisId="app" orientation="left" tickFormatter={fmt} tickCount={5}
+                 tick={{ fontSize: 11, fill: appColor }} width={56} />
+          <YAxis yAxisId="web" orientation="right" tickFormatter={fmt} tickCount={5}
+                 tick={{ fontSize: 11, fill: webColor }} width={56} />
           {band ? (
             <ReferenceArea
               yAxisId="app" x1={band.from} x2={band.to}

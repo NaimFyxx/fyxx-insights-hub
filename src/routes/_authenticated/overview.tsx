@@ -6,6 +6,7 @@ import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { describeChannels } from "@/lib/channels";
+import { ChannelBar } from "@/components/layout/ChannelBar";
 import { RevenueLineChart } from "@/components/charts/RevenueLineChart";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 
@@ -115,6 +116,8 @@ function OverviewPage() {
   return (
     <div className="space-y-8">
       <PageHeader title="Overview" subtitle="Selected range compared with the previous period." />
+
+      <ChannelBar />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         <StatTile

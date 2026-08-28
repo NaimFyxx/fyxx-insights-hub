@@ -6,7 +6,7 @@ import { fetchDailySales } from "@/lib/queries";
 import { jod, num, pct, deltaPct } from "@/lib/format";
 import {
   buildSeries, noiseNote, sameRangeLastYear, spansSwitchover,
-  MOBILE_SWITCHOVER, SWITCHOVER_WARNING, type Granularity,
+  MOBILE_SWITCHOVER, SWITCHOVER_WARNING, concentrationOf, type Granularity,
 } from "@/lib/timeseries";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { DualAxisChart } from "@/components/charts/DualAxisChart";
@@ -24,6 +24,13 @@ export const Route = createFileRoute("/_authenticated/online")({
   component: OnlineChannelsPage,
 });
 
+type LocalChannel = "both" | "app" | "web";
+const SCOPES: { key: LocalChannel; label: string }[] = [
+  { key: "both", label: "Both" },
+  { key: "app", label: "Mobile App" },
+  { key: "web", label: "Website" },
+];
+
 const GRANULARITIES: { key: Granularity; label: string }[] = [
   { key: "daily", label: "Daily" },
   { key: "weekly", label: "Weekly" },
@@ -36,6 +43,7 @@ function OnlineChannelsPage() {
   // App vs Website, and the global toggles could set it to POS and leave it
   // empty. Date range stays shared, because that genuinely is global.
   const [granularity, setGranularity] = useState<Granularity>("weekly");
+  const [scope, setScope] = useState<LocalChannel>("both");
 
   const lastYear = sameRangeLastYear(range.from, range.to);
 
@@ -103,6 +111,24 @@ function OnlineChannelsPage() {
         </p>
       ) : null}
 
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-1">
+          <span className="label-xs mr-1 text-muted-foreground">Show</span>
+          {SCOPES.map((sc) => (
+            <button
+              key={sc.key}
+              onClick={() => setScope(sc.key)}
+              className={cn(
+                "label-xs rounded-sm border px-3 py-1.5",
+                scope === sc.key
+                  ? "border-foreground bg-secondary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {sc.label}
+            </button>
+          ))}
+        </div>
       <div className="flex items-center gap-1">
         {GRANULARITIES.map((g) => (
           <button
@@ -118,7 +144,32 @@ function OnlineChannelsPage() {
             {g.label}
           </button>
         ))}
+        </div>
       </div>
+
+      {(() => {
+        const appD = deltaPct(appNow.revenue, appPrior.revenue);
+        const webD = deltaPct(webNow.revenue, webPrior.revenue);
+        const webAovD = deltaPct(aov(webNow), aov(webPrior));
+        const webOrdD = deltaPct(webNow.orders, webPrior.orders);
+        if (webD === null || appD === null) return null;
+        const diverging = webD < -10 && appD > 0;
+        if (!diverging) return null;
+        return (
+          <div className="border-l-2 border-foreground bg-secondary/40 px-4 py-3">
+            <p className="text-sm">
+              <span className="font-medium">Website revenue is down {Math.abs(webD).toFixed(1)}%</span>{" "}
+              year on year while Mobile App is up {appD.toFixed(1)}%.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Website orders {webOrdD === null ? "—" : `${webOrdD > 0 ? "+" : ""}${webOrdD.toFixed(1)}%`}{" "}
+              with AOV {webAovD === null ? "—" : `${webAovD > 0 ? "+" : ""}${webAovD.toFixed(1)}%`} — fewer
+              orders at higher value, which is the signature of bulk buyers rather than broad demand.
+              Check the concentration flags below before reading it as a channel trend.
+            </p>
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Mobile App revenue" value={jod(appNow.revenue)}
@@ -140,6 +191,31 @@ function OnlineChannelsPage() {
           />
         ) : <EmptyState>No data in range.</EmptyState>}
       </Panel>
+
+      {(() => {
+        const flags = series
+          .flatMap((p) => [
+            { ch: "Mobile App" as const, bucket: p.bucket, c: concentrationOf(data.now, p.bucket, "Mobile App", granularity) },
+            { ch: "Website" as const, bucket: p.bucket, c: concentrationOf(data.now, p.bucket, "Website", granularity) },
+          ])
+          .filter((f) => f.c !== null)
+          .filter((f) => scope === "both" || (scope === "app" ? f.ch === "Mobile App" : f.ch === "Website"));
+        if (!flags.length) return null;
+        return (
+          <Panel title="Concentration warnings">
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {flags.slice(0, 12).map((f) => (
+                <li key={`${f.ch}-${f.bucket}`}>
+                  <span className="text-foreground">{f.bucket}</span> — {f.c!.note}
+                </li>
+              ))}
+            </ul>
+            {flags.length > 12 ? (
+              <p className="mt-2 text-xs text-muted-foreground">…and {flags.length - 12} more.</p>
+            ) : null}
+          </Panel>
+        );
+      })()}
 
       <Panel title="Website share of online revenue">
         {shareData.length ? (

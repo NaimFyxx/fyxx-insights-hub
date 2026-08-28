@@ -54,6 +54,25 @@ export class Limiter {
   }
 }
 
+/**
+ * A 429 whose Retry-After is hours away is not a rate limit to wait out — it
+ * is the DAILY QUOTA being spent. Sleeping through it burns the job's wall
+ * clock and gets it killed by the runner timeout, which then looks like a
+ * failure rather than "quota exhausted, resume tomorrow".
+ */
+export class QuotaExhaustedError extends Error {
+  constructor(label, retryAfterMs) {
+    const hours = (retryAfterMs / 3600000).toFixed(1);
+    super(`${label}: daily API quota exhausted — the API asked us to wait ${hours}h. Stopping cleanly; the next scheduled run resumes.`);
+    this.name = "QuotaExhaustedError";
+    this.retryAfterMs = retryAfterMs;
+    this.quotaExhausted = true;
+  }
+}
+
+/** Longer than this is a quota reset, not a burst limit. */
+export const MAX_SENSIBLE_BACKOFF_MS = 15 * 60 * 1000;
+
 /** Retries on 429 and 5xx with exponential backoff, honouring Retry-After. */
 export async function withRetry(label, fn, { tries = 8 } = {}) {
   let delay = 2000;
@@ -72,6 +91,10 @@ export async function withRetry(label, fn, { tries = 8 } = {}) {
         ["ETIMEDOUT", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "EHOSTUNREACH", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"].includes(netCode);
       const retryable = status === 429 || (status >= 500 && status < 600) || networkFailure;
       if (!retryable || attempt === tries) throw err;
+      // Before deciding to wait, check whether this is the daily cap.
+      if (err?.status === 429 && err?.retryAfterMs > MAX_SENSIBLE_BACKOFF_MS) {
+        throw new QuotaExhaustedError(label, err.retryAfterMs);
+      }
       const wait = err?.retryAfterMs ?? delay;
       log.warn(
         `${label} failed (${status ?? netCode ?? err?.name ?? "unknown"}), retry ${attempt}/${tries - 1} in ${Math.round(wait / 1000)}s`,

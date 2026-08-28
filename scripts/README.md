@@ -218,6 +218,37 @@ run at ~14.5% of gross sales, which feeds straight into realised margin. If that
 returns figure is inflated by cancelled orders or Webkul refund artefacts rather
 than genuine returns, the margin decline is partly an artefact too.
 
+> ### ⚠️ Klaviyo emits DUPLICATE Placed Order events
+>
+> About 2% of orders produce the event twice — identical timestamp, value and
+> channel. Not two orders, not an edit: the same event twice.
+>
+> Two consequences:
+>
+> * **Any count taken from the raw event stream is ~2% overstated** unless
+>   de-duplicated. `klaviyo_attributed_daily` is unaffected because it comes
+>   from metric-aggregates, where Klaviyo aggregates its own side.
+> * **Postgres rejects the whole command, not the duplicate row**: `ON CONFLICT
+>   DO UPDATE command cannot affect row a second time`. A 44,000-row write died
+>   this way after a 20-minute pull had already succeeded.
+>
+> `upsert()` now de-duplicates on the conflict target for every source and
+> warns when it collapses rows.
+>
+> **This is the fourth trap of the same shape in this project**, and the shape
+> is worth naming: *a system returning something plausible instead of erroring.*
+>
+> | Trap | What it returns instead of an error |
+> |---|---|
+> | LoyaltyLion ignores unknown filters | HTTP 200 and the full unfiltered set |
+> | Shopify without `read_all_orders` | An empty result for anything over 60 days |
+> | Klaviyo `mobile_push` vs `push-notification` | A 400 blaming "channel", not the vocabulary |
+> | Klaviyo duplicate order events | A plausible count, 2% too high |
+>
+> None of these announce themselves. Assume any new integration does the same
+> until measured: compare counts against a known quantity rather than checking
+> for a 200.
+
 ## Frontend contract (for Step 4)
 
 Decisions made while building the data layer that the dashboard must honour.

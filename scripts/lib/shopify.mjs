@@ -381,9 +381,15 @@ export async function fetchDailySales(from, to) {
       const day = new Date(o.createdAt).toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
       if (!byDay.has(day)) byDay.set(day, new Map());
       const perSource = byDay.get(day);
-      const cur = perSource.get(cls.source_name) ?? { revenue: 0, orders: 0, cls };
-      cur.revenue += Number(money?.amount ?? 0);
+      const cur = perSource.get(cls.source_name) ?? { revenue: 0, orders: 0, cls, top: [] };
+      const amt = Number(money?.amount ?? 0);
+      cur.revenue += amt;
       cur.orders += 1;
+      // Keep the five largest order totals, so a bucket can later show whether
+      // a handful of orders drove it rather than broad demand.
+      cur.top.push(amt);
+      cur.top.sort((a, b) => b - a);
+      if (cur.top.length > 5) cur.top.length = 5;
       perSource.set(cls.source_name, cur);
     }
     cursor = conn.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : null;
@@ -537,6 +543,7 @@ export function toSalesRows(byDay, days) {
         channel: v.cls.channel,
         total_online_revenue_jod: money3(v.revenue),
         orders: v.orders,
+        top_order_values: (v.top ?? []).map(money3),
       });
     }
   }

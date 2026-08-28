@@ -8,6 +8,8 @@ export type DailySales = {
   source_name: string;
   sub_channel: string;
   channel: string;
+  /** Five largest individual order totals for this date and source. */
+  top_order_values: number[];
 };
 
 export type AttributedDay = {
@@ -92,7 +94,7 @@ export const fetchDailySales = async (r: DateRange) =>
   unwrap<DailySales[]>(
     await supabase
       .from("shopify_daily_sales")
-      .select("date,total_online_revenue_jod,orders,source_name,sub_channel,channel")
+      .select("date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values")
       .gte("date", r.from)
       .lte("date", r.to)
       .order("date")

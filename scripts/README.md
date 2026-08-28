@@ -176,9 +176,13 @@ first ten characters of a bucket files the day under the previous date.
 
 > ### ⚠️ The Shopify token can write to the live store
 >
-> The token minted for this app carries **write scopes as well as read**. The
-> sync script must never use them — it is a reporting job against a live
-> store, and a mutation issued from here would alter real orders or products.
+> The token minted for this app carries **write scopes as well as read**, kept
+> deliberately for future use by other tooling. The sync script must never
+> touch them: it is a reporting job against a live store, and a mutation
+> issued from here would alter real orders, products or themes.
+>
+> Because the scopes are staying, the guard below is the only thing separating
+> this script from write access. It is not belt-and-braces — it is load-bearing.
 >
 > `assertReadOnly()` in `lib/shopify.mjs` enforces this. It runs inside
 > `gql()`, which is the only path to the network, so nothing reaches Shopify

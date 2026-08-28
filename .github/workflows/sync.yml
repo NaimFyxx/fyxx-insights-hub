@@ -250,6 +250,25 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      # A successful dump is otherwise invisible to the dashboard — artifacts
+      # live in GitHub, not the database. Recording it in sync_log is what lets
+      # the health view answer "when was the last good backup" without anyone
+      # opening the Actions tab.
+      - name: Record backup in sync_log
+        if: ${{ (github.event.schedule == '0 1 * * 0' || inputs.backup == true) && env.BACKUP_FILE != '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          curl -sS -o /dev/null -w "sync_log <- HTTP %{http_code}\n" \
+            -X POST "$SUPABASE_URL/rest/v1/sync_log" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{\"source\":\"database_backup\",\"status\":\"success\",\"rows_written\":1,\"message\":\"${BACKUP_FILE} (${BACKUP_SIZE}, encrypted artifact, 90-day retention)\"}"
+
       - name: Write run summary
         # Runs even on failure, so a bad night is readable without opening logs.
         if: always()

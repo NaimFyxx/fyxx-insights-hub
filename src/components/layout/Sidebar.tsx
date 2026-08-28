@@ -10,6 +10,7 @@ const NAV = [
   { to: "/loyalty", label: "Loyalty" },
   { to: "/activations", label: "Activations" },
   { to: "/export", label: "Export report" },
+  { to: "/health", label: "Sync health" },
 ] as const;
 
 export function Sidebar() {

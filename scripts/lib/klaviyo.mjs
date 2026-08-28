@@ -414,7 +414,7 @@ function subChannelFromKlaviyoSource(src) {
   return "Unknown";
 }
 
-async function pullEvents(metricId, fromIso, toIso, take, label) {
+export async function pullRawEvents(metricId, fromIso, toIso, take, label) {
   const filter = `and(equals(metric_id,"${metricId}"),greater-or-equal(datetime,${fromIso}),less-than(datetime,${toIso}))`;
   let path = `/events?filter=${encodeURIComponent(filter)}&page%5Bsize%5D=200`;
   const out = [];
@@ -440,12 +440,12 @@ export async function fetchOrderInfluence({ from, to, conversionMetricId }) {
   endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
   const endIso = `${endExclusive.toISOString().slice(0, 10)}T00:00:00`;
 
-  const clicks = await pullEvents(
+  const clicks = await pullRawEvents(
     clickMetric, `${lookbackFrom.toISOString().slice(0, 10)}T00:00:00`, endIso,
     (e) => ({ profile: e.relationships?.profile?.data?.id, t: Date.parse(e.attributes?.datetime) }),
     "influence clicks",
   );
-  const orders = await pullEvents(
+  const orders = await pullRawEvents(
     conversionMetricId, `${from}T00:00:00`, endIso,
     (e) => ({
       orderId: String(e.attributes?.event_properties?.$event_id ?? ""),

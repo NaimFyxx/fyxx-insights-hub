@@ -6,7 +6,8 @@
  */
 import { money3, rate4, int } from "../lib/log.mjs";
 import { toCampaignRows, toFlowRows } from "../lib/klaviyo.mjs";
-import { toSalesRows } from "../lib/shopify.mjs";
+import { toSalesRows, classifySource } from "../lib/shopify.mjs";
+const kmod = { classifySource };
 
 let failed = 0;
 const check = (name, cond, detail = "") => {
@@ -87,27 +88,41 @@ check("a row tagged mobile_push still routes to push, not flows",
 
 /* --------------------------------------------------------- sales rows -- */
 group("shopify shaping");
-const sales = toSalesRows(
-  new Map([["2026-08-01", { revenue: 2431.6667, orders: 31 }]]),
-  new Map([["2026-08-01", 512.3339]]),
-  ["2026-08-01", "2026-08-02"],
-);
-check("every day in range gets a row", sales.length === 2);
-check("revenue at 3dp", sales[0].total_online_revenue_jod === 2431.667);
-check("attributed revenue at 3dp", sales[0].klaviyo_attributed_revenue_jod === 512.334);
-check("a day with no orders is zero, not null", sales[1].total_online_revenue_jod === 0 && sales[1].orders === 0);
+const cls = (n) => { const { classifySource } = kmod; return classifySource(n); };
+const byDay = new Map([
+  ["2026-08-01", new Map([
+    ["web",      { revenue: 2431.6667, orders: 31, cls: { sub_channel: "Website",     channel: "Online Sales" } }],
+    ["5382175",  { revenue: 900.5,     orders: 12, cls: { sub_channel: "Mobile App",  channel: "Online Sales" } }],
+    ["pos",      { revenue: 400,       orders: 4,  cls: { sub_channel: "POS",         channel: "POS Sales" } }],
+  ])],
+]);
+const sales = toSalesRows(byDay, ["2026-08-01", "2026-08-02"]);
+check("one row per source, not per day", sales.length === 3, `${sales.length} rows`);
+check("POS is no longer excluded", sales.some((r) => r.sub_channel === "POS"));
+check("raw source_name is stored unmapped", sales.map((r) => r.source_name).sort().join(",") === "5382175,pos,web");
+check("channel grouping is stored alongside", sales.find((r) => r.source_name === "5382175").channel === "Online Sales");
+check("revenue at 3dp per channel", sales.find((r) => r.source_name === "web").total_online_revenue_jod === 2431.667);
+check("a day with no orders produces NO rows", !sales.some((r) => r.date === "2026-08-02"));
+check("attribution is NOT written onto a channel row",
+  sales.every((r) => !("klaviyo_attributed_revenue_jod" in r)), Object.keys(sales[0]).join(","));
 
-// Running --only shopify leaves attribution unknown. Writing 0 there would
-// wipe real revenue already stored, so the column must be omitted entirely.
-const noAttribution = toSalesRows(new Map([["2026-08-01", { revenue: 100, orders: 2 }]]), null, ["2026-08-01"]);
-check("with no Klaviyo run, the attribution column is OMITTED, not zeroed",
-  !("klaviyo_attributed_revenue_jod" in noAttribution[0]), Object.keys(noAttribution[0]).join(","));
-check("but the Shopify figures are still written",
-  noAttribution[0].total_online_revenue_jod === 100 && noAttribution[0].orders === 2);
-check("with a Klaviyo run, the column IS present",
-  "klaviyo_attributed_revenue_jod" in sales[0]);
-check("and a genuine zero is still written as zero",
-  toSalesRows(new Map(), new Map([["2026-08-01", 0]]), ["2026-08-01"])[0].klaviyo_attributed_revenue_jod === 0);
+group("channel mapping");
+check("web -> Website / Online Sales",
+  cls("web").sub_channel === "Website" && cls("web").channel === "Online Sales");
+check("Appmaker 5382175 -> Mobile App", cls("5382175").sub_channel === "Mobile App");
+check("Shopney 2653365 -> Mobile App too (switchover must not break the trend)",
+  cls("2653365").sub_channel === "Mobile App");
+check("both mobile providers land on the same channel",
+  cls("5382175").channel === cls("2653365").channel);
+check("Shopify POS 'pos' -> POS", cls("pos").sub_channel === "POS");
+check("Odoo 179433 -> POS too (same switchover rule)", cls("179433").sub_channel === "POS");
+check("both POS providers land on the same channel",
+  cls("pos").channel === cls("179433").channel && cls("pos").channel === "POS Sales");
+for (const d of ["shopify_draft_order", "iphone", "android"])
+  check(`${d} -> Draft Orders`, cls(d).sub_channel === "Draft Orders");
+check("an unseen source is stored as Unknown, never dropped",
+  cls("some_new_channel_2027").sub_channel === "Unknown" && cls("some_new_channel_2027").source_name === "some_new_channel_2027");
+check("a missing source becomes 'unknown' rather than throwing", cls(undefined).source_name === "unknown");
 
 /* --------------------------------------------------- channel vocabularies -- */
 group("klaviyo channel vocabularies");

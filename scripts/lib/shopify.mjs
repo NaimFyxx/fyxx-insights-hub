@@ -289,6 +289,39 @@ export function assertReadOnly(document, label = "graphql") {
   return true;
 }
 
+/* ------------------------------------------------------------------------
+ * Sales channels.
+ *
+ * Shopify's Order.sourceName is stored RAW and unmapped, so a channel
+ * definition can be changed later without re-fetching three years of orders.
+ * sub_channel and channel are derived from it here.
+ *
+ * Two channels changed provider mid-history, and both IDs must land on the
+ * same sub-channel or the trend snaps at the switchover:
+ *   Mobile App : 2653365 (Shopney, previous) -> 5382175 (Appmaker, current)
+ *   POS        : pos (Shopify POS, historic) -> 179433 (Odoo Connector, current)
+ * --------------------------------------------------------------------- */
+export const SOURCE_MAP = {
+  web:                  { sub_channel: "Website",      channel: "Online Sales" },
+  "5382175":            { sub_channel: "Mobile App",   channel: "Online Sales" }, // Appmaker, current
+  "2653365":            { sub_channel: "Mobile App",   channel: "Online Sales" }, // Shopney, previous
+  pos:                  { sub_channel: "POS",          channel: "POS Sales" },    // Shopify POS, historic
+  "179433":             { sub_channel: "POS",          channel: "POS Sales" },    // Odoo Connector, current
+  shopify_draft_order:  { sub_channel: "Draft Orders", channel: "Draft Orders" },
+  iphone:               { sub_channel: "Draft Orders", channel: "Draft Orders" },
+  android:              { sub_channel: "Draft Orders", channel: "Draft Orders" },
+};
+
+/**
+ * An unrecognised source is stored as Unknown rather than dropped or guessed.
+ * Shopify can add a channel at any time, and silently discarding its orders
+ * would understate revenue with no visible symptom.
+ */
+export function classifySource(sourceName) {
+  const key = String(sourceName ?? "").trim() || "unknown";
+  return { source_name: key, ...(SOURCE_MAP[key] ?? { sub_channel: "Unknown", channel: "Unknown" }) };
+}
+
 const ORDERS_QUERY = `
   query DailySales($q: String!, $cursor: String) {
     orders(first: 250, after: $cursor, query: $q, sortKey: CREATED_AT) {
@@ -297,6 +330,7 @@ const ORDERS_QUERY = `
         id
         createdAt
         cancelledAt
+        sourceName
         currentTotalPriceSet { shopMoney { amount currencyCode } }
       }
     }
@@ -313,65 +347,94 @@ const ORDERS_QUERY = `
  * decision made downstream, not a silent transformation at fetch time.
  */
 export async function fetchDailySales(from, to) {
-  const q = `created_at:>='${from}T00:00:00+03:00' created_at:<='${to}T23:59:59+03:00' -source_name:pos`;
+  // No channel filter. Every order is fetched and tagged; filtering is a
+  // display concern. Excluding POS here would throw away data that could only
+  // be recovered by re-fetching the entire history.
+  const q = `created_at:>='${from}T00:00:00+03:00' created_at:<='${to}T23:59:59+03:00'`;
+
+  // date -> source_name -> { revenue, orders }
   const byDay = new Map();
   let cursor = null;
   let pages = 0;
   let scanned = 0;
   let cancelled = 0;
   const currencies = new Set();
+  const sourceTally = new Map();
+  const unknownSources = new Map();
 
   do {
     const data = await gql(ORDERS_QUERY, { q, cursor }, `shopify orders page ${pages + 1}`);
     const conn = data.orders;
     for (const o of conn.nodes ?? []) {
       scanned++;
-      if (o.cancelledAt) {
-        cancelled++;
-        continue;
-      }
+      if (o.cancelledAt) { cancelled++; continue; }
+
       const money = o.currentTotalPriceSet?.shopMoney;
       if (money?.currencyCode) currencies.add(money.currencyCode);
-      // Bucket by Amman calendar day, matching the query window.
+
+      const cls = classifySource(o.sourceName);
+      sourceTally.set(cls.source_name, (sourceTally.get(cls.source_name) ?? 0) + 1);
+      if (cls.sub_channel === "Unknown") {
+        unknownSources.set(cls.source_name, (unknownSources.get(cls.source_name) ?? 0) + 1);
+      }
+
       const day = new Date(o.createdAt).toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
-      const cur = byDay.get(day) ?? { revenue: 0, orders: 0 };
+      if (!byDay.has(day)) byDay.set(day, new Map());
+      const perSource = byDay.get(day);
+      const cur = perSource.get(cls.source_name) ?? { revenue: 0, orders: 0, cls };
       cur.revenue += Number(money?.amount ?? 0);
       cur.orders += 1;
-      byDay.set(day, cur);
+      perSource.set(cls.source_name, cur);
     }
     cursor = conn.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : null;
     pages++;
-  } while (cursor && pages < 200);
+    if (pages % 20 === 0) log.info(`shopify: ${pages} pages, ${scanned} orders so far`);
+  } while (cursor && pages < 4000);
 
   if (currencies.size > 1) {
     log.warn(`orders span multiple currencies (${[...currencies].join(", ")}); amounts were NOT converted`);
   } else if (currencies.size === 1 && !currencies.has("JOD")) {
-    log.warn(
-      `shop currency is ${[...currencies][0]}, not JOD. Values are stored as reported, with no conversion applied.`,
-    );
+    log.warn(`shop currency is ${[...currencies][0]}, not JOD. Values stored as reported, no conversion.`);
   }
-  log.ok(`shopify: ${scanned} orders scanned, ${cancelled} cancelled and excluded, ${byDay.size} days with sales`);
+
+  log.ok(`shopify: ${scanned} orders scanned, ${cancelled} cancelled and excluded, ${byDay.size} days`);
+  if (sourceTally.size) {
+    log.info("  orders by source_name:");
+    for (const [src, n] of [...sourceTally].sort((a, b) => b[1] - a[1])) {
+      const { sub_channel, channel } = classifySource(src);
+      log.info(`      ${src.padEnd(20)} ${String(n).padStart(7)}   ${sub_channel} / ${channel}`);
+    }
+  }
+  if (unknownSources.size) {
+    log.warn(`${unknownSources.size} UNRECOGNISED source name(s): ${[...unknownSources.keys()].join(", ")}`);
+    log.warn("  These are stored as Unknown, not dropped. Add them to SOURCE_MAP in lib/shopify.mjs.");
+  }
   return byDay;
 }
 
-export function toSalesRows(byDay, attributedByDay, days) {
-  // When Klaviyo did not run (e.g. `--only shopify`), we have NO attributed
-  // figure — which is not the same as an attributed figure of zero. Writing a
-  // zero would silently destroy real revenue already stored for these days.
-  // Omitting the column entirely leaves the existing value untouched, because
-  // the upsert only updates columns present in the payload.
-  const haveAttribution = attributedByDay instanceof Map;
-  return days.map((date) => {
-    const s = byDay.get(date) ?? { revenue: 0, orders: 0 };
-    const row = {
-      date,
-      total_online_revenue_jod: money3(s.revenue),
-      orders: s.orders,
-    };
-    if (haveAttribution) {
-      // Event-date basis, so it lines up with the order dates above.
-      row.klaviyo_attributed_revenue_jod = money3(attributedByDay.get(date) ?? 0);
+/**
+ * One row per (date, source_name). Days with no orders produce no rows — there
+ * is no channel to attribute an absence to, and a zero row per possible source
+ * would invent data Shopify never reported.
+ *
+ * Attribution is deliberately NOT written here. It is whole-account and cannot
+ * be split by channel, so it lives in klaviyo_attributed_daily.
+ */
+export function toSalesRows(byDay, days) {
+  const rows = [];
+  for (const date of days) {
+    const perSource = byDay.get(date);
+    if (!perSource) continue;
+    for (const [source_name, v] of perSource) {
+      rows.push({
+        date,
+        source_name,
+        sub_channel: v.cls.sub_channel,
+        channel: v.cls.channel,
+        total_online_revenue_jod: money3(v.revenue),
+        orders: v.orders,
+      });
     }
-    return row;
-  });
+  }
+  return rows;
 }

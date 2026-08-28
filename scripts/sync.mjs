@@ -122,6 +122,13 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
   // --- attributed revenue: event-date basis, a different question ---------
   const attributed = await klaviyo.fetchAttributedRevenueByDay({ from, to, conversionMetricId: metricId });
 
+  // Attributed revenue is a whole-account, order-date figure. It is written
+  // to its own table because it cannot be split by Shopify sales channel.
+  const attributedRows = [...attributed.entries()].map(([date, revenue]) => ({
+    date,
+    revenue_jod: money3(revenue),
+  }));
+
   const pushRows = [...campaignPush, ...flowPush];
 
   if (dryRun) {
@@ -134,6 +141,7 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
     return { rows: campaignRows.length + flowRows.length + pushRows.length, attributed };
   }
 
+  const aw = await upsert("klaviyo_attributed_daily", attributedRows, "date", { dryRun });
   const cw = await upsert("klaviyo_campaigns", campaignRows, "campaign_id,campaign_message_id", { dryRun });
   const pw = await upsert("klaviyo_push", campaignPush, "source_type,source_id,message_id,sent_on", { dryRun });
   await writeSyncLog(
@@ -141,27 +149,22 @@ async function syncKlaviyo({ from, to, dryRun, force }) {
       message: `${cw} campaign rows, ${pw} campaign push rows`, durationMs: Date.now() - started },
     { dryRun },
   );
-  log.ok(`Klaviyo: ${cw} campaigns, ${flowRows.length} flow rows, ${pushRows.length} push rows`);
+  log.ok(`Klaviyo: ${cw} campaigns, ${flowRows.length} flow rows, ${pushRows.length} push rows, ${aw} attributed day(s)`);
   return { rows: cw + flowRows.length + pushRows.length, attributed };
 }
 
 async function syncShopify({ from, to, dryRun, attributed }) {
   const started = Date.now();
-  if (!attributed) {
-    log.warn(
-      "Klaviyo did not run, so there is no attributed-revenue figure for this range.\n" +
-        "  klaviyo_attributed_revenue_jod will be LEFT AS IT IS rather than zeroed.",
-    );
-  }
+
   const byDay = await shopify.fetchDailySales(from, to);
-  const rows = shopify.toSalesRows(byDay, attributed, eachDay(from, to));
+  const rows = shopify.toSalesRows(byDay, eachDay(from, to));
 
   if (dryRun) {
     log.info("Shopify — would write:");
-    preview("shopify_daily_sales", rows, ["date", "total_online_revenue_jod", "orders", "klaviyo_attributed_revenue_jod"]);
+    preview("shopify_daily_sales", rows, ["date", "source_name", "sub_channel", "total_online_revenue_jod", "orders"]);
     return rows.length;
   }
-  const w = await upsert("shopify_daily_sales", rows, "date", { dryRun });
+  const w = await upsert("shopify_daily_sales", rows, "date,source_name", { dryRun });
   await writeSyncLog(
     { source: "shopify_daily_sales", status: "success", rangeStart: from, rangeEnd: to, rowsWritten: w,
       message: `${w} days of online sales, POS excluded`, durationMs: Date.now() - started },

@@ -92,6 +92,27 @@ saying which vocabulary it wanted:
 so the difference is stated once. `isPush()` accepts either spelling, because
 groupings arrive from the report endpoints and metadata from the list endpoint.
 
+> ### ⚠️ Klaviyo and Shopify name the same channel differently
+>
+> The same sales channel has two vocabularies. Shopify returns raw app IDs;
+> Klaviyo resolves them to display names. Any cross-system comparison must map
+> both to the same sub-channel, or Mobile App will appear twice and match
+> nothing.
+>
+> | Sub-channel | Shopify `Order.sourceName` | Klaviyo `Source Name` |
+> |---|---|---|
+> | Website | `web` | `web` |
+> | Mobile App | `5382175` (Appmaker), `2653365` (Shopney) | `Appmaker.xyz - Mobile app` |
+> | POS | `pos`, `179433` (Odoo) | `Odoo Connector` |
+> | Draft Orders | `shopify_draft_order`, `iphone`, `android` | `shopify_draft_order` |
+>
+> Klaviyo does also carry the numeric id at `$extra.app_id`, which matches
+> Shopify's value — that is the reliable join key when one is needed.
+>
+> This is the same class of trap as `mobile_push` vs `push-notification` above:
+> one system's name for a thing is not another's, and neither errors when you
+> use the wrong one.
+
 ## Idempotency
 
 Every write is an upsert against a unique index:

@@ -56,6 +56,30 @@ export const REPORT_CHANNEL = { email: "email", push: "push-notification" };
 const PUSH_ALIASES = new Set([LIST_CHANNEL.push, REPORT_CHANNEL.push]);
 export const isPush = (channel) => PUSH_ALIASES.has(channel);
 
+/**
+ * Klaviyo refuses a values-report timeframe longer than one year
+ * ("Passed in timeframe is greater than 1 year"). Any range wider than that
+ * has to be split, so a multi-year backfill is chunked rather than failing.
+ * 360 days leaves margin against boundary arithmetic.
+ */
+export const MAX_TIMEFRAME_DAYS = 360;
+
+export function chunkRange(from, to, maxDays = MAX_TIMEFRAME_DAYS) {
+  const chunks = [];
+  let start = from;
+  while (start <= to) {
+    const d = new Date(`${start}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + maxDays - 1);
+    const end = d.toISOString().slice(0, 10);
+    chunks.push({ from: start, to: end < to ? end : to });
+    if (end >= to) break;
+    const next = new Date(`${end}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    start = next.toISOString().slice(0, 10);
+  }
+  return chunks;
+}
+
 /** Day boundaries in Amman time, so a "day" means what it means in the shop. */
 const dayStart = (d) => `${d}T00:00:00${TZ_OFFSET}`;
 const dayEnd = (d) => `${d}T23:59:59${TZ_OFFSET}`;

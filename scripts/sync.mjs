@@ -32,7 +32,10 @@ function parseArgs(argv) {
     else if (k === "--from") a.from = argv[++i];
     else if (k === "--to") a.to = argv[++i];
     else if (k === "--only") a.only = argv[++i].split(",").map((s) => s.trim());
-    else if (k === "--max-days") a.maxDays = Number(argv[++i]);
+    else if (k === "--max-days") {
+      a.maxDays = Number(argv[++i]);
+      if (!Number.isFinite(a.maxDays) || a.maxDays < 0) throw new Error("--max-days must be 0 or a positive number");
+    }
     else if (k === "--help" || k === "-h") a.help = true;
     else throw new Error(`Unknown argument: ${k}`);
   }
@@ -81,7 +84,15 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
 
   // --- campaigns: one call, send-date basis -------------------------------
   const meta = await klaviyo.fetchCampaignMeta(from, to);
-  const campaignResults = await klaviyo.fetchCampaignValues({ from, to, conversionMetricId: metricId });
+  // Klaviyo rejects a timeframe over a year, so a multi-year backfill is split.
+  const chunks = klaviyo.chunkRange(from, to);
+  if (chunks.length > 1) log.info(`range exceeds Klaviyo's 1-year timeframe limit — split into ${chunks.length} chunk(s)`);
+
+  const campaignResults = [];
+  for (const c of chunks) {
+    if (chunks.length > 1) log.info(`  campaign values ${c.from} … ${c.to}`);
+    campaignResults.push(...(await klaviyo.fetchCampaignValues({ ...c, conversionMetricId: metricId })));
+  }
   const { email: campaignRows, push: campaignPush } = klaviyo.toCampaignRows(campaignResults, meta);
 
   // --- flows: one call per day, send-date basis ---------------------------
@@ -95,7 +106,10 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   // has to span several runs. --max-days caps how many flow days one run
   // attempts, so the nightly Action can chip away at a backfill automatically
   // instead of someone remembering to re-trigger it.
-  const pending = maxDays ? allPending.slice(0, maxDays) : allPending;
+  // `maxDays` of 0 is meaningful: do the campaign and attribution calls but no
+  // flow days at all. A truthiness check would read 0 as "no cap" and attempt
+  // the entire range — the exact opposite.
+  const pending = Number.isFinite(maxDays) ? allPending.slice(0, Math.max(0, maxDays)) : allPending;
   const deferred = allPending.length - pending.length;
 
   if (done.size) log.info(`resuming: ${done.size} day(s) already synced`);
@@ -104,8 +118,11 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
     log.info(`${pending.length} flow day(s) this run, ~${mins} minute(s) at 2 calls/min`);
   }
   if (deferred > 0) {
-    const runs = Math.ceil(deferred / (maxDays || 1));
-    log.warn(`${deferred} day(s) deferred to later runs (~${runs} more run(s) to finish the backfill)`);
+    const runs = maxDays > 0 ? Math.ceil(deferred / maxDays) : null;
+    log.warn(
+      `${deferred} day(s) deferred to later runs` +
+        (runs ? ` (~${runs} more run(s) to finish the backfill)` : " (flows skipped entirely this run)"),
+    );
   }
 
   const flowRows = [];
@@ -140,7 +157,12 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   }
 
   // --- attributed revenue: event-date basis, a different question ---------
-  const attributed = await klaviyo.fetchAttributedRevenueByDay({ from, to, conversionMetricId: metricId });
+  const attributed = new Map();
+  for (const c of chunks) {
+    if (chunks.length > 1) log.info(`  attributed revenue ${c.from} … ${c.to}`);
+    const part = await klaviyo.fetchAttributedRevenueByDay({ ...c, conversionMetricId: metricId });
+    for (const [d, v] of part) attributed.set(d, v);
+  }
 
   // Attributed revenue is a whole-account, order-date figure. It is written
   // to its own table because it cannot be split by Shopify sales channel.

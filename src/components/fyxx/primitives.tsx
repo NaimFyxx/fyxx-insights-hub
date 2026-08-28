@@ -59,14 +59,20 @@ export function StatTile({
 }: {
   label: string;
   value: string;
-  delta?: number;
+  delta?: number | null;
   note?: string;
 }) {
   return (
     <div className="border-t border-border pt-4">
       <SectionLabel>{label}</SectionLabel>
       <p className="display-num mt-3 text-4xl leading-none">{value}</p>
-      {typeof delta === "number" ? <Delta value={delta} /> : null}
+      {typeof delta === "number" ? (
+        <Delta value={delta} />
+      ) : delta === null ? (
+        // Null means no prior period to compare against — say so rather than
+        // showing a percentage that was never measured.
+        <p className="mt-2 text-xs text-muted-foreground">no comparison</p>
+      ) : null}
       {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
     </div>
   );

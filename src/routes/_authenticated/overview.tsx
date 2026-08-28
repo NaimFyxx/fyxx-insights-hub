@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDateRange } from "@/context/date-range-context";
-import { fetchCampaigns, fetchDailySales, fetchFlows, fetchPush, fetchSnapshots } from "@/lib/queries";
+import { fetchAttributed, fetchCampaigns, fetchDailySales, fetchFlows, fetchPush, fetchSnapshots } from "@/lib/queries";
 import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
@@ -30,10 +30,12 @@ function OverviewPage() {
   const q = useQuery({
     queryKey: ["overview", range.from, range.to, refreshKey],
     queryFn: async () => {
-      const [sales, prevSales, campaigns, prevCampaigns, flows, prevFlows, push, prevPush, snaps, prevSnaps] =
+      const [sales, prevSales, attributed, prevAttributed, campaigns, prevCampaigns, flows, prevFlows, push, prevPush, snaps, prevSnaps] =
         await Promise.all([
           fetchDailySales(range),
           fetchDailySales(prev),
+          fetchAttributed(range),
+          fetchAttributed(prev),
           fetchCampaigns(range),
           fetchCampaigns(prev),
           fetchFlows(range),
@@ -43,7 +45,7 @@ function OverviewPage() {
           fetchSnapshots(range),
           fetchSnapshots(prev),
         ]);
-      return { sales, prevSales, campaigns, prevCampaigns, flows, prevFlows, push, prevPush, snaps, prevSnaps };
+      return { sales, prevSales, attributed, prevAttributed, campaigns, prevCampaigns, flows, prevFlows, push, prevPush, snaps, prevSnaps };
     },
   });
 
@@ -58,15 +60,21 @@ function OverviewPage() {
 
   const d = q.data;
 
-  const reach = (c: typeof d.campaigns, f: typeof d.flows, p: typeof d.push) =>
+  // MESSAGES SENT, not people. Uniqueness does not aggregate: a profile mailed
+  // on ten days counts ten times here. True unique reach needs Klaviyo's
+  // `unique` measurement queried per range — see scripts/README.md.
+  const sent = (c: typeof d.campaigns, f: typeof d.flows, p: typeof d.push) =>
     sum(c.map((x) => x.sent)) + sum(f.map((x) => x.recipients)) + sum(p.map((x) => x.sent));
 
-  const reachNow = reach(d.campaigns, d.flows, d.push);
-  const reachPrev = reach(d.prevCampaigns, d.prevFlows, d.prevPush);
+  const sentNow = sent(d.campaigns, d.flows, d.push);
+  const sentPrev = sent(d.prevCampaigns, d.prevFlows, d.prevPush);
 
-  const klaviyoNow = sum(d.sales.map((x) => Number(x.klaviyo_attributed_revenue_jod)));
-  const klaviyoPrev = sum(d.prevSales.map((x) => Number(x.klaviyo_attributed_revenue_jod)));
+  // Attributed revenue now comes from its own table, not the dead column.
+  const klaviyoNow = sum(d.attributed.map((x) => Number(x.revenue_jod)));
+  const klaviyoPrev = sum(d.prevAttributed.map((x) => Number(x.revenue_jod)));
 
+  // shopify_daily_sales has one row per channel per day, so this sums across
+  // every channel row in range rather than assuming one row per day.
   const onlineNow = sum(d.sales.map((x) => Number(x.total_online_revenue_jod)));
   const onlinePrev = sum(d.prevSales.map((x) => Number(x.total_online_revenue_jod)));
 
@@ -82,13 +90,20 @@ function OverviewPage() {
     ? prevLast.blue_members + prevLast.silver_members + prevLast.gold_members + prevLast.platinum_members
     : 0;
 
-  const linePoints = d.sales.map((s) => ({
-    date: s.date,
-    klaviyo: Number(s.klaviyo_attributed_revenue_jod),
-    total: Number(s.total_online_revenue_jod),
+  // Collapse the per-channel rows to one point per day before charting,
+  // otherwise each day appears once per channel.
+  const attributedByDate = new Map(d.attributed.map((a) => [a.date, Number(a.revenue_jod)]));
+  const totalByDate = new Map<string, number>();
+  for (const s of d.sales) {
+    totalByDate.set(s.date, (totalByDate.get(s.date) ?? 0) + Number(s.total_online_revenue_jod));
+  }
+  const linePoints = [...totalByDate.keys()].sort().map((date) => ({
+    date,
+    klaviyo: attributedByDate.get(date) ?? 0,
+    total: totalByDate.get(date) ?? 0,
   }));
 
-  const reachByChannel = [
+  const sentByChannel = [
     { label: "Email campaigns", value: sum(d.campaigns.map((x) => x.sent)) },
     { label: "Push", value: sum(d.push.map((x) => x.sent)) },
     { label: "Flows", value: sum(d.flows.map((x) => x.recipients)) },
@@ -99,16 +114,23 @@ function OverviewPage() {
       <PageHeader title="Overview" subtitle="Selected range compared with the previous period." />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="People reached" value={num(reachNow)} delta={deltaPct(reachNow, reachPrev)} />
+        <StatTile
+          label="Messages sent"
+          value={num(sentNow)}
+          delta={deltaPct(sentNow, sentPrev)}
+          note="Sends, not people. One person mailed daily counts once per send."
+        />
         <StatTile
           label="Klaviyo revenue"
           value={jod(klaviyoNow)}
           delta={deltaPct(klaviyoNow, klaviyoPrev)}
+          note="Attributed by order date, all sales channels."
         />
         <StatTile
-          label="Share of online revenue"
+          label="Klaviyo-attributed share"
           value={pct(shareNow)}
           delta={deltaPct(shareNow, sharePrev)}
+          note={`${jod(klaviyoNow)} attributed across all channels, against ${jod(onlineNow)} from every channel. Attribution cannot be split by channel.`}
         />
         <StatTile label="Loyalty members" value={num(members)} delta={deltaPct(members, membersPrev)} />
       </div>
@@ -117,8 +139,8 @@ function OverviewPage() {
         {linePoints.length ? <RevenueLineChart data={linePoints} /> : <EmptyState>No data in range.</EmptyState>}
       </Panel>
 
-      <Panel title="Reach by channel">
-        <SimpleBarChart data={reachByChannel} />
+      <Panel title="Messages sent by channel">
+        <SimpleBarChart data={sentByChannel} />
       </Panel>
     </div>
   );

@@ -7,398 +7,70 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
       activations: {
-        Row: {
-          created_at: string
-          date: string
-          id: string
-          notes: string | null
-          status: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          date: string
-          id?: string
-          notes?: string | null
-          status?: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          date?: string
-          id?: string
-          notes?: string | null
-          status?: string
-          title?: string
-          updated_at?: string
-        }
+        Row: { created_at: string; date: string; id: string; notes: string | null; status: string; title: string; updated_at: string }
+        Insert: { created_at?: string; date: string; id?: string; notes?: string | null; status?: string; title: string; updated_at?: string }
+        Update: { created_at?: string; date?: string; id?: string; notes?: string | null; status?: string; title?: string; updated_at?: string }
+        Relationships: []
+      }
+      klaviyo_attributed_daily: {
+        Row: { created_at: string; date: string; id: string; orders: number; revenue_jod: number; updated_at: string }
+        Insert: { created_at?: string; date: string; id?: string; orders?: number; revenue_jod?: number; updated_at?: string }
+        Update: { created_at?: string; date?: string; id?: string; orders?: number; revenue_jod?: number; updated_at?: string }
         Relationships: []
       }
       klaviyo_campaigns: {
-        Row: {
-          campaign_id: string
-          campaign_message_id: string
-          click_rate: number
-          clicked: number
-          conversion_rate: number
-          created_at: string
-          delivered: number
-          id: string
-          name: string
-          open_rate: number
-          opened: number
-          orders: number
-          revenue_jod: number
-          send_channel: string
-          sent: number
-          sent_on: string
-          updated_at: string
-        }
-        Insert: {
-          campaign_id: string
-          campaign_message_id: string
-          click_rate?: number
-          clicked?: number
-          conversion_rate?: number
-          created_at?: string
-          delivered?: number
-          id?: string
-          name: string
-          open_rate?: number
-          opened?: number
-          orders?: number
-          revenue_jod?: number
-          send_channel?: string
-          sent?: number
-          sent_on: string
-          updated_at?: string
-        }
-        Update: {
-          campaign_id?: string
-          campaign_message_id?: string
-          click_rate?: number
-          clicked?: number
-          conversion_rate?: number
-          created_at?: string
-          delivered?: number
-          id?: string
-          name?: string
-          open_rate?: number
-          opened?: number
-          orders?: number
-          revenue_jod?: number
-          send_channel?: string
-          sent?: number
-          sent_on?: string
-          updated_at?: string
-        }
+        Row: { campaign_id: string; campaign_message_id: string; click_rate: number; clicked: number; conversion_rate: number; created_at: string; delivered: number; id: string; name: string; open_rate: number; opened: number; orders: number; revenue_jod: number; send_channel: string; sent: number; sent_on: string; updated_at: string }
+        Insert: { campaign_id: string; campaign_message_id: string; click_rate?: number; clicked?: number; conversion_rate?: number; created_at?: string; delivered?: number; id?: string; name: string; open_rate?: number; opened?: number; orders?: number; revenue_jod?: number; send_channel?: string; sent?: number; sent_on: string; updated_at?: string }
+        Update: { campaign_id?: string; campaign_message_id?: string; click_rate?: number; clicked?: number; conversion_rate?: number; created_at?: string; delivered?: number; id?: string; name?: string; open_rate?: number; opened?: number; orders?: number; revenue_jod?: number; send_channel?: string; sent?: number; sent_on?: string; updated_at?: string }
         Relationships: []
       }
       klaviyo_flows: {
-        Row: {
-          click_rate: number
-          clicked: number
-          conversion_rate: number
-          conversions: number
-          created_at: string
-          date: string
-          delivered: number
-          flow_id: string
-          flow_message_id: string
-          flow_name: string
-          id: string
-          open_rate: number
-          opened: number
-          recipients: number
-          revenue_jod: number
-          send_channel: string
-          updated_at: string
-        }
-        Insert: {
-          click_rate?: number
-          clicked?: number
-          conversion_rate?: number
-          conversions?: number
-          created_at?: string
-          date: string
-          delivered?: number
-          flow_id: string
-          flow_message_id: string
-          flow_name: string
-          id?: string
-          open_rate?: number
-          opened?: number
-          recipients?: number
-          revenue_jod?: number
-          send_channel?: string
-          updated_at?: string
-        }
-        Update: {
-          click_rate?: number
-          clicked?: number
-          conversion_rate?: number
-          conversions?: number
-          created_at?: string
-          date?: string
-          delivered?: number
-          flow_id?: string
-          flow_message_id?: string
-          flow_name?: string
-          id?: string
-          open_rate?: number
-          opened?: number
-          recipients?: number
-          revenue_jod?: number
-          send_channel?: string
-          updated_at?: string
-        }
+        Row: { click_rate: number; clicked: number; conversion_rate: number; conversions: number; created_at: string; date: string; delivered: number; flow_id: string; flow_message_id: string; flow_name: string; id: string; open_rate: number; opened: number; recipients: number; revenue_jod: number; send_channel: string; updated_at: string }
+        Insert: { click_rate?: number; clicked?: number; conversion_rate?: number; conversions?: number; created_at?: string; date: string; delivered?: number; flow_id: string; flow_message_id: string; flow_name: string; id?: string; open_rate?: number; opened?: number; recipients?: number; revenue_jod?: number; send_channel?: string; updated_at?: string }
+        Update: { click_rate?: number; clicked?: number; conversion_rate?: number; conversions?: number; created_at?: string; date?: string; delivered?: number; flow_id?: string; flow_message_id?: string; flow_name?: string; id?: string; open_rate?: number; opened?: number; recipients?: number; revenue_jod?: number; send_channel?: string; updated_at?: string }
         Relationships: []
       }
       klaviyo_push: {
-        Row: {
-          conversions: number
-          created_at: string
-          delivered: number
-          id: string
-          message_id: string
-          open_rate: number
-          opened: number
-          revenue_jod: number
-          sent: number
-          sent_on: string
-          source_id: string
-          source_name: string
-          source_type: string
-          updated_at: string
-        }
-        Insert: {
-          conversions?: number
-          created_at?: string
-          delivered?: number
-          id?: string
-          message_id: string
-          open_rate?: number
-          opened?: number
-          revenue_jod?: number
-          sent?: number
-          sent_on: string
-          source_id: string
-          source_name: string
-          source_type?: string
-          updated_at?: string
-        }
-        Update: {
-          conversions?: number
-          created_at?: string
-          delivered?: number
-          id?: string
-          message_id?: string
-          open_rate?: number
-          opened?: number
-          revenue_jod?: number
-          sent?: number
-          sent_on?: string
-          source_id?: string
-          source_name?: string
-          source_type?: string
-          updated_at?: string
-        }
+        Row: { conversions: number; created_at: string; delivered: number; id: string; message_id: string; open_rate: number; opened: number; revenue_jod: number; sent: number; sent_on: string; source_id: string; source_name: string; source_type: string; updated_at: string }
+        Insert: { conversions?: number; created_at?: string; delivered?: number; id?: string; message_id: string; open_rate?: number; opened?: number; revenue_jod?: number; sent?: number; sent_on: string; source_id: string; source_name: string; source_type?: string; updated_at?: string }
+        Update: { conversions?: number; created_at?: string; delivered?: number; id?: string; message_id?: string; open_rate?: number; opened?: number; revenue_jod?: number; sent?: number; sent_on?: string; source_id?: string; source_name?: string; source_type?: string; updated_at?: string }
         Relationships: []
       }
       ll_snapshots: {
-        Row: {
-          birthday_rewards_issued: number
-          blue_members: number
-          created_at: string
-          gold_members: number
-          id: string
-          platinum_members: number
-          points_earned: number | null
-          points_earned_reversed: number | null
-          points_expired: number | null
-          points_outstanding: number
-          points_outstanding_start: number | null
-          points_redeemed: number | null
-          points_redeemed_reimbursed: number | null
-          points_source: string
-          redemption_rate: number
-          redemptions: number
-          silver_members: number
-          snapshot_date: string
-          updated_at: string
-        }
-        Insert: {
-          birthday_rewards_issued?: number
-          blue_members?: number
-          created_at?: string
-          gold_members?: number
-          id?: string
-          platinum_members?: number
-          points_earned?: number | null
-          points_earned_reversed?: number | null
-          points_expired?: number | null
-          points_outstanding?: number
-          points_outstanding_start?: number | null
-          points_redeemed?: number | null
-          points_redeemed_reimbursed?: number | null
-          points_source?: string
-          redemption_rate?: number
-          redemptions?: number
-          silver_members?: number
-          snapshot_date: string
-          updated_at?: string
-        }
-        Update: {
-          birthday_rewards_issued?: number
-          blue_members?: number
-          created_at?: string
-          gold_members?: number
-          id?: string
-          platinum_members?: number
-          points_earned?: number | null
-          points_earned_reversed?: number | null
-          points_expired?: number | null
-          points_outstanding?: number
-          points_outstanding_start?: number | null
-          points_redeemed?: number | null
-          points_redeemed_reimbursed?: number | null
-          points_source?: string
-          redemption_rate?: number
-          redemptions?: number
-          silver_members?: number
-          snapshot_date?: string
-          updated_at?: string
-        }
+        Row: { birthday_rewards_issued: number; blue_members: number; created_at: string; gold_members: number; id: string; platinum_members: number; points_earned: number | null; points_earned_reversed: number | null; points_expired: number | null; points_outstanding: number; points_outstanding_start: number | null; points_redeemed: number | null; points_redeemed_reimbursed: number | null; points_source: string; redemption_rate: number; redemptions: number; silver_members: number; snapshot_date: string; updated_at: string }
+        Insert: { birthday_rewards_issued?: number; blue_members?: number; created_at?: string; gold_members?: number; id?: string; platinum_members?: number; points_earned?: number | null; points_earned_reversed?: number | null; points_expired?: number | null; points_outstanding?: number; points_outstanding_start?: number | null; points_redeemed?: number | null; points_redeemed_reimbursed?: number | null; points_source?: string; redemption_rate?: number; redemptions?: number; silver_members?: number; snapshot_date: string; updated_at?: string }
+        Update: { birthday_rewards_issued?: number; blue_members?: number; created_at?: string; gold_members?: number; id?: string; platinum_members?: number; points_earned?: number | null; points_earned_reversed?: number | null; points_expired?: number | null; points_outstanding?: number; points_outstanding_start?: number | null; points_redeemed?: number | null; points_redeemed_reimbursed?: number | null; points_source?: string; redemption_rate?: number; redemptions?: number; silver_members?: number; snapshot_date?: string; updated_at?: string }
         Relationships: []
       }
       reports: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          end_date: string
-          id: string
-          month_highlight: string
-          next_month_bullets: string[]
-          start_date: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          end_date: string
-          id?: string
-          month_highlight: string
-          next_month_bullets?: string[]
-          start_date: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          end_date?: string
-          id?: string
-          month_highlight?: string
-          next_month_bullets?: string[]
-          start_date?: string
-          updated_at?: string
-        }
+        Row: { created_at: string; created_by: string | null; end_date: string; id: string; month_highlight: string; next_month_bullets: string[]; start_date: string; updated_at: string }
+        Insert: { created_at?: string; created_by?: string | null; end_date: string; id?: string; month_highlight: string; next_month_bullets?: string[]; start_date: string; updated_at?: string }
+        Update: { created_at?: string; created_by?: string | null; end_date?: string; id?: string; month_highlight?: string; next_month_bullets?: string[]; start_date?: string; updated_at?: string }
         Relationships: []
       }
       shopify_daily_sales: {
-        Row: {
-          created_at: string
-          date: string
-          id: string
-          klaviyo_attributed_revenue_jod: number
-          orders: number
-          people_reached: number
-          total_online_revenue_jod: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          date: string
-          id?: string
-          klaviyo_attributed_revenue_jod?: number
-          orders?: number
-          people_reached?: number
-          total_online_revenue_jod?: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          date?: string
-          id?: string
-          klaviyo_attributed_revenue_jod?: number
-          orders?: number
-          people_reached?: number
-          total_online_revenue_jod?: number
-          updated_at?: string
-        }
+        Row: { channel: string; created_at: string; date: string; id: string; klaviyo_attributed_revenue_jod: number; orders: number; people_reached: number; source_name: string; sub_channel: string; total_online_revenue_jod: number; updated_at: string }
+        Insert: { channel?: string; created_at?: string; date: string; id?: string; klaviyo_attributed_revenue_jod?: number; orders?: number; people_reached?: number; source_name?: string; sub_channel?: string; total_online_revenue_jod?: number; updated_at?: string }
+        Update: { channel?: string; created_at?: string; date?: string; id?: string; klaviyo_attributed_revenue_jod?: number; orders?: number; people_reached?: number; source_name?: string; sub_channel?: string; total_online_revenue_jod?: number; updated_at?: string }
         Relationships: []
       }
       sync_log: {
-        Row: {
-          created_at: string
-          duration_ms: number | null
-          id: string
-          message: string | null
-          range_end: string | null
-          range_start: string | null
-          rows_written: number
-          source: string
-          status: string
-          synced_at: string
-        }
-        Insert: {
-          created_at?: string
-          duration_ms?: number | null
-          id?: string
-          message?: string | null
-          range_end?: string | null
-          range_start?: string | null
-          rows_written?: number
-          source: string
-          status?: string
-          synced_at?: string
-        }
-        Update: {
-          created_at?: string
-          duration_ms?: number | null
-          id?: string
-          message?: string | null
-          range_end?: string | null
-          range_start?: string | null
-          rows_written?: number
-          source?: string
-          status?: string
-          synced_at?: string
-        }
+        Row: { created_at: string; duration_ms: number | null; id: string; message: string | null; range_end: string | null; range_start: string | null; rows_written: number; source: string; status: string; synced_at: string }
+        Insert: { created_at?: string; duration_ms?: number | null; id?: string; message?: string | null; range_end?: string | null; range_start?: string | null; rows_written?: number; source: string; status?: string; synced_at?: string }
+        Update: { created_at?: string; duration_ms?: number | null; id?: string; message?: string | null; range_end?: string | null; range_start?: string | null; rows_written?: number; source?: string; status?: string; synced_at?: string }
         Relationships: []
       }
     }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    Views: { [_ in never]: never }
+    Functions: { [_ in never]: never }
+    Enums: { [_ in never]: never }
+    CompositeTypes: { [_ in never]: never }
   }
 }
 

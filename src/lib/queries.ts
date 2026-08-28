@@ -4,9 +4,15 @@ import type { DateRange } from "@/lib/ranges";
 export type DailySales = {
   date: string;
   total_online_revenue_jod: number;
-  klaviyo_attributed_revenue_jod: number;
   orders: number;
-  people_reached: number;
+  source_name: string;
+  sub_channel: string;
+  channel: string;
+};
+
+export type AttributedDay = {
+  date: string;
+  revenue_jod: number;
 };
 
 export type Campaign = {
@@ -63,14 +69,34 @@ const unwrap = <T,>(res: { data: T | null; error: { message: string } | null }):
   return (res.data ?? []) as T;
 };
 
+/**
+ * One row per (date, source_name) since the channel split, so callers must
+ * aggregate rather than assuming one row per day.
+ */
 export const fetchDailySales = async (r: DateRange) =>
   unwrap<DailySales[]>(
     await supabase
       .from("shopify_daily_sales")
-      .select("date,total_online_revenue_jod,klaviyo_attributed_revenue_jod,orders,people_reached")
+      .select("date,total_online_revenue_jod,orders,source_name,sub_channel,channel")
       .gte("date", r.from)
       .lte("date", r.to)
-      .order("date"),
+      .order("date")
+      .limit(5000),
+  );
+
+/**
+ * Klaviyo-attributed revenue, ORDER-date basis, whole account.
+ * Deliberately not on shopify_daily_sales: it cannot be split by channel.
+ */
+export const fetchAttributed = async (r: DateRange) =>
+  unwrap<AttributedDay[]>(
+    await supabase
+      .from("klaviyo_attributed_daily")
+      .select("date,revenue_jod")
+      .gte("date", r.from)
+      .lte("date", r.to)
+      .order("date")
+      .limit(2000),
   );
 
 export const fetchCampaigns = async (r: DateRange) =>

@@ -10,7 +10,7 @@
  * Orders. That is reclassification, not a real channel shift, and every
  * per-channel trend on the dashboard would be partly measuring it.
  *
- * Method: for each cancelled order on `web` or `5382175`, look for a
+ * Method: for each cancelled Website or Mobile App order, look for a
  * non-cancelled order from the SAME customer on the SAME Amman day, and grade
  * the match by how close its value is to the cancelled one.
  *
@@ -41,8 +41,10 @@ const n0 = (v) => Math.round(v).toLocaleString("en-US");
 const pctOf = (a, b) => (b > 0 ? (100 * a) / b : 0);
 const ammanDay = (iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
 
-// Channels an order can be moved OUT of by this practice.
-const ORIGIN_SOURCES = new Set(["web", "5382175"]);
+// Channels an order can be moved OUT of by this practice, named by SUB-CHANNEL
+// rather than by source id. Mobile App has two source ids (Appmaker now,
+// Shopney until August 2025) and naming one of them silently drops the other.
+const ORIGIN_SUBS = new Set(["Website", "Mobile App"]);
 
 const ORDERS_QUERY = `
   query ReplacementScan($q: String!, $cursor: String) {
@@ -116,7 +118,7 @@ function band(delta, base) {
   return "weak";
 }
 
-const cancelled = orders.filter((o) => o.cancelled && ORIGIN_SOURCES.has(o.src));
+const cancelled = orders.filter((o) => o.cancelled && ORIGIN_SUBS.has(o.sub));
 const results = [];
 for (const c of cancelled) {
   if (!c.cust) { results.push({ c, band: "no-customer", cand: null, n: 0 }); continue; }
@@ -169,7 +171,7 @@ console.log(`    no same-day order      : ${unmatched.length} orders, ${j3(unmat
 // is weak evidence and the confident bands carry the argument.
 let baseN = 0, baseHit = 0;
 for (const o of orders) {
-  if (o.cancelled || !o.cust || !ORIGIN_SOURCES.has(o.src)) continue;
+  if (o.cancelled || !o.cust || !ORIGIN_SUBS.has(o.sub)) continue;
   baseN++;
   if ((liveByCustDay.get(`${o.cust}|${o.day}`) ?? []).length > 1) baseHit++;
 }
@@ -224,14 +226,14 @@ const bump = (m, k, f) => {
 for (const o of orders) {
   if (o.cancelled) continue;
   const m = o.day.slice(0, 7);
-  if (o.src === "web") { bump(m, "web", o.value); bump(m, "webAdj", o.value); }
-  else if (o.src === "5382175") { bump(m, "app", o.value); bump(m, "appAdj", o.value); }
+  if (o.sub === "Website") { bump(m, "web", o.value); bump(m, "webAdj", o.value); }
+  else if (o.sub === "Mobile App") { bump(m, "app", o.value); bump(m, "appAdj", o.value); }
   else if (o.sub === "Draft Orders") { bump(m, "draft", o.value); bump(m, "draftAdj", o.value); }
 }
 for (const r of confident) {
   if (r.cand.sub === r.c.sub) continue; // stayed in its own channel, nothing moved
   const m = r.c.day.slice(0, 7);
-  const key = r.c.src === "web" ? "webAdj" : "appAdj";
+  const key = r.c.sub === "Website" ? "webAdj" : "appAdj";
   bump(m, key, r.c.value);
   if (r.cand.sub === "Draft Orders") bump(m, "draftAdj", -r.cand.value);
 }

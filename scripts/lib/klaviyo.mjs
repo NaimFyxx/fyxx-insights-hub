@@ -230,6 +230,72 @@ export async function fetchFlowValuesForDay({ day, conversionMetricId }) {
  * ORDER date, so it lines up with Shopify's daily totals. Mixing the two in
  * one figure is the thing we agreed never to do.
  * --------------------------------------------------------------------- */
+/**
+ * ATTRIBUTED REVENUE, per order, net of cancellations.
+ *
+ * Replaces the metric-aggregate approach, which was wrong in a way that could
+ * not be corrected by re-syncing. Klaviyo's Placed Order event is never
+ * retracted when an order is cancelled, so the aggregate kept counting
+ * cancelled orders at full value. On 2026-08-05 that produced 8,530.320 JOD of
+ * attributed revenue against a day whose entire sales were 5,220.573 — an
+ * impossibility. Across August it overstated by 9,355 JOD, a third.
+ *
+ * This reads events individually instead:
+ *   - `include=attributions` gives the flow or campaign each order is credited
+ *     to, so an order with no attribution is excluded rather than inferred.
+ *   - Each EVENT is counted once however many attributions it carries. Summing
+ *     per attribution would double count, which was the original suspicion.
+ *     Measured on August 2026: zero of 367 attributed events carried more than
+ *     one attribution, so it is not happening today, but the guard is free.
+ *   - Orders appearing in `Cancelled Order` are dropped. Cancellations are
+ *     looked for up to `cancelWindowEnd`, well past the order date, because
+ *     19.5% of them happen more than three days after the order.
+ */
+export async function fetchAttributedByOrder({ from, to, conversionMetricId, cancelledMetricId, cancelWindowEnd }) {
+  const ammanMidnightUtc = (day, addDays = 0) => {
+    const d = new Date(`${day}T00:00:00${TZ_OFFSET}`);
+    d.setUTCDate(d.getUTCDate() + addDays);
+    return d.toISOString().slice(0, 19);
+  };
+
+  const placed = await pullRawEvents(
+    conversionMetricId, ammanMidnightUtc(from), ammanMidnightUtc(to, 1),
+    (e) => ({
+      orderId: String(e.attributes?.event_properties?.$event_id ?? ""),
+      value: Number(e.attributes?.event_properties?.$value ?? 0),
+      t: Date.parse(e.attributes?.datetime),
+      attributions: (e.relationships?.attributions?.data ?? []).length,
+    }),
+    "attributed orders",
+    { include: "attributions" },
+  );
+
+  // An order placed inside the range can be cancelled long after it.
+  const cancels = await pullRawEvents(
+    cancelledMetricId, ammanMidnightUtc(from), ammanMidnightUtc(cancelWindowEnd ?? to, 1),
+    (e) => String(e.attributes?.event_properties?.$event_id ?? ""),
+    "cancelled orders",
+  );
+  const cancelled = new Set(cancels);
+
+  const byDay = new Map();
+  let attributed = 0, dropped = 0, droppedValue = 0, multi = 0;
+  for (const o of placed) {
+    if (!o.attributions) continue;          // not credited to Klaviyo
+    attributed++;
+    if (o.attributions > 1) multi++;
+    if (cancelled.has(o.orderId)) { dropped++; droppedValue += o.value; continue; }
+    const day = toAmmanDate(o.t);
+    const d = byDay.get(day) ?? { revenue: 0, orders: 0 };
+    d.revenue += o.value; d.orders++;       // once per EVENT, not per attribution
+    byDay.set(day, d);
+  }
+  log.ok(`attributed: ${attributed} of ${placed.length} orders credited to Klaviyo`);
+  if (multi) log.info(`  ${multi} carried more than one attribution and were counted once each`);
+  if (dropped) log.warn(`  ${dropped} attributed order(s) were CANCELLED; ${money3(droppedValue)} JOD excluded`);
+  return byDay;
+}
+
 export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId }) {
   // Klaviyo reads a naive `datetime` filter as UTC but buckets results in the
   // requested `timezone`. Sending naive Amman midnights therefore starts the
@@ -414,9 +480,12 @@ function subChannelFromKlaviyoSource(src) {
   return "Unknown";
 }
 
-export async function pullRawEvents(metricId, fromIso, toIso, take, label) {
+export async function pullRawEvents(metricId, fromIso, toIso, take, label, { include } = {}) {
   const filter = `and(equals(metric_id,"${metricId}"),greater-or-equal(datetime,${fromIso}),less-than(datetime,${toIso}))`;
   let path = `/events?filter=${encodeURIComponent(filter)}&page%5Bsize%5D=200`;
+  // `include=attributions` returns the flow or campaign each order is credited
+  // to. Without it an order's attribution is invisible and has to be inferred.
+  if (include) path += `&include=${encodeURIComponent(include)}`;
   const out = [];
   let pages = 0;
   while (path && pages < 4000) {

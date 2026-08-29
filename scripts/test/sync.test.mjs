@@ -452,5 +452,43 @@ for (const c of [
 check("unknown key-shaped strings are caught too",
   !redact("stray shpat_NOT_A_REAL_TOKEN_stray_fixture here").includes("stray_fixture"));
 
+
+// ---------------------------------------------------------------------------
+// Channel figures must go through SOURCE_MAP.
+//
+// Mobile App has TWO source ids: 5382175 (Appmaker, current) and 2653365
+// (Shopney, until 6 Aug 2025). An ad-hoc script that groups by source_name and
+// looks at only one of them invents a channel launch that never happened —
+// this produced a reported "+831.8% year on year" that was really +23.8%. It
+// has happened twice, so it is a test now rather than a note.
+{
+  const { SOURCE_MAP, classifySource } = await import("../lib/shopify.mjs");
+  const appIds = Object.entries(SOURCE_MAP)
+    .filter(([, v]) => v.sub_channel === "Mobile App")
+    .map(([k]) => k);
+  check("Mobile App still has more than one source id", appIds.length > 1, appIds.join(", "));
+  for (const id of appIds) {
+    check(`${id} classifies as Mobile App`, classifySource(id).sub_channel === "Mobile App");
+  }
+
+  // No file outside lib/shopify.mjs may name an app source id directly. Group
+  // by sub_channel via classifySource instead.
+  const { readdirSync, readFileSync, statSync } = await import("node:fs");
+  const walk = (dir) => readdirSync(dir).flatMap((f) => {
+    const p = `${dir}/${f}`;
+    return statSync(p).isDirectory() ? walk(p) : [p];
+  });
+  const offenders = [];
+  for (const file of walk("scripts")) {
+    if (!file.endsWith(".mjs")) continue;
+    if (file.endsWith("lib/shopify.mjs") || file.endsWith("test/sync.test.mjs")) continue;
+    const body = readFileSync(file, "utf8");
+    for (const id of appIds) {
+      if (body.includes(`"${id}"`) || body.includes(`'${id}'`)) offenders.push(`${file} names ${id}`);
+    }
+  }
+  check("no script hardcodes an app source id", offenders.length === 0, offenders.join("; "));
+}
+
 console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
 process.exit(failed ? 1 : 0);

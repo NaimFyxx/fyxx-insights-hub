@@ -11,7 +11,7 @@ import {
 } from "@/lib/queries";
 import { previousRange, settledOnly, rangeIncludesToday } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
-import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { attributionLimitNote, SUB_CHANNELS, describeChannels } from "@/lib/channels";
 import { ChannelBar } from "@/components/layout/ChannelBar";
 import { ConcentrationNotice } from "@/components/fyxx/ConcentrationNotice";
@@ -83,6 +83,15 @@ function OverviewPage() {
       };
     },
   });
+
+  if (q.isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Overview" />
+        <QueryFailed error={q.error} />
+      </div>
+    );
+  }
 
   if (q.isLoading || !q.data) {
     return (

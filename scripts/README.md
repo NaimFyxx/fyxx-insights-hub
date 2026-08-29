@@ -262,7 +262,38 @@ than genuine returns, the margin decline is partly an artefact too.
 > until measured: compare counts against a known quantity rather than checking
 > for a 200.
 
-## Frontend contract (for Step 4)
+## Who reads what
+
+Two audiences, and they are not the same person. Several contracts below were
+originally written as though the dashboard had an outside reader; it does not.
+
+**The dashboard has exactly one user — Naim.** It is a working tool for running
+marketing and producing reports quickly. There is no sharing, no second
+account, no colleague who might misread a figure. So:
+
+* Captions exist so the *operator* does not forget the state they left it in —
+  which channels are toggled, which date range is loaded, which figures are
+  measured versus derived. That is a real need and those captions stay.
+* Captions written to stop a hypothetical third party drawing a wrong
+  conclusion are unnecessary. The dashboard can be blunt.
+* Where a choice is between hedging and being direct, be direct.
+
+**The exported PDF is the only thing Zeid ever sees**, and he sees it with no
+other context — no filters visible, no ability to click through, no knowledge
+this tool exists. So everything about the report holds in full:
+
+* It must be self-explaining: any figure has to carry what it covers.
+* It must match what he would find in Klaviyo if he checked.
+* Send-date and order-date figures must be labelled distinctly.
+* Channel coverage must be stated, since he cannot see the toggles that
+  produced it.
+
+**The analytical caution is not about either audience.** The reason not to
+trust a figure that fails its own placebo test is not that someone might catch
+it — it is that it would be wrong, and decisions would be made on it. That
+stands whether anyone else ever looks.
+
+## Frontend contract (for the dashboard — single user)
 
 Decisions made while building the data layer that the dashboard must honour.
 
@@ -274,14 +305,15 @@ This default deliberately excludes a large share of real revenue. Over
 (1,491,908 JOD) and POS a further 28.8%, so the default view shows roughly a
 third of the business.
 
-That is an accepted trade-off, not an oversight — but it means the omission
-must never be silent. **The caption naming the included channels is mandatory
-on first load, not only after the user changes a toggle.** A revenue figure
-must never be ambiguous about what it covers.
+The caption naming the included channels renders on first load, not only after
+a toggle changes — so the state is visible without having to remember it. On
+the **report**, stating the channel coverage is mandatory for a different and
+stronger reason: Zeid cannot see the toggles that produced the figure.
 
 **Attributed revenue is whole-account and cannot follow the channel toggles.**
-Its numerator is fixed while the denominator changes, so the share must carry a
-caption saying exactly that. Wording agreed:
+Its numerator is fixed while the denominator changes. On the dashboard a short
+note suffices; on the **report** it needs the full sentence, since the reader
+has no other way to know. Report wording:
 
 > **Klaviyo-attributed share — 19.6%**
 > 1,387.250 JOD attributed by Klaviyo across all channels, against
@@ -291,7 +323,8 @@ caption saying exactly that. Wording agreed:
 
 **Two revenue bases must never be summed or compared.** `klaviyo_campaigns` and
 `klaviyo_flows` carry SEND-date revenue; `klaviyo_attributed_daily` carries
-ORDER-date revenue. Label them distinctly wherever both appear.
+ORDER-date revenue. This is not a presentation concern — adding them produces a
+wrong number regardless of who is reading. Label them distinctly in both places.
 
 **`shopify_daily_sales.klaviyo_attributed_revenue_jod` is dead.** Read
 `klaviyo_attributed_daily` instead. The column is retained only so the current

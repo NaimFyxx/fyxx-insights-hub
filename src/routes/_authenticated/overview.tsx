@@ -125,19 +125,21 @@ function OverviewPage() {
           label="Messages sent"
           value={num(sentNow)}
           delta={deltaPct(sentNow, sentPrev)}
-          note="Sends, not people. One person mailed daily counts once per send."
+          note="Sends, not unique people"
         />
         <StatTile
           label="Klaviyo revenue"
           value={jod(klaviyoNow)}
           delta={deltaPct(klaviyoNow, klaviyoPrev)}
-          note="Attributed by order date, all sales channels."
+          note="Order-date basis, all channels"
         />
         <StatTile
           label="Klaviyo-attributed share"
           value={pct(shareNow)}
           delta={deltaPct(shareNow, sharePrev)}
-          note={`${jod(klaviyoNow)} attributed by Klaviyo across ALL channels, against ${jod(onlineNow)} from ${describeChannels(channels)}. Attribution cannot be split by channel, so the numerator is fixed while the denominator follows your filters.`}
+          // Short on the dashboard: the operator knows why. The report carries
+          // the full sentence, because Zeid has no other context.
+          note={`All channels ÷ ${describeChannels(channels)} — attribution can't be split by channel`}
         />
         <StatTile label="Loyalty members" value={num(members)} delta={deltaPct(members, membersPrev)} />
       </div>

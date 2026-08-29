@@ -33,8 +33,8 @@ function NoData({ what }: { what: string }) {
     <div>
       <p className="display-num text-3xl text-muted-foreground">—</p>
       <p className="mt-2 text-xs text-muted-foreground">
-        {what} is only recorded from 27 Aug 2026, when nightly snapshots began. LoyaltyLion cannot
-        report it historically, so earlier days have no value rather than a value of zero.
+        {what}: no data before 27 Aug 2026 — snapshots started then and LoyaltyLion can&apos;t
+        backfill it. Not zero, unmeasured.
       </p>
     </div>
   );

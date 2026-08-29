@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fyxx Monthly Executive Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baskervville:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --black: #000000;
+    --ink: #111111;
+    --grey: #6b6b6b;
+    --line: #dddddd;
+    --pink: #f0b09e;
+    --pink-soft: #F5D5CF;
+    --white: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #e9e9e9; }
+  body { font-family: "Inter", system-ui, sans-serif; color: var(--ink); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .page {
+    width: 210mm; height: 297mm; margin: 12mm auto; background: var(--white);
+    padding: 8mm 13mm 6.5mm 13mm; display: flex; flex-direction: column; gap: 2mm;
+    box-shadow: 0 2px 20px rgba(0,0,0,.12);
+  }
+  @media print { html, body { background: #fff; } .page { margin: 0; box-shadow: none; } }
+
+  /* Header */
+  .head { border-bottom: 1.5px solid var(--black); padding-bottom: 2.5mm; }
+  .headtop { display: flex; justify-content: space-between; align-items: baseline; }
+  .headgrid { display: grid; grid-template-columns: 1fr auto; align-items: end; margin-top: 1.5mm; }
+  .wordmark { font-family: "Baskervville", Georgia, serif; font-size: 20pt; letter-spacing: .5px; line-height: 1; }
+  .wordmark span { color: var(--pink); }
+  .eyebrow { font-family: "Syne", sans-serif; font-weight: 800; font-size: 6.5pt; letter-spacing: 2.2px; text-transform: uppercase; color: var(--grey); }
+  .head .eyebrow { white-space: nowrap; }
+  .month { font-family: "Baskervville", Georgia, serif; font-size: 26pt; line-height: 1; }
+  .meta { text-align: right; font-size: 7.5pt; color: var(--grey); line-height: 1.5; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* Section label */
+  .sec { display: flex; align-items: baseline; gap: 2.5mm; margin-bottom: 1.3mm; }
+  .sec .eyebrow { color: var(--black); }
+  .sec::after { content: ""; flex: 1; border-bottom: 1px solid var(--pink); transform: translateY(-1.5px); }
+
+  /* Highlight */
+  .highlight { font-family: "Baskervville", Georgia, serif; font-size: 11pt; line-height: 1.36; padding-left: 4mm; border-left: 2.5px solid var(--pink); }
+
+  /* Reach strip */
+  .reach { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .kpi { padding: 2mm 0 2mm 3mm; border-left: 1px solid var(--line); }
+  .kpi:first-child { border-left: 0; padding-left: 0; }
+  .kpi .n { font-family: "Baskervville", Georgia, serif; font-size: 19pt; line-height: 1; letter-spacing: -.3px; }
+  .kpi .n small { font-size: 10pt; color: var(--grey); letter-spacing: 0; margin-left: 1px; }
+  .kpi .l { font-size: 7pt; color: var(--grey); margin-top: 1.4mm; }
+  .kpi .l b { color: var(--ink); font-weight: 600; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 7.4pt; }
+  th { font-family: "Syne", sans-serif; font-weight: 700; font-size: 5.8pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--grey); text-align: right; padding: 0 0 1.2mm 0; border-bottom: 1px solid var(--line); white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  td { padding: .85mm 0; border-bottom: 1px solid #eeeeee; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table { table-layout: fixed; }
+  th:first-child, td:first-child { text-align: left; padding-right: 3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.w30 th:first-child { width: 27%; } table.w40 th:first-child { width: 50%; } table.w46 th:first-child { width: 58%; }
+  th:not(:first-child), td:not(:first-child) { padding-left: 2.5mm; }
+  td.name { font-weight: 500; }
+  td.sub, span.sub { color: var(--grey); font-weight: 400; font-size: 6.6pt; }
+  tr.total td { border-top: 1px solid var(--black); border-bottom: 0; font-weight: 600; padding-top: 1.6mm; }
+  tr.total td:first-child { font-family: "Syne", sans-serif; font-size: 6pt; letter-spacing: 1.2px; text-transform: uppercase; }
+
+  .cols > section { min-width: 0; }
+  
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; }
+  .cols-32 { grid-template-columns: 1.2fr 1fr; }
+
+  /* Loyalty */
+  .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2mm; margin-bottom: 1.6mm; }
+  .tier { border-top: 2px solid var(--line); padding-top: 1.6mm; }
+  .tier.gold { border-top-color: var(--pink); }
+  .tier .t { font-family: "Syne", sans-serif; font-weight: 700; font-size: 5.8pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--grey); }
+  .tier .n { font-family: "Baskervville", Georgia, serif; font-size: 15pt; line-height: 1.15; }
+  .tier .d { font-size: 6.6pt; color: var(--grey); }
+  .tier .d.up { color: var(--ink); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2mm; }
+  .fact { border-top: 1px solid var(--line); padding-top: 1.4mm; }
+  .fact .n { font-family: "Baskervville", Georgia, serif; font-size: 12.5pt; line-height: 1.1; }
+  .fact .n small { font-size: 7.5pt; color: var(--grey); }
+  .fact .l { font-size: 6.6pt; color: var(--grey); margin-top: .6mm; }
+
+  /* Activations */
+  .acts { list-style: none; font-size: 7.4pt; }
+  .acts li { display: grid; grid-template-columns: 5mm 1fr auto; align-items: center; gap: 1.5mm; padding: .9mm 0; border-bottom: 1px solid #eeeeee; }
+  .acts .date { color: var(--grey); font-size: 6.8pt; font-variant-numeric: tabular-nums; }
+  .mark { width: 3.4mm; height: 3.4mm; border-radius: 50%; border: 1.2px solid var(--black); display: inline-block; position: relative; }
+  .mark.done { background: var(--black); }
+  .mark.done::after { content: ""; position: absolute; left: 1.05mm; top: .45mm; width: .9mm; height: 1.7mm; border: solid var(--pink); border-width: 0 1.1px 1.1px 0; transform: rotate(45deg); }
+  .status { font-family: "Syne", sans-serif; font-weight: 700; font-size: 5.6pt; letter-spacing: 1.2px; text-transform: uppercase; }
+  .status.no { color: var(--grey); }
+
+  /* Next month */
+  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; }
+  .next.stack { grid-template-columns: 1fr; gap: 1.6mm; }
+  .next.stack div { padding-top: 1.2mm; }
+  .next.stack div b { display: inline; font-size: 9.5pt; margin-right: 1.5mm; }
+  .next div { font-size: 8pt; line-height: 1.45; padding-top: 1.8mm; border-top: 2px solid var(--pink); }
+  .next div b { display: block; font-family: "Baskervville", Georgia, serif; font-size: 10.5pt; font-weight: 400; margin-bottom: .8mm; }
+
+  .foot { margin-top: 0; display: flex; justify-content: space-between; font-size: 6.4pt; color: var(--grey); border-top: 1px solid var(--line); padding-top: 1.4mm; }
+  .sample { background: var(--pink-soft); color: var(--ink); font-family: "Syne", sans-serif; font-weight: 700; font-size: 5.8pt; letter-spacing: 1.2px; text-transform: uppercase; padding: .6mm 2mm; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <div class="headtop">
+      <div class="wordmark">Fyxx<span>.</span></div>
+      <div class="eyebrow">Marketing Department &nbsp;·&nbsp; Monthly Executive Report</div>
+    </div>
+    <div class="headgrid">
+      <div class="month">August 2026</div>
+      <div class="meta">
+        Period <b>1 to 31 August 2026</b> &nbsp;·&nbsp; Prepared by <b>Naím Aljada</b> &nbsp;·&nbsp; Issued <b>1 September 2026</b><br>
+        <span class="sample" style="display:inline-block;margin-top:1mm">Sample figures for layout approval</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec"><span class="eyebrow">Month highlight</span></div>
+    <p class="highlight">August was carried by the loyalty programme: the new reward-expiry and points-digest flows brought 214 members back to buy, and email revenue held despite one campaign fewer than July. Push remains a weak channel, with opens under 1% on every reminder-type send.</p>
+  </section>
+
+  <section>
+    <div class="sec"><span class="eyebrow">Total reach</span></div>
+    <div class="reach">
+      <div class="kpi"><div class="n">14,820</div><div class="l">People reached across all channels</div></div>
+      <div class="kpi"><div class="n">9,640 <small>· 4,310 · 6,275</small></div><div class="l">Email campaigns · Push · Flows</div></div>
+      <div class="kpi"><div class="n">11,930 <small>JOD</small></div><div class="l">Revenue attributed to Klaviyo</div></div>
+      <div class="kpi"><div class="n">31.4<small>%</small></div><div class="l">Share of online revenue <b>(38,010 JOD total)</b></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="eyebrow">Email campaigns</span></div>
+    <table class="w30">
+      <thead><tr><th>Campaign</th><th>Sent</th><th>Sent on</th><th>Opened</th><th>Open<br>rate</th><th>Clicked</th><th>Click<br>rate</th><th>Orders</th><th>Revenue<br>JOD</th></tr></thead>
+      <tbody>
+        <tr><td class="name">What's On · August</td><td>9,612</td><td>3 Aug</td><td>4,208</td><td>43.8%</td><td>391</td><td>4.1%</td><td>38</td><td>2,140</td></tr>
+        <tr><td class="name">New Arrivals · Les Caves</td><td>9,588</td><td>10 Aug</td><td>3,970</td><td>41.4%</td><td>446</td><td>4.7%</td><td>52</td><td>3,385</td></tr>
+        <tr><td class="name">TGR · Jazz Night</td><td>4,120</td><td>17 Aug</td><td>1,930</td><td>46.8%</td><td>212</td><td>5.1%</td><td>19</td><td>640</td></tr>
+        <tr><td class="name">Summer Whites · 15% off</td><td>9,640</td><td>24 Aug</td><td>3,802</td><td>39.4%</td><td>521</td><td>5.4%</td><td>67</td><td>3,910</td></tr>
+        <tr class="total"><td>Total</td><td>32,960</td><td></td><td>13,910</td><td>42.2%</td><td>1,570</td><td>4.8%</td><td>176</td><td>10,075</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec"><span class="eyebrow">Flows</span></div>
+      <table class="w40">
+        <thead><tr><th>Flow</th><th>Recipients</th><th>Open rate</th><th>Conv. rate</th><th>Revenue JOD</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Abandoned Checkout Reminder - Standard (Email &amp; Notification)</td><td>1,214</td><td>38.6%</td><td>4.2%</td><td>1,860</td></tr>
+          <tr><td class="name">ll-reward-available</td><td>986</td><td>43.1%</td><td>3.6%</td><td>1,480</td></tr>
+          <tr><td class="name">ll-points-digest</td><td>2,940</td><td>36.2%</td><td>1.9%</td><td>1,310</td></tr>
+          <tr><td class="name">[FINAL] First Time Customer - My First Fyxx Discount (App Maker)</td><td>418</td><td>51.0%</td><td>6.4%</td><td>905</td></tr>
+          <tr><td class="name">ll-reward-expiry</td><td>163</td><td>47.9%</td><td>7.4%</td><td>560</td></tr>
+          <tr><td class="name">Win Back - 40 Days (New / Zeid)</td><td>1,102</td><td>29.4%</td><td>1.1%</td><td>410</td></tr>
+          <tr><td class="name">ll-points-earned</td><td>1,890</td><td>58.3%</td><td>0.8%</td><td>290</td></tr>
+          <tr><td class="name">Talabat + Careem 2026 - Post Purchase</td><td>612</td><td>44.2%</td><td>0.5%</td><td>120</td></tr>
+          <tr><td class="name sub">All other live flows with sends (14)</td><td class="sub">1,470</td><td class="sub">31.0%</td><td class="sub">0.3%</td><td class="sub">85</td></tr>
+          <tr class="total"><td>All live flows</td><td>10,795</td><td>40.1%</td><td>2.4%</td><td>7,020</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </section>
+
+  <div class="cols cols-32">
+    <section>
+      <div class="sec"><span class="eyebrow">Push notifications</span></div>
+      <table class="w46">
+        <thead><tr><th>Type</th><th>Sent</th><th>Opened</th><th>Open<br>rate</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Campaign push (What's On)</td><td>3,180</td><td>82</td><td>2.6%</td></tr>
+          <tr><td class="name">Order Fulfilled, order-confirmation-pos</td><td>1,640</td><td>58</td><td>3.5%</td></tr>
+          <tr><td class="name">ll-points-earned, ll-reward-*</td><td>2,210</td><td>61</td><td>2.8%</td></tr>
+          <tr><td class="name">ll-points-digest, ll-*-expiry</td><td>1,350</td><td>11</td><td>0.8%</td></tr>
+          <tr><td class="name">Abandoned Cart Reminder (Mobile)</td><td>420</td><td>12</td><td>2.9%</td></tr>
+          <tr class="total"><td>Total</td><td>8,800</td><td>224</td><td>2.5%</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:6.6pt;color:var(--grey);margin-top:2mm;line-height:1.4">Push clicks are not reported: click tracking is currently recording zero across the account and is under investigation.</p>
+    </section>
+    <section>
+      <div class="sec"><span class="eyebrow">LoyaltyLion</span></div>
+      <div class="tiers">
+        <div class="tier"><div class="t">Blue</div><div class="n">5,240</div><div class="d up">+38 vs July</div></div>
+        <div class="tier"><div class="t">Silver</div><div class="n">812</div><div class="d up">+12 vs July</div></div>
+        <div class="tier gold"><div class="t">Gold</div><div class="n">214</div><div class="d up">+4 vs July</div></div>
+        <div class="tier"><div class="t">Platinum</div><div class="n">47</div><div class="d">no change</div></div>
+      </div>
+      <div class="facts">
+        <div class="fact"><div class="n">6.8<small>%</small></div><div class="l">Redemption rate <span class="sub">(5.9% in July)</span></div></div>
+        <div class="fact"><div class="n">2.41<small>M pts</small></div><div class="l">Points outstanding <span class="sub">(24,100 JOD)</span></div></div>
+        <div class="fact"><div class="n">96</div><div class="l">Birthday rewards issued</div></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="cols cols-32">
+    <section>
+      <div class="sec"><span class="eyebrow">Activations</span></div>
+      <ul class="acts">
+        <li><span class="mark done"></span><span>What's On newsletter <span class="date">· 3 Aug</span></span><span class="status">Done</span></li>
+        <li><span class="mark done"></span><span>Les Caves new arrivals launch <span class="date">· 10 Aug</span></span><span class="status">Done</span></li>
+        <li><span class="mark done"></span><span>Points digest flow go-live <span class="date">· 9 Aug</span></span><span class="status">Done</span></li>
+        <li><span class="mark done"></span><span>TGR Jazz Night <span class="date">· 21 Aug</span></span><span class="status">Done</span></li>
+        <li><span class="mark done"></span><span>Summer Whites promo <span class="date">· 24 to 28 Aug</span></span><span class="status">Done</span></li>
+        <li><span class="mark"></span><span>The Regulars order challenge launch <span class="date">· 25 Aug</span></span><span class="status no">Not done</span></li>
+        <li><span class="mark"></span><span>Taste Characteristics on product pages <span class="date">· 31 Aug</span></span><span class="status no">Not done</span></li>
+      </ul>
+    </section>
+    <section>
+    <div class="sec"><span class="eyebrow">Next month</span></div>
+    <div class="next stack">
+      <div><b>Launch The Regulars</b>Order challenge goes live once LoyaltyLion confirms retroactive counting. Announcement email in week one.</div>
+      <div><b>Fix push measurement</b>Resolve zero click tracking so push can be judged on more than opens, then decide on volume.</div>
+      <div><b>Pulltex clearance, phase one</b>First clearance email and redemption collection update targeting the 1,970 units in stock.</div>
+    </div>
+  </section>
+  </div>
+
+  <footer class="foot">
+    <span>Fyxx · Al-Kasra for Trade and Marketing · Prepared for Zeid Salfiti</span>
+    <span>Sources: Klaviyo, LoyaltyLion, Shopify · Generated from the Fyxx Marketing dashboard · Page 1 of 1</span>
+  </footer>
+
+</div>
+</body>
+</html>

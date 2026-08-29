@@ -81,12 +81,18 @@ function LoyaltyPage() {
     );
   }
 
-  const tiers = hasScanData ? [
-    { label: "Blue", value: last.blue_members, prev: prevLast?.blue_members ?? 0 },
-    { label: "Silver", value: last.silver_members, prev: prevLast?.silver_members ?? 0 },
-    { label: "Gold", value: last.gold_members, prev: prevLast?.gold_members ?? 0 },
-    { label: "Platinum", value: last.platinum_members, prev: prevLast?.platinum_members ?? 0 },
-  ] : [];
+  // `?? 0` here would treat "no earlier measurement" as "zero members last
+  // period", turning every tier delta into a fabricated +100%-style jump.
+  // null means no comparison, which is what the tile renders.
+  const hadPrevScan = prevLast != null && prevLast.blue_members > 0;
+  const tiers = hasScanData
+    ? [
+        { label: "Blue", value: last.blue_members, prev: hadPrevScan ? prevLast!.blue_members : null },
+        { label: "Silver", value: last.silver_members, prev: hadPrevScan ? prevLast!.silver_members : null },
+        { label: "Gold", value: last.gold_members, prev: hadPrevScan ? prevLast!.gold_members : null },
+        { label: "Platinum", value: last.platinum_members, prev: hadPrevScan ? prevLast!.platinum_members : null },
+      ]
+    : [];
 
   const birthdayRewards = data.current.reduce((a, s) => a + s.birthday_rewards_issued, 0);
 
@@ -113,7 +119,7 @@ function LoyaltyPage() {
               key={t.label}
               label={`${t.label} tier`}
               value={num(t.value)}
-              delta={deltaPct(t.value, t.prev)}
+              delta={t.prev === null ? undefined : deltaPct(t.value, t.prev)}
             />
           ))
         ) : (

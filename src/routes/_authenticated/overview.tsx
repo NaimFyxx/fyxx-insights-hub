@@ -80,11 +80,25 @@ function OverviewPage() {
   const inSelection = (r: { sub_channel: string }) => channels.includes(r.sub_channel as never);
   const selSales = d.sales.filter(inSelection);
   const selPrevSales = d.prevSales.filter(inSelection);
+  // Selected-channel revenue — this is what the toggles drive.
   const onlineNow = sum(selSales.map((x) => Number(x.total_online_revenue_jod)));
   const onlinePrev = sum(selPrevSales.map((x) => Number(x.total_online_revenue_jod)));
+  const ordersNow = sum(selSales.map((x) => Number(x.orders)));
+  const ordersPrev = sum(selPrevSales.map((x) => Number(x.orders)));
 
-  const shareNow = onlineNow > 0 ? (klaviyoNow / onlineNow) * 100 : 0;
-  const sharePrev = onlinePrev > 0 ? (klaviyoPrev / onlinePrev) * 100 : 0;
+  // The share is ALWAYS against every channel, never the filtered subset.
+  //
+  // Attributed revenue is whole-account and cannot be split by channel, so
+  // dividing it by a subset is not a share of anything: Website alone produced
+  // 358% and 392%. Capping at 100% would invent a ceiling and hide the
+  // problem; reframing as a ratio answers a question nobody asks. Pairing a
+  // whole-account numerator with a whole-account denominator is the only form
+  // that means what its label says — and it is why this tile sits with the
+  // other Klaviyo figures the toggles do not affect.
+  const allNow = sum(d.sales.map((x) => Number(x.total_online_revenue_jod)));
+  const allPrev = sum(d.prevSales.map((x) => Number(x.total_online_revenue_jod)));
+  const shareNow = allNow > 0 ? (klaviyoNow / allNow) * 100 : null;
+  const sharePrev = allPrev > 0 ? (klaviyoPrev / allPrev) * 100 : null;
 
   // Tier counts exist only on days we scanned LoyaltyLion — 3 of 369, because
   // the imported year of points history carries none. Taking the latest
@@ -125,45 +139,83 @@ function OverviewPage() {
 
       <ChannelBar />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="Messages sent"
-          value={num(sentNow)}
-          delta={deltaPct(sentNow, sentPrev)}
-          note="Sends, not unique people"
-        />
-        <StatTile
-          label="Klaviyo revenue"
-          value={jod(klaviyoNow)}
-          delta={deltaPct(klaviyoNow, klaviyoPrev)}
-          note="Order-date basis, all channels"
-        />
-        <StatTile
-          label="Klaviyo-attributed share"
-          value={pct(shareNow)}
-          delta={deltaPct(shareNow, sharePrev)}
-          // Short on the dashboard: the operator knows why. The report carries
-          // the full sentence, because Zeid has no other context.
-          note={`All channels ÷ ${describeChannels(channels)} — attribution can't be split by channel`}
-        />
-        <StatTile
-          label="Loyalty members"
-          value={members === null ? "—" : num(members)}
-          delta={members !== null && membersPrev !== null ? deltaPct(members, membersPrev) : undefined}
-          note={
-            members === null
-              ? "Not measured in this range — tier snapshots start 27 Aug 2026"
-              : `As at ${last!.snapshot_date}`
-          }
-        />
-      </div>
+      <section>
+        <p className="label-xs mb-3 text-muted-foreground">
+          Klaviyo — whole account, not affected by the channel toggles
+        </p>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <StatTile
+            label="Messages sent"
+            value={num(sentNow)}
+            delta={deltaPct(sentNow, sentPrev)}
+            note="Sends, not unique people"
+          />
+          <StatTile
+            label="Klaviyo revenue"
+            value={jod(klaviyoNow)}
+            delta={deltaPct(klaviyoNow, klaviyoPrev)}
+            note="Order-date basis, all channels"
+          />
+          <StatTile
+            label="Klaviyo share of all revenue"
+            value={shareNow === null ? "—" : pct(shareNow)}
+            delta={shareNow !== null && sharePrev !== null ? deltaPct(shareNow, sharePrev) : undefined}
+            note={`${jod(klaviyoNow)} of ${jod(allNow)} across every channel`}
+          />
+        </div>
+      </section>
+
+      <section>
+        <p className="label-xs mb-3 text-muted-foreground">
+          Shopify — follows the channel toggles: {describeChannels(channels)}
+        </p>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <StatTile
+            label="Revenue"
+            value={jod(onlineNow)}
+            delta={deltaPct(onlineNow, onlinePrev)}
+            note={describeChannels(channels)}
+          />
+          <StatTile
+            label="Orders"
+            value={num(ordersNow)}
+            delta={deltaPct(ordersNow, ordersPrev)}
+            note={describeChannels(channels)}
+          />
+          <StatTile
+            label="Average order value"
+            value={ordersNow > 0 ? jod(onlineNow / ordersNow) : "—"}
+            delta={
+              ordersNow > 0 && ordersPrev > 0
+                ? deltaPct(onlineNow / ordersNow, onlinePrev / ordersPrev)
+                : undefined
+            }
+            note={describeChannels(channels)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <p className="label-xs mb-3 text-muted-foreground">LoyaltyLion</p>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <StatTile
+            label="Loyalty members"
+            value={members === null ? "—" : num(members)}
+            delta={members !== null && membersPrev !== null ? deltaPct(members, membersPrev) : undefined}
+            note={
+              members === null
+                ? "Not measured in this range — tier snapshots start 27 Aug 2026"
+                : `As at ${last!.snapshot_date}`
+            }
+          />
+        </div>
+      </section>
 
       {channels.includes("POS") ? (
         <p className="border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
-          ⚠️ POS is selected, so the Klaviyo-attributed share below is understated. Klaviyo can only
-          see about 35% of POS orders — the Odoo connector syncs only those with an identified
-          customer — but the denominator counts all POS revenue. Deselect POS for a share figure
-          that means anything.
+          ⚠️ POS revenue above is complete, but Klaviyo can only see about 35% of POS orders — the
+          Odoo connector syncs only those with an identified customer. Don&apos;t compare the Klaviyo
+          figures against POS revenue.
         </p>
       ) : null}
 

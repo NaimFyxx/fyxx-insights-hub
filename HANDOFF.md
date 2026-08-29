@@ -6,142 +6,106 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Changed a previously reported figure
 
-- **CORRECTION TO MY OWN LAST HANDOFF.** I reported that `/v2/activities`
-  ignores `created_at_min`/`created_at_max`. **It does not.** That check used a
-  window ending today, so "newest N in range" and "newest N overall" were the
-  same rows. Re-tested against a window not touching today: the filter is
-  honoured on `/activities`, `/transactions` and `/customers`, at every limit.
-  Server-side filtering restored.
-- **Birthday rewards were never zero. August 2026 is 131**, spread
-  400/500/600/700 points across the tiers. ONE fault, not two: they are issued
-  `pending` and the sync counted only `approved`. Report now shows the live
-  figure.
-- **Pending is transient, not terminal.** Full history: `$birthday` 1,753
-  approved / 48 expired / 30 pending. Customers do receive them.
-- **Pending points are 1.59% of approved, NOT the 8.34% I reported.** That
-  figure came from a 10,000-customer API sample instead of the full 21,264.
-  Third error this session from sampling; now a written rule in the README.
-- **Mobile App click-influence 35.8% → 19.2%. Re-run COMPLETE and verified.**
-  The `Unknown` bucket is gone: 13,099 rows and 717,166 JOD reclassified,
-  almost all Mobile App. Draft Orders unchanged at 20.4%, POS 18.0%, Website
-  13.3%. 41,419 rows, 2,959 duplicates collapsed on order_id. Never displayed.
-- **Attributed revenue, August: 37,615 → 28,260 JOD.** Klaviyo share 22.0% →
-  16.5%. 2026 YTD 132,534 → 109,876, 17.1% overstated.
-- **Mobile App year on year was reported as +831.8%. It is +23.8%.**
+- **One-and-never-returned: 42.7% → 37.9%.** The old figure was computed
+  without knowing that **74.3% of buyers first bought before 2025** (9,400 of
+  12,657). Requiring the order to be old enough to have had a chance to repeat
+  gives **34.6%**. Still the single largest segment, but materially smaller.
+- **Concentration is sharper than reported, not softer.** Top 1% of buyers take
+  **34.8%** of revenue, top 5% take 62.7%, top 10% take 76.0%. The 12+ orders
+  group is 16.8% of buyers and **78.2%** of revenue.
+- **Mean customer value 701.2 JOD, median 97.8.** A 7.2x gap. Never show the
+  mean alone.
+- **August 2026 revenue 171,018 → 176,441 JOD** after the 2019 sweep. Not a
+  recomputation: 31 orders arrived after the 07:04 sync. June and July are
+  byte-identical, and no historical figure moved.
+- Earlier corrections still standing: Klaviyo attribution August 37,615 →
+  28,260 (share 22.0% → 16.5%); Mobile App influence 35.8% → 19.2%; Mobile App
+  YoY +831.8% → +23.8%; birthday rewards zero → 131 in August; pending points
+  8.34% → 1.59%.
 
 ## Decisions made this turn
 
-- **`data_coverage` replaces `ll_import_coverage`.** One view records what
-  every source actually covers, derived from the rows rather than declared, so
-  the absence-vs-zero guard is data-driven instead of four special cases. There
-  are **13** distinct coverage windows, not the five previously listed.
-- `coverageGap()` answers only "does this source reach back far enough". Sync
-  staleness stays with `sync_log` on the health page — conflating them produced
-  a false positive.
-
-- LoyaltyLion history **imported**: 38,748 activities, 60,680 transactions,
-  2,211 rewards = 101,639 rows. Every row carries a `source` tag
-  (`ll_export_20260829`); coverage is reported by `data_coverage` (below) so no
-  reader has to remember a figure is imported rather than live.
-
-- `1830279` → **Draft Orders**, verified: app lookup returns "Shopify Web"
-  (`shopify_web`, Shopify) and all 92 orders carry `app = "Draft Orders"`.
-- Unknown source ids are now resolved by **app lookup**, not name matching:
-  `node(id:"gid://shopify/App/<id>"){ ...on App { title handle developerName } }`.
-  Confirmed 580111 Online Store, 5382175 Appmaker, 179433 Odoo Connector
-  (Webkul), 1354745 Draft Orders, 1830279 Shopify Web.
-- `subChannelFromKlaviyoSource` consults `SOURCE_MAP` first. One taxonomy.
-- Birthday collection fixed in the pipeline, not pasted from the export.
-- Import `customeractivities`, `customertransactions`, `rewards`. Compare
-  `saleschannelbreakdown` without importing. Skip `integrationprogramevents`
-  and `customers`.
+- **2019 Shopify sweep landed.** 163,547 orders, 9,757 cancelled, 2,364 days,
+  10,415 day rows, back to 2019-09-09.
+- **Zero unmapped source names** across six years and 11 distinct values. The
+  three resolved pre-emptively all fired: `checkout_next` 1,904 orders,
+  `580111` 686, `1830279` 82. Without that work they would have been a new
+  Unknown bucket.
+- `shopify_customers` now carries computed `first_order_date`,
+  `last_order_date` and `revenue_jod` for 12,657 buyers, from orders rather
+  than the unreliable `amountSpent`.
 
 ## Findings
 
-**LoyaltyLion API, newly established**
-- `/v2/activities` exposes `$birthday`; `/v2/transactions` exists;
-  `/rewards`, `/rules`, `/events` return 404
-- Date filters ARE honoured on all three parameterised endpoints
-- `assertFilterHonoured` existed and had **never been called anywhere**. It now
-  runs once per loyalty sync against both endpoints
-- **Pending is a normal lifecycle state, not a birthday quirk.** `$purchase`
-  runs 19,855 approved against 483 pending. `points_pending` is **1.59% of
-  `points_approved`** across the full 21,264-customer population — 137,218
-  points, about 1,372 JOD, held by 290 members — and drains into approved
-  rather than accumulating
-- Sampling the newest rows biases toward `pending` and toward "the filter does
-  nothing". **Three** errors this turn came from that habit: the filter
-  misdiagnosis, birthday rewards read as never approving, and pending points
-  reported at 8.34% instead of 1.59%
+**Cohort retention — what six years of history unlocks**
 
-**Customer population** (19,163 records; export says 20,019 — 4% gap open)
-- 42.7% of buyers ordered once and never returned
-- Top 15.2% of buyers drive 74.9% of orders, **78.1% of revenue**
-- **5,926 buyers (42.5%) reachable on neither channel — 2,803,714 JOD, 31.6%**
-- Workable list 2,884 never opted in (NOT the 1,362 who opted out); priority
-  segment **85 customers**, 324,901 JOD
-- **SMS: 5,427 buyers reachable ONLY by SMS, 2,391,700 JOD.** 572 subscribers
+| Cohort | Acquired | Ever repeated | Still active (90d) | Revenue/customer |
+|---|---|---|---|---|
+| 2019 | 52 | 86.5% | 30.8% | 4,720.6 |
+| 2020 | 1,272 | 80.0% | 16.1% | 1,606.2 |
+| 2021 | 1,539 | 78.1% | 16.2% | 1,175.3 |
+| 2022 | 2,850 | 65.8% | 11.3% | 728.6 |
+| 2023 | 1,936 | 61.9% | 13.1% | 523.7 |
+| 2024 | 1,684 | 59.4% | 12.9% | 546.5 |
+| 2025 | 2,142 | 48.6% | 15.1% | 250.5 |
+| 2026 | 1,110 | 39.4% | 65.9% | 162.0 |
+
+**READ THIS BEFORE QUOTING THE DECLINE.** Repeat rate and revenue per customer
+fall monotonically, but the table is **confounded by age**: a 2019 customer has
+had seven years to repeat, a 2026 customer eight months. The decline is what
+you would see even if nothing had changed. Settling whether retention is
+genuinely worsening needs repeat-within-a-fixed-window, which needs
+`second_order_date` — not currently captured, one more sweep.
+
+What IS safe to read: the 2019 and 2020 cohorts are still 16-31% active after
+five or six years and have produced 1,600-4,700 JOD each. Long-tenure customers
+are the business.
+
+**Revenue concentration** (house accounts excluded, computed revenue)
+- top 1% of buyers → **34.8%** of revenue
+- top 5% → 62.7%, top 10% → 76.0%
+- 12+ lifetime orders: 16.8% of buyers → **78.2%** of revenue
+- mean 701.2 JOD, **median 97.8**, p90 1,284.7
+
+**Reach ceiling** (unchanged, still the most actionable)
+- **5,926 buyers (42.5%) reachable on neither email nor SMS — 31.6% of spend**
+- workable list: **2,884 never opted in**, NOT the 1,362 who opted out
+- priority: **85 customers**, ordered in last 90 days, 200+ JOD, 324,901 JOD
+- **SMS: 5,427 buyers reachable ONLY by SMS**, 2,391,700 JOD. 572 subscribers
   against 14,309 phone numbers
 
-**Expired birthday rewards — answered**
-- All **48 are Blue tier**. No Silver, Gold or Platinum member lost one.
-- Entirely confined to **July 2025 (7) and August 2025 (41)**. None since.
-  It reads as a one-off that stopped, not an ongoing leak — consistent with
-  the reward-expiry reminder flow going live around then.
+**Identity join** — LoyaltyLion `merchant_id` 99.8%; Klaviyo via order id
+99.3%; Klaviyo `external_id` useless (10.4% populated, 0% Shopify ids)
 
-**Points liability — answered**
-- LoyaltyLion's own export sums `Points Approved` to **8,620,816**; we store
-  **8,620,578**. **+0.00%.** Their outstanding figure counts approved only,
-  same as ours. Confirmed, not inferred.
-- `Points Pending` is **137,218 = 1.59%**, about 1,372 JOD, held by 290
-  members, and it drains into approved rather than accumulating.
-
-**Identity join**
-- LoyaltyLion → Shopify via `merchant_id`: **99.8%**
-- Klaviyo `external_id`: useless, 10.4% populated, 0% Shopify ids
-- Klaviyo → Shopify via order id: **99.3%** resolve to one customer; 20 map to
-  several = merge-detection signal
-
-**Exports** (6 files, read in place, never copied into the repo)
-
-| File | Rows | Span | Verdict |
-|---|---|---|---|
-| customeractivities | 38,748 | 2023-02-21+ | Import |
-| customertransactions | 60,680 | 2023-02-21+ | Import — 39,567 carry an Order ID |
-| rewards | 2,211 | **2025-08-04+** | Import — start date is a DATA LIMIT, not a beginning |
-| saleschannelbreakdown | 14,717 | 2019-12-03+ | Compare only |
-| integrationprogramevents | 51,988 | 2025-08-04+ | Skip — all `location=klaviyo` |
-| customers | 21,264 | snapshot | Skip — no Shopify id column |
+**LoyaltyLion history imported** — 101,639 rows, every one tagged
+`ll_export_20260829`. Coverage in `data_coverage`.
 
 ## Open questions needing input
 
-1. **4% population gap** still unexplained; re-check once both sides queryable.
-2. **Should the three imports become live API sources?** `/v2/activities` and
-   `/v2/transactions` both work and the birthday fix already pulls activities
-   live. As imports they stop at 29 Aug 2026 and go stale. Recommend deciding
-   after the 2019 sweep rather than widening scope now.
+1. **`second_order_date` sweep** to age-normalise the cohort table? One more
+   ~11 minute pass. Without it the retention decline cannot be interpreted.
+2. **4% population gap** (19,163 vs 20,019) still unexplained.
+3. **Should the three imports become live API sources?** `/v2/activities` and
+   `/v2/transactions` both work. Agreed to decide after the sweep — it is now
+   after the sweep.
 
 ## Next
 
-1. 2019 Shopify sweep, with guards: Klaviyo starts 2025-01, so pre-2025 ranges
-   must not show "Klaviyo share 0%"; Mobile App gains Shopney history ending
-   late 2024 then a gap
-2. Customer section, leading with the three headline numbers
-3. Identity table
-
-
----
+1. Customer section, leading with: 37.9% bought once, top 1% take 34.8% of
+   revenue, 31.6% of revenue unreachable
+2. Identity table
+3. `updated_at`-driven Shopify repair and the Klaviyo 90-day campaign re-fetch,
+   both still unbuilt from the retroactive-change work
 
 ## Applied this turn
 
-`ll_activities`, `ll_transactions`, `ll_rewards`, plus the `data_coverage`
-view, which replaced the narrower `ll_import_coverage`. RLS matches every
-other table.
+`ll_activities`, `ll_transactions`, `ll_rewards` and the `data_coverage` view,
+which replaced the narrower `ll_import_coverage`. RLS matches every other
+table.
 
 The importer caught a fault worth recording: LoyaltyLion writes timestamp
-offsets as `+00`, which `Date.parse` REJECTS (it wants `+00:00`). Unhandled,
-every timestamp parsed to null, which collapsed the rewards key to
-`(customer, null, title)` and manufactured **894 collisions in a file that has
-none** — 2,211 distinct of 2,211. The importer now normalises the offset and
-REFUSES to write if any timestamp fails to parse, rather than importing
-undated rows.
+offsets as `+00`, which `Date.parse` REJECTS. Unhandled, every timestamp parsed
+to null, collapsing the rewards key to `(customer, NULL, title)` and
+manufacturing **894 collisions in a file that has none**. The composite key
+exposed it by colliding; a surrogate id would have imported 2,211 undated rows
+and reported success.

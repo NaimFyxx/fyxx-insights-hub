@@ -669,6 +669,43 @@ immediately.
 Both cases share a shape. The convenient option does not remove the fault, it
 removes the *evidence* of the fault.
 
+### What changed between 2021 and 2024
+
+The 90-day repeat rate fell from 47.1% to 33.7%. Two things happened at once
+and the acquisition channel per customer separates them.
+
+**Channel quality differs sharply.** All-time, by the channel a customer was
+ACQUIRED through:
+
+| Acquired via | Customers | Repeat ≤90d | Avg lifetime orders | Median revenue |
+|---|---|---|---|---|
+| Mobile App | 4,787 | **44.7%** | **13.5** | 131.0 |
+| Website | 2,403 | 36.1% | 8.2 | 65.0 |
+| Draft Orders | 1,336 | 34.8% | 9.5 | 128.8 |
+| POS | 3,480 | 34.5% | 6.7 | 93.0 |
+
+An app-acquired customer repeats ten points more often and places twice the
+lifetime orders.
+
+**And the mix moved away from the app.** Share of new customers acquired via
+the app: 92.3% (2019), 71.0% (2020), 60.4% (2021), **29.9% (2022)**, 33.0%,
+36.4%, 25.5%, 48.4% (2026). POS went from 3.9% of acquisition in 2020 to 48.2%
+in 2022.
+
+Holding each channel at its all-time rate, the mix shift alone predicts a fall
+from 43.9% to 37.8% — **roughly 6 points of the 16-point drop between 2019 and
+2022.** The rest is within-channel: from 2023 the actual rate runs BELOW what
+the mix predicts, and the gap widens (-1.8, -4.9, -4.7, -6.2 points). Every
+channel now retains worse than its own history.
+
+So: about a third of the decline is who we acquired, and the rest is that the
+same channels stopped holding people as well.
+
+**Treat the split as indicative, not exact.** The prediction uses each
+channel's all-time repeat rate, which for the app is dominated by its early
+years, so it flatters the mix explanation in later cohorts. What is solid is
+the direction and the ordering, not the precise six points.
+
 ### The first measurable outcome we have for any flow
 
 Birthday rewards that expired unredeemed: **48 in total, every one of them

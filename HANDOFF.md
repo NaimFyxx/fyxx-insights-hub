@@ -74,6 +74,16 @@ The raw "ever repeated" column overstated it badly (86.5% to 39.4% reads as
 collapse). The truth is severe but different, and the flattening is the part
 worth acting on.
 
+**Why retention fell, 2021-2024** — acquisition channel now captured
+- App-acquired customers repeat at **44.7%** vs 34.5-36.1% for POS, Website and
+  Draft Orders, and place **13.5** lifetime orders against 6.7-9.5
+- App share of NEW customers: 71.0% (2020), 60.4% (2021), **29.9% (2022)**,
+  33.0%, 36.4%, 25.5%, 48.4% (2026). POS went 3.9% to 48.2% over 2020-2022
+- Mix shift alone predicts a fall of ~6 points of the 16-point drop. From 2023
+  actual runs BELOW mix-predicted and the gap widens to -6.2, so the rest is
+  every channel retaining worse than its own history
+- Indicative, not exact: the prediction uses all-time channel rates
+
 **Revenue concentration** (house accounts excluded, computed revenue)
 - top 1% of buyers → **34.8%** of revenue
 - top 5% → 62.7%, top 10% → 76.0%

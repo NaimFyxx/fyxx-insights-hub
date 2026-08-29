@@ -639,6 +639,36 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### Prefer a key that CAN collide to a surrogate that cannot
+
+`ll_rewards` has no natural id in the export, so its key is
+`(ll_customer_id, claimed_at, title)`. A surrogate `uuid` would have been
+easier and would never collide.
+
+The composite key is why the import worked. LoyaltyLion writes timestamp
+offsets as `+00`, which `Date.parse` **rejects** — it wants `+00:00`. Every
+timestamp parsed to null. With the composite key that collapsed to
+`(customer, NULL, title)` and the dry run reported **894 collisions in a file
+containing none** (2,211 distinct keys, 2,211 rows), which is what exposed the
+parsing fault. A surrogate id would have accepted all 2,211 rows, every one of
+them undated, and reported success.
+
+The rule: **when a key can fail, a fault in the data announces itself. When a
+key cannot fail, the same fault is absorbed and shipped.** The collision risk
+of the composite key is real — two identical rewards claimed in the same second
+would merge — and it is still the better trade, because that failure is visible
+and the other is not.
+
+This is the second time loud failure has caught something convenience would
+have hidden. The first: `shopify_daily_sales` had DEFAULT `'unknown'` on
+`source_name`, so a pre-migration insert produced a valid-looking Unknown
+channel row instead of an error, and 24 to 26 August 2026 were double counted
+until a hard bound caught it. Dropping the default made the same insert fail
+immediately.
+
+Both cases share a shape. The convenient option does not remove the fault, it
+removes the *evidence* of the fault.
+
 ### The first measurable outcome we have for any flow
 
 Birthday rewards that expired unredeemed: **48 in total, every one of them

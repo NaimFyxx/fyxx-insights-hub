@@ -14,6 +14,7 @@ import {
 } from "@/lib/queries";
 import { POS_DEFINITION_CHANGED } from "@/lib/channels";
 import { settledOnly, rangeIncludesToday, type DateRange } from "@/lib/ranges";
+import { fetchCoverage, coverageGap } from "@/lib/coverage";
 
 /**
  * A section that cannot be rendered honestly is marked unavailable with the
@@ -314,18 +315,29 @@ export type ReportData = {
 };
 
 export async function buildReport(range: DateRange): Promise<ReportData> {
-  const [reach, campaigns, flows, push, sales, attributed, snaps, activations, narrative] =
-    await Promise.all([
-      buildReach(range),
-      fetchCampaigns(range),
-      fetchFlows(range),
-      fetchPush(range),
-      fetchDailySales(range),
-      fetchAttributed(range),
-      fetchSnapshots(range),
-      fetchActivations(),
-      fetchNarrative(range),
-    ]);
+  const [
+    coverage,
+    reach,
+    campaigns,
+    flows,
+    push,
+    sales,
+    attributed,
+    snaps,
+    activations,
+    narrative,
+  ] = await Promise.all([
+    fetchCoverage(),
+    buildReach(range),
+    fetchCampaigns(range),
+    fetchFlows(range),
+    fetchPush(range),
+    fetchDailySales(range),
+    fetchAttributed(range),
+    fetchSnapshots(range),
+    fetchActivations(),
+    fetchNarrative(range),
+  ]);
 
   const days = daysIn(range);
 
@@ -379,7 +391,9 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
   const birthdayMeasured = snaps.some((s) => s.birthday_rewards_issued > 0);
   const birthdayAvailability: Availability = birthdayMeasured
     ? ok
-    : no("Birthday rewards were not collected for this period. Collection was fixed on 29 August 2026; earlier snapshots hold no figure.");
+    : no(
+        "Birthday rewards were not collected for this period. Collection was fixed on 29 August 2026; earlier snapshots hold no figure.",
+      );
 
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
@@ -407,7 +421,14 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     narrative,
     reach,
     campaigns: {
-      availability: campaigns.length ? ok : no("No campaigns were sent in this period."),
+      availability:
+        (coverageGap(coverage, "klaviyo_campaigns", range, "Campaign reporting") ??
+        (campaigns.length ? null : "No campaigns were sent in this period."))
+          ? no(
+              coverageGap(coverage, "klaviyo_campaigns", range, "Campaign reporting") ??
+                "No campaigns were sent in this period.",
+            )
+          : ok,
       rows: campaigns,
     },
     flows: { availability: flowsAvailability, rollup: rollUpFlows(flows) },
@@ -426,11 +447,18 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     },
     activations: activations.filter((a) => a.date >= range.from && a.date <= range.to),
     revenue: {
-      availability: ATTRIBUTION_UNRECONCILED
-        ? no(
-            "Revenue attributed to Klaviyo is withheld this month. Our own figure and Klaviyo's disagree by roughly a factor of two, and the cause is still being traced. It will be reported once the two agree.",
-          )
-        : ok,
+      // Coverage first. A range that predates Klaviyo attribution would
+      // otherwise render 0.0% as though Klaviyo drove nothing, when in fact
+      // Klaviyo was not the sending platform then. Derived from data_coverage,
+      // so it stays correct as sources are backfilled.
+      availability:
+        coverageGap(coverage, "klaviyo_attributed_orders", range, "Klaviyo attribution") !== null
+          ? no(coverageGap(coverage, "klaviyo_attributed_orders", range, "Klaviyo attribution")!)
+          : ATTRIBUTION_UNRECONCILED
+            ? no(
+                "Revenue attributed to Klaviyo is withheld this month. Our own figure and Klaviyo's disagree by roughly a factor of two, and the cause is still being traced. It will be reported once the two agree.",
+              )
+            : ok,
       klaviyoAttributed,
       allChannels,
       sharePct: salesSettled > 0 ? (klaviyoSettled / salesSettled) * 100 : null,

@@ -571,6 +571,16 @@ export type Database = {
       };
     };
     Views: {
+      data_coverage: {
+        Row: {
+          source: string | null;
+          kind: string | null;
+          rows: number | null;
+          covers_from: string | null;
+          covers_to: string | null;
+        };
+        Relationships: [];
+      };
       klaviyo_order_influence_net: {
         Row: {
           created_at: string | null;

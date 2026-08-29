@@ -31,6 +31,14 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Decisions made this turn
 
+- **`data_coverage` replaces `ll_import_coverage`.** One view records what
+  every source actually covers, derived from the rows rather than declared, so
+  the absence-vs-zero guard is data-driven instead of four special cases. There
+  are **13** distinct coverage windows, not the five previously listed.
+- `coverageGap()` answers only "does this source reach back far enough". Sync
+  staleness stays with `sync_log` on the health page — conflating them produced
+  a false positive.
+
 - LoyaltyLion history **imported**: 38,748 activities, 60,680 transactions,
   2,211 rewards = 101,639 rows. Every row carries a `source` tag
   (`ll_export_20260829`); `ll_import_coverage` reports what each table spans so
@@ -57,11 +65,14 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 - `assertFilterHonoured` existed and had **never been called anywhere**. It now
   runs once per loyalty sync against both endpoints
 - **Pending is a normal lifecycle state, not a birthday quirk.** `$purchase`
-  runs 19,855 approved against 483 pending. `points_pending` is **8.34% of
-  `points_approved`** in a 10,000-customer sample (~618 JOD there), and drains
-  into approved rather than accumulating
+  runs 19,855 approved against 483 pending. `points_pending` is **1.59% of
+  `points_approved`** across the full 21,264-customer population — 137,218
+  points, about 1,372 JOD, held by 290 members — and drains into approved
+  rather than accumulating
 - Sampling the newest rows biases toward `pending` and toward "the filter does
-  nothing". Both errors this turn came from that habit
+  nothing". **Three** errors this turn came from that habit: the filter
+  misdiagnosis, birthday rewards read as never approving, and pending points
+  reported at 8.34% instead of 1.59%
 
 **Customer population** (19,163 records; export says 20,019 — 4% gap open)
 - 42.7% of buyers ordered once and never returned

@@ -24,13 +24,50 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 - **Identity table built.** 18,929 rows. 18,864 carry a LoyaltyLion id (99.7%),
   6,649 a Klaviyo profile (35.1%), 6,584 both.
-  - **64 conflicts** — Klaviyo profiles whose orders belong to several Shopify
-    customers, over 20 months. The worst is one profile spanning 5 customers
-    and 171 orders. Tracked over time in `identity_snapshots` so the RATE is
-    visible, which is the maintenance signal.
-  - **9,892 Klaviyo contacts have no order since 2025-01-01** — 57% of the
-    17,358 contact base. Note the window: a profile that bought in 2023 and not
-    since counts here, so it is "no recent order", NOT "never bought".
+  - **64 conflicts** over 20 months, tracked in `identity_snapshots` so the
+    RATE becomes visible. **The worst spans 5 Shopify customers and 171
+    orders**, mixing an employee (Yousef Mazahreh, 1,220 lifetime orders, house
+    account), a major real customer (Omar Khamash, 436 orders, 17,673 JOD) and
+    three companies with no email address. Those are not one person.
+
+    **House accounts are 7.8% of conflicts but 39.4% of conflicted orders**
+    (588 of 1,494). Counting conflicts understates them fivefold, because
+    conflicts are wildly unequal in size and house accounts carry the large
+    ones. Four of the top five involve a house account and one is two house
+    accounts merged into each other. Separately, **26 of 64 (41%)** involve a
+    customer with **no email** — the case where Klaviyo has to fall back to
+    another identifier.
+
+    Neither is a diagnosis. Top five with ids, for checking in Shopify:
+
+    | Klaviyo profile | Orders | Shopify customers |
+    |---|---|---|
+    | `01GSE2S2VR4ZG9ZQ7QVY75Q4DH` | 171 | 5320661500057 Yousef Mazahreh (1,220, **house**) · 6607593505015 Omar Muhammad Khamash (436) · 9381827117303 شركة جمع للمطاعم العالمة (6, no email) · 9121758085367 Jireas Sahawneh (4, no email) · 9079041917175 شركة الكميه للمطاعم السياحيه (4, no email) |
+    | `01J925FFSAAT36B9T86RCASXX9` | 148 | 8312268947703 Jireas Haddad (151) · 9208254726391 Mousa Sweiss (64, **house**) · 9079041917175 شركة الكميه (4, no email) |
+    | `01GSE3EEV7DWXF2TJPB8Y6ZPZB` | 146 | 6371814768887 Essa Gacaman (218, **house**) · 4535572037785 Caroline Zawaideh (6) |
+    | `01GSE3G85T6GJREFK148WMN86N` | 107 | 5028813242521 Shafiq Ghattas (253, **house**) · 6371814768887 Essa Gacaman (218, **house**) |
+    | `01GSE3H7RNQGKV5GAKZCKTB7KN` | 74 | 2826198843488 Fadi Afram (203) · 3663652094105 Mercedes Alonso (45) |
+
+    `9079041917175` appears in three separate conflicts. The last row is the
+    one with no house account and no missing email, so it is the cleanest
+    candidate for a genuine mis-merge.
+  - **The population split, on the Shopify side where six years exist** (19,090
+    real customers):
+
+    | | Customers | Note |
+    |---|---|---|
+    | never bought | **6,505** | 34% — on file, never ordered |
+    | lapsed before 2025 | **6,392** | 33% — **1,478,104 JOD lifetime**, 5,333 have an email, **2,878 already subscribed** |
+    | bought since 2025 | 6,193 | 32% |
+
+    The lapsed group is the actionable one: 2,878 of them are subscribed right
+    now, so they can be contacted today without asking anyone to opt in.
+
+    **The 9,892 Klaviyo figure CANNOT be split this way.** The Klaviyo link runs
+    through 2025+ orders, so a pre-2025-only buyer has no order to route
+    through. Splitting it needs an email join, which this project does not
+    store. The Shopify split above is the answerable version and covers a
+    different population — 19,090 customers against 17,358 Klaviyo contacts.
   - Klaviyo linkage is 35.1% because the edge runs through orders and only
     reaches people who have bought. That is the design, not a shortfall.
 
@@ -249,19 +286,15 @@ programme, tiers and point values.
 
 ## Next
 
-1. ~~Identity table~~ DONE. Next: **retroactive-change fixes** — `customer_identity` joining Shopify, Klaviyo and
-   LoyaltyLion ids with `matched_how`, plus the Klaviyo profiles mapping to
-   several Shopify customers as a merge-detection list. **DDL at the bottom of
-   this file, awaiting approval.**
-2. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
-   Klaviyo trailing-90-day campaign re-fetch (one API call). **Decided: poll
-   now, webhooks later** — approximate and observable beats exact and silent.
-3. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
+1. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
+   Klaviyo trailing-90-day campaign re-fetch (one API call). Decided: poll now,
+   webhooks later.
+2. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
    source. It carries `cancellation_status`, `total_refunded` and
    `metadata.shopify_source_name`, so it is a third view of every order that is
    not Shopify. Compare against what we hold and report where they disagree.
    Agreement everywhere is itself a useful result.
-4. **Critical review of the whole dashboard and report** — once the queue is
+3. **Critical review of the whole dashboard and report** — once the queue is
    empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
    what exists because it was built rather than because it would be used.
    **Include a three-way split of every number: MEASURED, INFERRED, and NEVER
@@ -269,81 +302,3 @@ programme, tiers and point values.
    artefacts — the draft-order marketing-influence story and the enrolment
    retention gap. Untested numbers deserve the same scepticism, and the third
    category is where the next wrong belief is sitting.
-
-
----
-
-## DDL awaiting approval — customer_identity
-
-```sql
--- One row per person, holding the id each system knows them by.
---
--- Two of the three edges are HARD KEYS and neither uses email:
---   LoyaltyLion -> Shopify   customers.merchant_id IS the Shopify customer id.
---                            99.8% of 2,000 sampled. Email would have been
---                            worse: only 79% of LoyaltyLion customers have one.
---   Klaviyo -> Shopify       derived through ORDERS. A Placed Order event
---                            carries the Klaviyo profile and the Shopify order
---                            id; the order carries the customer. 99.3% of
---                            profiles resolve to exactly one customer.
---
--- Klaviyo's own external_id is useless here: populated on 10.4% of profiles and
--- zero of those are Shopify ids.
---
--- The Klaviyo edge only reaches people who have ORDERED. A subscriber who has
--- never bought has no order to route through and stays unlinked. Fine for every
--- question asked so far, all of which are about buyers.
-CREATE TABLE public.customer_identity (
-  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shopify_customer_id   text NOT NULL,
-  klaviyo_profile_id    text,
-  loyaltylion_id        text,
-
-  -- Audit trail, not a confidence score. Both edges are hard keys, so this
-  -- records WHICH key was used rather than how sure we are.
-  matched_how           text NOT NULL,   -- 'merchant_id' | 'order_id' | 'manual'
-  klaviyo_order_matches integer NOT NULL DEFAULT 0,
-
-  first_confirmed_at    timestamptz NOT NULL DEFAULT now(),
-  last_confirmed_at     timestamptz NOT NULL DEFAULT now(),
-  created_at            timestamptz NOT NULL DEFAULT now(),
-  updated_at            timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (shopify_customer_id)
-);
-CREATE INDEX customer_identity_klaviyo_idx ON public.customer_identity (klaviyo_profile_id);
-CREATE INDEX customer_identity_ll_idx      ON public.customer_identity (loyaltylion_id);
-
--- A Klaviyo profile whose orders belong to more than one Shopify customer.
--- Not noise: either Lori has not merged two customers yet, or Klaviyo merged
--- two people who should not have been. Twenty cases in four months, and
--- currently no other way to see them.
-CREATE TABLE public.identity_conflicts (
-  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  klaviyo_profile_id   text NOT NULL,
-  shopify_customer_ids text[] NOT NULL,
-  order_count          integer NOT NULL DEFAULT 0,
-  detected_at          timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (klaviyo_profile_id)
-);
-
-ALTER TABLE public.customer_identity  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.identity_conflicts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "customer_identity_select_authenticated"
-  ON public.customer_identity FOR SELECT TO authenticated USING (true);
-CREATE POLICY "identity_conflicts_select_authenticated"
-  ON public.identity_conflicts FOR SELECT TO authenticated USING (true);
-REVOKE ALL ON public.customer_identity  FROM anon, authenticated;
-REVOKE ALL ON public.identity_conflicts FROM anon, authenticated;
-GRANT SELECT ON public.customer_identity, public.identity_conflicts TO authenticated;
-GRANT ALL    ON public.customer_identity, public.identity_conflicts TO service_role;
-```
-
-Three notes:
-
-- **No email column**, consistent with `shopify_customers`. Neither edge needs
-  one and storing it would add PII for no join.
-- **`matched_how` is an audit trail, not a confidence score.** It was scoped as
-  provenance for an email match; both edges turned out to be hard keys, so it
-  records which key was used.
-- **Conflicts get their own table** rather than a flag, because the useful thing
-  is the LIST — which profiles, which customers — not a count.

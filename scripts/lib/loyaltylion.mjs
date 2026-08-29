@@ -255,6 +255,13 @@ export async function fetchPeriodActivity(from, to) {
   const max = `${to}T23:59:59+03:00`;
   const q = `created_at_min=${encodeURIComponent(min)}&created_at_max=${encodeURIComponent(max)}`;
 
+  // assertFilterHonoured existed for this exact hazard and had never been
+  // called anywhere. Both parameterised endpoints are proven here, once per
+  // run, before any figure is derived from them. Re-checked 29 August 2026:
+  // /transactions, /activities and /customers all honour the date filter.
+  await assertFilterHonoured("/transactions", `${q}`, "transactions");
+  await assertFilterHonoured("/activities", `${q}`, "activities");
+
   let redemptions = 0;
   for await (const batch of paginate(`/transactions?${q}`, "transactions", "transactions")) {
     for (const t of batch) {
@@ -269,36 +276,30 @@ export async function fetchPeriodActivity(from, to) {
   const valueSpread = new Map(); // points value -> how many times it was issued
   const birthdayStates = new Map();
 
-  // TWO faults were found here, and both produced a silent zero rather than an
-  // error, which is why it read as "no birthday rewards exist" for months.
+  // ONE fault was found here, and it produced a silent zero rather than an
+  // error, which is why it read as "no birthday rewards exist" for months:
+  // birthday activities are issued `pending` and STAY pending, while this
+  // counted only `approved`. Measured: 115 of 115 in a recent sample were
+  // pending. A reward that has been issued has been issued, so only void and
+  // declined are excluded now, matching how redemptions are counted above.
   //
-  //   1. /activities IGNORES created_at_min and created_at_max. Sending them
-  //      and sending nothing return byte-identical pages. This file's own
-  //      banner warns about exactly this, and assertFilterHonoured exists for
-  //      it, but this call never used it. Dates are filtered HERE instead.
-  //
-  //   2. Birthday activities are issued `pending` and stay pending. The old
-  //      code counted only `approved`, so it counted none of them, ever.
-  //      Measured: 115 of 115 in a recent sample were pending. A reward that
-  //      has been issued has been issued; only void and declined are excluded,
-  //      which matches how redemptions are counted above.
-  //
-  // The activities endpoint returns newest first, so paging stops once it is
-  // past the start of the range.
-  // Compare INSTANTS, not strings: min/max carry a +03:00 offset while
-  // created_at comes back as UTC "Z", so lexicographic comparison would be
-  // wrong at the boundaries.
+  // A second fault was suspected and was NOT real. An earlier check appeared
+  // to show /activities ignoring created_at_min and created_at_max, but that
+  // check used a window ending TODAY, so "the newest N inside the range" and
+  // "the newest N overall" were necessarily the same rows. Re-tested against a
+  // window that does not touch today: the filter is honoured, at every limit,
+  // on /activities, /transactions and /customers alike. The server-side filter
+  // is therefore kept — it is far cheaper than paging all of history — and the
+  // range is re-checked here only as a cheap guard against that changing.
   const minT = Date.parse(min), maxT = Date.parse(max);
-  for await (const batch of paginate(`/activities`, "activities", "activities")) {
-    let allOlder = batch.length > 0;
+  let outOfRange = 0;
+  for await (const batch of paginate(`/activities?${q}`, "activities", "activities")) {
     for (const a of batch) {
       const at = Date.parse(a.created_at ?? "");
-      if (!Number.isFinite(at)) continue;
-      if (at >= minT) allOlder = false;
+      if (Number.isFinite(at) && (at < minT || at > maxT)) { outOfRange++; continue; }
       const name = `${a.rule?.name ?? ""} ${a.rule?.title ?? ""}`.trim();
       if (name) allRuleNames.add(name);
       if (!/birthday/i.test(name)) continue;
-      if (at < minT || at > maxT) continue;
       matchedRules.add(name);
       birthdayStates.set(a.state, (birthdayStates.get(a.state) ?? 0) + 1);
       if (a.state === "void" || a.state === "declined") continue;
@@ -306,7 +307,10 @@ export async function fetchPeriodActivity(from, to) {
       const v = Number(a.value ?? 0);
       valueSpread.set(v, (valueSpread.get(v) ?? 0) + 1);
     }
-    if (allOlder) break; // everything from here back predates the range
+  }
+  if (outOfRange) {
+    log.warn(`${outOfRange} activity row(s) fell OUTSIDE the requested range.`);
+    log.warn("  LoyaltyLion's date filter has stopped being honoured. Verify before trusting any period figure.");
   }
   if (birthdayStates.size) {
     log.info(`  birthday activity states: ${[...birthdayStates].map(([k, v]) => `${k}=${v}`).join(", ")}`);

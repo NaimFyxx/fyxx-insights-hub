@@ -371,13 +371,15 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     ? ok
     : no("Points outstanding was not recorded for this period.");
 
-  // birthday_rewards_issued has never been populated: it is zero on all 369
-  // snapshots because the sync does not collect it. Printing "0" would state a
-  // measurement that was never taken, so the report says it is not collected.
+  // Birthday rewards ARE collected now. The old zero came from counting only
+  // `approved` activities while LoyaltyLion issues them `pending` — measured
+  // over the full history, 1,753 of 1,831 do approve, so pending is transient.
+  // A day still showing zero is a day the sync had not yet been fixed, which is
+  // a real absence rather than a real zero.
   const birthdayMeasured = snaps.some((s) => s.birthday_rewards_issued > 0);
   const birthdayAvailability: Availability = birthdayMeasured
     ? ok
-    : no("Birthday rewards are not yet collected by the nightly sync.");
+    : no("Birthday rewards were not collected for this period. Collection was fixed on 29 August 2026; earlier snapshots hold no figure.");
 
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);

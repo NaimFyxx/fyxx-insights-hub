@@ -639,6 +639,29 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### REQUIRED: resolve an unknown source id by app lookup, never by name
+
+A numeric Shopify `sourceName` is an app id. Ask Shopify what it is:
+
+```graphql
+query { node(id: "gid://shopify/App/1830279") {
+  ... on App { title handle developerName } } }
+```
+
+That returns `Shopify Web` / `shopify_web` / `Shopify`. Then confirm against the
+orders themselves before adding a row to `SOURCE_MAP` — for 1830279, all 92 of
+them carried `app = "Draft Orders"` and a customer, which is what settled it as
+staff-created drafts rather than a web channel.
+
+**Do not pattern-match a name.** Every channel error this project has had came
+from inferring meaning from a string: `2653365` sat in Unknown because no
+pattern matched a bare id, `checkout_next` looked like a separate channel and
+was not, and a Mobile App year-on-year figure was reported as +831.8% when it
+was +23.8% because a script matched one of two app ids.
+
+Confirmed by lookup: 580111 Online Store, 5382175 Appmaker, 179433 Odoo
+Connector (Webkul), 1354745 Draft Orders, 1830279 Shopify Web.
+
 ### UNRESOLVED: the customer population differs by about 4%
 
 A full customer sweep (`scripts/diagnose/customers.mjs`, 77 pages to

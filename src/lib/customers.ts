@@ -18,6 +18,7 @@ import { fetchAllRows } from "@/lib/queries";
  *   ranking and wrong for arithmetic.
  */
 export type CustomerRow = {
+  loyalty_enrolled: boolean | null;
   shopify_customer_id: string;
   orders_lifetime: number;
   revenue_jod: number | null;
@@ -37,7 +38,7 @@ export const fetchCustomers = () =>
     supabase
       .from("shopify_customers")
       .select(
-        "shopify_customer_id,orders_lifetime,revenue_jod,first_order_date,second_order_date,last_order_date,first_order_channel,has_email,has_phone,email_consent,sms_consent,is_house_account",
+        "shopify_customer_id,orders_lifetime,revenue_jod,first_order_date,second_order_date,last_order_date,first_order_channel,has_email,has_phone,email_consent,sms_consent,is_house_account,loyalty_enrolled",
       )
       .order("shopify_customer_id")
       .range(from, to),
@@ -360,4 +361,45 @@ export function busyDays(sales: { date: string; sub_channel: string; orders: num
     ...v,
     busyShareOfOrders: v.orders ? (v.busyOrders / v.orders) * 100 : 0,
   }));
+}
+
+/**
+ * Retention by loyalty enrolment, within acquisition channel.
+ *
+ * The largest single difference measured anywhere in this project — and
+ * CORRELATIONAL. Loyal customers are more likely to enrol, so this shows where
+ * to look, not what to conclude. Never phrase it as enrolment causing
+ * retention.
+ */
+export function byEnrolment(all: CustomerRow[], today: string, windowDays = 90) {
+  const eligible = all.filter(
+    (c) =>
+      !c.is_house_account &&
+      c.first_order_date &&
+      c.first_order_channel &&
+      days(c.first_order_date, today) >= windowDays,
+  );
+  const rate = (rows: CustomerRow[]) =>
+    rows.length
+      ? (rows.filter(
+          (c) =>
+            c.second_order_date && days(c.first_order_date!, c.second_order_date) <= windowDays,
+        ).length /
+          rows.length) *
+        100
+      : null;
+  return CHANNELS.map((ch) => {
+    const rows = eligible.filter((c) => c.first_order_channel === ch);
+    const yes = rows.filter((c) => c.loyalty_enrolled === true);
+    const no = rows.filter((c) => c.loyalty_enrolled !== true);
+    return {
+      channel: ch,
+      enrolled: yes.length,
+      enrolledRate: rate(yes),
+      notEnrolled: no.length,
+      notEnrolledRate: rate(no),
+      enrolledOrders: yes.length ? yes.reduce((a, c) => a + c.orders_lifetime, 0) / yes.length : 0,
+      notEnrolledOrders: no.length ? no.reduce((a, c) => a + c.orders_lifetime, 0) / no.length : 0,
+    };
+  }).filter((r) => r.enrolled + r.notEnrolled > 0);
 }

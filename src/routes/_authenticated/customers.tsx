@@ -10,6 +10,7 @@ import {
   summarise,
   cohorts,
   byAcquisitionChannel,
+  byEnrolment,
   posCapture,
   POS_CAPTURE_COMPARABLE_UNTIL,
   busyDays,
@@ -42,6 +43,7 @@ function CustomersPage() {
     queryKey: ["pos-capture-sales"],
     queryFn: () => fetchDailySales({ from: "2019-01-01", to: POS_CAPTURE_COMPARABLE_UNTIL }),
   });
+  const enrol = useMemo(() => (q.data ? byEnrolment(q.data, today, 90) : []), [q.data, today]);
   const busy = useMemo(() => (sq.data ? busyDays(sq.data) : []), [sq.data]);
   const capture = useMemo(
     () => (q.data && sq.data ? posCapture(sq.data, q.data) : []),
@@ -154,12 +156,17 @@ function CustomersPage() {
           Only customers whose first order was at least 90 days ago are counted, so every year is
           measured over the same window. A cohort with fewer than 90 days of history shows a dash
           rather than a partial rate.
-          {flat
-            ? " The fall ran to " +
-              peak?.year +
-              " and has since stabilised: the last three cohorts sit within three points of each other."
-            : ""}
         </p>
+        {flat ? (
+          <p className="mt-2 border-l-2 border-destructive/40 pl-4 text-xs">
+            <b>The flat section is not a recovery.</b> The last three cohorts sit within three
+            points of each other, but that is two opposing forces cancelling. App share of new
+            customers recovered to 48.4% in 2026, which alone predicts a repeat rate of 39.9% — the
+            highest since 2020. The actual rate was 33.7%, a 6.2 point shortfall and the widest
+            recorded. The line held level because a better acquisition mix offset channels that kept
+            retaining worse. If mix recovery stalls, it resumes falling.
+          </p>
+        ) : null}
       </Panel>
 
       <Panel title="Which channel acquires the customers worth having">
@@ -282,6 +289,43 @@ function CustomersPage() {
             which channel is losing ground and which is holding.
           </p>
         </div>
+      </Panel>
+
+      <Panel title="Retention by loyalty enrolment">
+        <Table>
+          <thead>
+            <tr>
+              <Th>Acquired via</Th>
+              <Th align="right">Enrolled</Th>
+              <Th align="right">Repeat</Th>
+              <Th align="right">Not enrolled</Th>
+              <Th align="right">Repeat</Th>
+              <Th align="right">Gap</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {enrol.map((e) => (
+              <tr key={e.channel}>
+                <Td>{e.channel}</Td>
+                <Td align="right">{num(e.enrolled)}</Td>
+                <Td align="right">{e.enrolledRate === null ? "—" : pct(e.enrolledRate)}</Td>
+                <Td align="right">{num(e.notEnrolled)}</Td>
+                <Td align="right">{e.notEnrolledRate === null ? "—" : pct(e.notEnrolledRate)}</Td>
+                <Td align="right">
+                  {e.enrolledRate !== null && e.notEnrolledRate !== null
+                    ? `+${(e.enrolledRate - e.notEnrolledRate).toFixed(1)}`
+                    : "—"}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="mt-2 border-l-2 border-border pl-4 text-xs text-muted-foreground">
+          <b>Correlational, and the selection bias is severe.</b> Loyal customers are more likely to
+          enrol, so this cannot show that enrolling someone makes them retain. It shows where to
+          look. Phrase it as &ldquo;enrolled customers retain far better&rdquo;, never as
+          &ldquo;enrolling customers makes them retain&rdquo;.
+        </p>
       </Panel>
 
       <Panel title="New customers captured per 100 POS orders">

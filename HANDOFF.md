@@ -22,6 +22,11 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 ## Resolved
 
+- **Customer section COMPLETE.** The cohort panel now states that the flat
+  section is two opposing forces cancelling, not a recovery. Enrolment is a
+  first-class retention dimension with its correlational caveat inline.
+- **`scripts/lib/edit.mjs`** makes the edit assertion structural.
+
 - 2,400 ghost customer rows deleted. `shopify_customers` is back to 19,163 with
   zero rows lacking `customer_created_at`. `loyalty-join.mjs` is UPDATE-only and
   verified: 2,401 LoyaltyLion customers with no Shopify counterpart skipped.
@@ -161,8 +166,11 @@ programme, tiers and point values.
   does nothing when its target has been reformatted, and `git add -A` commits
   the unrelated files without complaint — so a change can be reported as landed
   when it was not. It happened twice: a handoff rewrite and a panel rewrite.
-  Assert the target exists before replacing, and grep the result before
-  committing.
+  **Now structural: use `scripts/lib/edit.mjs`.** `mustReplace` throws on a
+  missing target, an ambiguous one, an already-applied one, and on a write that
+  did not take. The check is inside the function, as `assertReadOnly` is inside
+  `gql()`, so an edit cannot be done without it. Covered by the test suite. It
+  caught a reformatted target on its first real use.
 
 - **LoyaltyLion Link header lists `rel="previous"` BEFORE `rel="next"`.** Read
   `cursor.next` from the body. A naive `/cursor=/` match paginates backwards.
@@ -192,17 +200,14 @@ programme, tiers and point values.
 
 ## Next
 
-1. **Finish the customer section** — two items left. Carry the "flat because
-   mix gain offset decay" framing into the cohort panel so it cannot be
-   misread, and surface enrolment as a retention dimension. The headlines,
-   acquisition channel, mix-versus-decay, POS capture, life cycle,
-   concentration and reach panels are all built.
-2. **Enrolment before/after test** — approved, `enrolled_at` confirmed present
-   on every enrolled customer. Compare a customer's order rate before and after
-   their own enrolment. **Label it exactly**: enrolment usually happens AT a
-   purchase, so the "after" window starts at a moment of demonstrated
-   engagement and biases toward improvement. Closer than cross-sectional, never
-   presented as causal.
+1. **Enrolment before/after test** — approved. `enrolled_at` confirmed on
+   every enrolled customer. Compare a customer order rate before and after
+   their own enrolment. Label it exactly: enrolment usually happens AT a
+   purchase, so the after window starts at demonstrated engagement and biases
+   toward improvement. Closer than cross-sectional, never causal.
+2. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
+   surface, then one real probe per untried endpoint, timeboxed, into the
+   README with the date. Include `/v2/orders` on LoyaltyLion.
 3. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
    surface, then one real probe per untried endpoint, timeboxed, into the
    README with the date. **Include `/v2/orders` on LoyaltyLion**: never used,

@@ -552,5 +552,41 @@ check("unknown key-shaped strings are caught too",
     orphans.length ? `NEVER CALLED: ${orphans.join(", ")}` : "all guards invoked");
 }
 
+
+// ---------------------------------------------------------------------------
+// Scripted edits must not be able to silently do nothing.
+//
+// lib/edit.mjs exists because String.replace returns the text UNCHANGED when
+// its target has been reformatted, git add -A then commits whatever else moved,
+// and the edit gets reported as landed when it was not. That happened twice
+// here. The check lives inside the function, as assertReadOnly does inside
+// gql(), so an edit cannot be performed without it.
+{
+  const { mustReplace, mustAppend, mustContain } = await import("../lib/edit.mjs");
+  const { writeFileSync, readFileSync, unlinkSync } = await import("node:fs");
+  const f = "/tmp/fyxx-edit-guard.txt";
+  const throws = (fn) => { try { fn(); return false; } catch { return true; } };
+
+  writeFileSync(f, "hello world");
+  check("missing target throws", throws(() => mustReplace(f, "ABSENT", "x")));
+
+  writeFileSync(f, "aa bb aa");
+  check("ambiguous target throws", throws(() => mustReplace(f, "aa", "z")));
+  check("ambiguous target is allowed with all:true",
+    !throws(() => mustReplace(f, "aa", "z", { all: true })));
+
+  writeFileSync(f, "alpha beta");
+  check("already-applied replacement throws", throws(() => mustReplace(f, "alpha", "beta")));
+
+  writeFileSync(f, "keep me");
+  check("duplicate append throws", throws(() => mustAppend(f, "keep me")));
+  check("missing content throws", throws(() => mustContain(f, "nowhere")));
+
+  writeFileSync(f, "one two three");
+  mustReplace(f, "two", "TWO");
+  check("happy path still edits", readFileSync(f, "utf8") === "one TWO three");
+  unlinkSync(f);
+}
+
 console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
 process.exit(failed ? 1 : 0);

@@ -30,14 +30,19 @@ async function klaviyoOrderIds() {
   let offset = 0;
   for (;;) {
     const res = await fetch(
-      `${url}/rest/v1/klaviyo_order_influence?select=order_id&date=gte.${FROM}&date=lte.${TO}&limit=10000&offset=${offset}`,
+      `${url}/rest/v1/klaviyo_order_influence?select=order_id&date=gte.${FROM}&date=lte.${TO}&limit=1000&offset=${offset}`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` } },
     );
     if (!res.ok) throw new Error(`supabase ${res.status}`);
     const rows = await res.json();
     for (const r of rows) ids.add(String(r.order_id));
-    if (rows.length < 10000) break;
-    offset += 10000;
+    // Advance by what the SERVER returned, not what we asked for. PostgREST
+    // silently caps a page at 1000 regardless of the limit requested, so
+    // "fewer rows than I asked for means the end" stops after one page and
+    // reports 98% of orders missing.
+    if (rows.length === 0) break;
+    offset += rows.length;
+    if (offset > 500000) throw new Error("pagination did not terminate");
   }
   return ids;
 }

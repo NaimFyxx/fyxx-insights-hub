@@ -35,6 +35,8 @@ export type SourceHealth = {
 
 /** Recent sync_log, enough to see the last success even after failures. */
 export async function fetchSyncLog(): Promise<SyncRow[]> {
+  // 1000 is PostgREST's hard page cap, so this is the most one call can give.
+  // Recent runs are all this view needs; it is not trying to be exhaustive.
   const { data, error } = await supabase
     .from("sync_log")
     .select("source,status,synced_at,range_start,range_end,rows_written,message")
@@ -76,15 +78,23 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
 
 /** Backfill progress for the two sources that run a day at a time. */
 export async function fetchBackfillProgress(source: string, from: string) {
-  const { data, error } = await supabase
-    .from("sync_log")
-    .select("range_start")
-    .eq("source", source)
-    .eq("status", "success")
-    .gte("range_start", from)
-    .limit(5000);
-  if (error) throw new Error(error.message);
-  const days = new Set((data ?? []).map((r) => r.range_start as string));
+  // Must page: PostgREST caps at 1000 per request whatever limit is asked for,
+  // and a 605-day backfill has more successful days than that — the progress
+  // bar would stall at 1000 and read as stuck.
+  const days = new Set<string>();
+  for (let start = 0; ; start += 1000) {
+    const { data, error } = await supabase
+      .from("sync_log")
+      .select("range_start")
+      .eq("source", source)
+      .eq("status", "success")
+      .gte("range_start", from)
+      .range(start, start + 999);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const r of rows) if (r.range_start) days.add(r.range_start as string);
+    if (rows.length < 1000) break;
+  }
   const total = Math.floor((Date.now() - new Date(`${from}T00:00:00Z`).getTime()) / 86400000) + 1;
   return { done: days.size, total, outstanding: Math.max(0, total - days.size) };
 }

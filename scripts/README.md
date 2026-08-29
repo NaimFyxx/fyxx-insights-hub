@@ -245,6 +245,7 @@ than genuine returns, the margin decline is partly an artefact too.
 > | Klaviyo `mobile_push` vs `push-notification` | A 400 blaming "channel", not the vocabulary |
 > | Klaviyo duplicate order events | A plausible count, 2% too high |
 > | **Shopify order search ignores `source_name`** | HTTP 200 and the full unfiltered set |
+> | **PostgREST caps every response at 1000 rows** | Exactly 1000 rows and no indication there are more |
 >
 > **The Shopify one is worth spelling out**, because it produces a confident
 > wrong answer about the very thing this project splits by. Querying
@@ -253,6 +254,16 @@ than genuine returns, the margin decline is partly an artefact too.
 > search (#163007, #162563, #162518) are all `shopify_draft_order`. Anyone
 > checking "what drove the website spike" that way gets Draft Orders back and
 > believes it is Website.
+>
+> **The PostgREST one bit our own code, twice.** `.limit(5000)` on a 2,364-row
+> table returns 1000 rows and no error — so the dashboard was showing 58% of
+> the data as though it were all of it, and a diagnostic reported 98% of orders
+> missing when the real figure was nothing like it. The limit you ask for is a
+> maximum, not a request; the server cap is lower and silent.
+>
+> Page with `.range(from, to)` and **advance by the number of rows the server
+> returned**, stopping only on a short page. "Fewer rows than I asked for means
+> the end" is exactly the wrong test, because that is true on the first page.
 >
 > **Use the stored `shopify_daily_sales` rows for channel questions**, not order
 > search. Those come from `Order.sourceName` read off each order individually,

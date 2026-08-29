@@ -87,33 +87,59 @@ const unwrap = <T,>(res: { data: T | null; error: { message: string } | null }):
 };
 
 /**
+ * PostgREST caps a response at 1000 rows regardless of the limit requested,
+ * and does not tell you it did. `.limit(5000)` on a 2,364-row table silently
+ * returned 1000 and the dashboard showed 58% of the data as though it were
+ * all of it.
+ *
+ * This pages by RANGE until a short page arrives, so the caller gets every row
+ * or an error — never a quiet subset. Advance by what the server returned, not
+ * by what was asked for.
+ */
+const PAGE = 1000;
+async function fetchAllRows<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const res = await build(from, from + PAGE - 1);
+    if (res.error) throw new Error(res.error.message);
+    const rows = res.data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+    if (out.length > 200_000) throw new Error("pagination did not terminate");
+  }
+  return out;
+}
+
+/**
  * One row per (date, source_name) since the channel split, so callers must
  * aggregate rather than assuming one row per day.
  */
-export const fetchDailySales = async (r: DateRange) =>
-  unwrap<DailySales[]>(
-    await supabase
+export const fetchDailySales = (r: DateRange) =>
+  fetchAllRows<DailySales>((from, to) =>
+    supabase
       .from("shopify_daily_sales")
       .select("date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values")
       .gte("date", r.from)
       .lte("date", r.to)
       .order("date")
-      .limit(5000),
+      .range(from, to),
   );
 
 /**
  * Klaviyo-attributed revenue, ORDER-date basis, whole account.
  * Deliberately not on shopify_daily_sales: it cannot be split by channel.
  */
-export const fetchAttributed = async (r: DateRange) =>
-  unwrap<AttributedDay[]>(
-    await supabase
+export const fetchAttributed = (r: DateRange) =>
+  fetchAllRows<AttributedDay>((from, to) =>
+    supabase
       .from("klaviyo_attributed_daily")
       .select("date,revenue_jod")
       .gte("date", r.from)
       .lte("date", r.to)
       .order("date")
-      .limit(2000),
+      .range(from, to),
   );
 
 export const fetchCampaigns = async (r: DateRange) =>
@@ -126,26 +152,26 @@ export const fetchCampaigns = async (r: DateRange) =>
       .order("sent_on"),
   );
 
-export const fetchFlows = async (r: DateRange) =>
-  unwrap<FlowRow[]>(
-    await supabase
+export const fetchFlows = (r: DateRange) =>
+  fetchAllRows<FlowRow>((from, to) =>
+    supabase
       .from("klaviyo_flows")
       .select("*")
       .gte("date", r.from)
       .lte("date", r.to)
       .order("date")
-      .limit(2000),
+      .range(from, to),
   );
 
-export const fetchPush = async (r: DateRange) =>
-  unwrap<PushRow[]>(
-    await supabase
+export const fetchPush = (r: DateRange) =>
+  fetchAllRows<PushRow>((from, to) =>
+    supabase
       .from("klaviyo_push")
       .select("*")
       .gte("sent_on", r.from)
       .lte("sent_on", r.to)
       .order("sent_on")
-      .limit(2000),
+      .range(from, to),
   );
 
 export const fetchSnapshots = async (r: DateRange) =>

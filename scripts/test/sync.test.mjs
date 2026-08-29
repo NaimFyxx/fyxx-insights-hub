@@ -405,6 +405,32 @@ group("channel captions");
   check("the online page has its own scope control instead", /setScope/.test(online));
 }
 
+/* ------------------------------------------------- postgrest paging -- */
+group("PostgREST 1000-row cap");
+{
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const q = readFileSync(fileURLToPath(new URL("../../src/lib/queries.ts", import.meta.url)), "utf8");
+  const h = readFileSync(fileURLToPath(new URL("../../src/lib/health.ts", import.meta.url)), "utf8");
+
+  // PostgREST silently returns at most 1000 rows however large a limit is
+  // requested. `.limit(5000)` on a 2,364-row table returned 1000 and the
+  // dashboard showed 58% of the data as though it were all of it.
+  // Strip comments first: the explanation of this very bug mentions
+  // ".limit(5000)" and would otherwise fail its own test.
+  const code = (q + h)
+    .split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join("\n");
+  const oversized = code.match(/\.limit\((?:[2-9]\d{3,}|1\d{4,})\)/g);
+  check("no query asks for more than 1000 via .limit()", !oversized,
+    oversized?.join(" ") ?? "none found");
+  check("range-based paging is used instead", /\.range\(/.test(q) && /\.range\(/.test(h));
+  check("paging advances until a SHORT page, not a fixed count",
+    /rows\.length < PAGE/.test(q) && /rows\.length < 1000/.test(h));
+  check("there is a runaway guard", /pagination did not terminate/.test(q));
+}
+
 /* ---------------------------------------------------------- redaction -- */
 group("secret redaction");
 process.env.KLAVIYO_API_KEY = "pk_thisisaverysecretklaviyokey123456";

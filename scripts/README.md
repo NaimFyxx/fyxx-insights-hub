@@ -833,8 +833,19 @@ orders — so both sides see the same shape and no conclusion depends on the gap
 The counts still differ and it is **not explained**. The sweep paginated to
 exhaustion so it is not truncation, and the two ran at different times.
 
-Re-check once `shopify_customers` exists and both sides are queryable. Do not
-quietly adopt either number in the meantime.
+**Re-checked 29 August 2026, both sides queryable. Still unexplained.**
+
+What the pass ruled out:
+- **Not a missed customer.** Zero customers appear in the full order history
+  who are absent from `shopify_customers`. The sweep is not skipping anyone.
+- **Not a counting error on our side.** 1,373 customers report
+  `orders_lifetime > 0` while having no non-cancelled order, which is exactly
+  the cancelled-only case and confirms `numberOfOrders` includes cancellations.
+  That fully explains our internal 14,030 vs 12,657.
+
+Both sides are internally consistent and disagree by 856 customers and 1,595
+orders. No conclusion rests on it — the distribution agrees on every band —
+so it is documented and left. Do not quietly adopt either number.
 
 ### Cancelled orders inflate Klaviyo attribution
 

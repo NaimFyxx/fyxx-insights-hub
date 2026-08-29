@@ -50,16 +50,29 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 | 2025 | 2,142 | 48.6% | 15.1% | 250.5 |
 | 2026 | 1,110 | 39.4% | 65.9% | 162.0 |
 
-**READ THIS BEFORE QUOTING THE DECLINE.** Repeat rate and revenue per customer
-fall monotonically, but the table is **confounded by age**: a 2019 customer has
-had seven years to repeat, a 2026 customer eight months. The decline is what
-you would see even if nothing had changed. Settling whether retention is
-genuinely worsening needs repeat-within-a-fixed-window, which needs
-`second_order_date` — not currently captured, one more sweep.
+**AGE-NORMALISED, and the decline is REAL.** `second_order_date` now captured,
+so cohorts are comparable at the same age:
 
-What IS safe to read: the 2019 and 2020 cohorts are still 16-31% active after
-five or six years and have produced 1,600-4,700 JOD each. Long-tenure customers
-are the business.
+| Cohort | Repeat within 90d | Within 365d |
+|---|---|---|
+| 2019 | 55.8% | 63.5% |
+| 2020 | 49.4% | 61.3% |
+| 2021 | 47.1% | 62.8% |
+| 2022 | 39.8% | 53.4% |
+| 2023 | 36.3% | 49.5% |
+| 2024 | 33.7% | 49.5% |
+| 2025 | 33.0% | 46.0% |
+| 2026 | 33.7% | — |
+
+Two findings the raw table could not give:
+- **90-day repeat fell from ~49% (2020-21) to ~33%**, a third of the rate lost.
+  Real, not elapsed time.
+- **It STOPPED falling.** 2024 33.7%, 2025 33.0%, 2026 33.7% — flat for three
+  cohorts. The deterioration was 2021 to 2024 and has since stabilised.
+
+The raw "ever repeated" column overstated it badly (86.5% to 39.4% reads as
+collapse). The truth is severe but different, and the flattening is the part
+worth acting on.
 
 **Revenue concentration** (house accounts excluded, computed revenue)
 - top 1% of buyers → **34.8%** of revenue

@@ -481,12 +481,25 @@ export async function fetchDailyReach(day, metricIds) {
 export const INFLUENCE_LOOKBACK_DAYS = 7;
 
 /** Shopify sourceName -> our sub_channel, for the Klaviyo side of the join. */
+/**
+ * Klaviyo's "Source Name" is a SECOND vocabulary for the same channels, and it
+ * has already drifted from Shopify's once. Klaviyo sent the bare app id
+ * `2653365` for Shopney orders, which none of the patterns below match, so
+ * 13,060 Mobile App orders worth 714,685 JOD accumulated silently in Unknown
+ * until it was the second largest line in the table.
+ *
+ * Unmapped values are counted and reported by the caller. Nothing is inferred
+ * here: a value that is not recognised stays Unknown and is named out loud.
+ */
+export const KLAVIYO_SOURCE_UNMAPPED = new Map();
+
 function subChannelFromKlaviyoSource(src) {
   const s = String(src ?? "");
   if (s === "web") return "Website";
   if (/appmaker|shopney|mobile app/i.test(s)) return "Mobile App";
   if (/odoo|point of sale|^pos$/i.test(s)) return "POS";
   if (/draft|iphone|android/i.test(s)) return "Draft Orders";
+  KLAVIYO_SOURCE_UNMAPPED.set(s, (KLAVIYO_SOURCE_UNMAPPED.get(s) ?? 0) + 1);
   return "Unknown";
 }
 
@@ -565,6 +578,15 @@ export async function fetchOrderInfluence({ from, to, conversionMetricId }) {
     });
   }
   log.ok(`influence: ${orders.length} orders, ${clicks.length} clicks, ${rows.filter((r) => r.hours_since_click !== null).length} with a prior click`);
+  if (KLAVIYO_SOURCE_UNMAPPED.size) {
+    const total = [...KLAVIYO_SOURCE_UNMAPPED.values()].reduce((a, b) => a + b, 0);
+    log.warn(`${KLAVIYO_SOURCE_UNMAPPED.size} UNRECOGNISED Klaviyo Source Name value(s) across ${total} order(s):`);
+    for (const [v, n] of [...KLAVIYO_SOURCE_UNMAPPED].sort((a, b) => b[1] - a[1])) {
+      log.warn(`    ${String(v || "(empty)").padEnd(32)} ${n} order(s)  -> stored as Unknown`);
+    }
+    log.warn("  These are a per-channel figure computed on a partial population.");
+    log.warn("  Add them to subChannelFromKlaviyoSource in lib/klaviyo.mjs.");
+  }
   return rows;
 }
 

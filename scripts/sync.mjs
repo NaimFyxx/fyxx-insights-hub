@@ -6,6 +6,7 @@
  *   node scripts/sync.mjs --from 2026-06-01 --to 2026-06-30
  *   node scripts/sync.mjs --from … --to … --dry-run    fetch and report, write nothing
  *   node scripts/sync.mjs --only shopify               one source
+ *   node scripts/sync.mjs --only customers             customer snapshot
  *   node scripts/sync.mjs --from … --to … --force      re-sync days already done
  *
  * Every write is an upsert on a unique index, so re-running any range is safe
@@ -351,6 +352,25 @@ async function syncReach({ from, to, dryRun, force, maxDays }) {
   return written;
 }
 
+async function syncCustomers({ dryRun }) {
+  const started = Date.now();
+  const rows = await shopify.fetchCustomers();
+  if (dryRun) {
+    log.info("Customers — would write:");
+    preview("shopify_customers", rows, ["shopify_customer_id", "orders_lifetime", "amount_spent_jod", "email_consent", "is_house_account"]);
+    return rows.length;
+  }
+  const w = await upsert("shopify_customers", rows, "shopify_customer_id", { dryRun });
+  await writeSyncLog(
+    { source: "shopify_customers", status: "success", rowsWritten: w,
+      message: `${w} customers; revenue_jod left unset until it can be computed from orders`,
+      durationMs: Date.now() - started },
+    { dryRun },
+  );
+  log.ok(`Customers: ${w} row(s)`);
+  return w;
+}
+
 async function syncShopify({ from, to, dryRun, attributed }) {
   const started = Date.now();
 
@@ -517,7 +537,7 @@ async function main() {
   if (from > to) throw new Error(`--from (${from}) is after --to (${to})`);
 
   const sources = args.only ?? ["klaviyo", "shopify", "loyaltylion"];
-  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin", "influence"].includes(s));
+  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin", "influence", "customers"].includes(s));
   if (unknown.length) throw new Error(`--only: unknown source(s) ${unknown.join(", ")}`);
 
   preflight(sources, args.dryRun);
@@ -586,6 +606,18 @@ async function main() {
       failures.push(["loyaltylion", err]);
       log.error(`LoyaltyLion failed — ${redact(err.message)}`);
       if (!args.dryRun) await writeSyncLog({ source: "ll_snapshots", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
+    }
+  }
+
+  // Customers are a whole-population snapshot, not a date range, so this is
+  // opt-in via --only rather than part of the nightly run.
+  if (sources.includes("customers")) {
+    try {
+      totalRows += await syncCustomers({ dryRun: args.dryRun });
+    } catch (err) {
+      failures.push(["customers", err]);
+      log.error(`Customers failed — ${redact(err.message)}`);
+      if (!args.dryRun) await writeSyncLog({ source: "shopify_customers", status: "error", message: redact(String(err.message)).slice(0, 500) }, { dryRun: false });
     }
   }
 

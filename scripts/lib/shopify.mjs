@@ -613,3 +613,78 @@ export async function pullOrderIdentity(from, to) {
   } while (cursor && pages < 4000);
   return out;
 }
+
+
+/* ------------------------------------------------------------------------
+ * CUSTOMERS
+ *
+ * House accounts are identified by TAG. Venue tables ("Table 4", "Terrace 7"),
+ * "By The Glass" and "Free of Charge Goods FOC" carry CUSTOMER_INTERNAL; staff
+ * carry "CUSTOMER TYPE_Employee". Filtering by order volume instead would drop
+ * a genuine customer with 708 orders and 79,840 JOD who carries no such tag,
+ * so volume is never used for this.
+ * --------------------------------------------------------------------- */
+export const isHouseAccount = (tags = []) =>
+  tags.some((t) => /^CUSTOMER_INTERNAL$/i.test(t) || /CUSTOMER TYPE_Employee/i.test(t));
+
+const CUSTOMERS_QUERY = `
+  query Customers($cursor: String) {
+    customers(first: 250, after: $cursor, sortKey: CREATED_AT) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id displayName createdAt numberOfOrders
+        amountSpent { amount }
+        email phone
+        emailMarketingConsent { marketingState }
+        smsMarketingConsent { marketingState }
+        tags
+      }
+    }
+  }`;
+
+/**
+ * Every customer, as rows for shopify_customers.
+ *
+ * Email and phone are reduced to booleans here and never stored. Counting the
+ * reachable ceiling needs presence, not addresses, and the list to act on is
+ * exported from Shopify where consent is authoritative.
+ *
+ * amount_spent_jod is carried through but is PROVISIONAL: measured against 808
+ * customers, it matched the non-cancelled sum 572 times, the all-orders sum 175
+ * times, and neither 61 times. revenue_jod is deliberately left unset until it
+ * can be computed from orders.
+ */
+export async function fetchCustomers() {
+  const rows = [];
+  let cursor = null, pages = 0, house = 0, houseOrders = 0, allOrders = 0;
+  do {
+    const data = await gql(CUSTOMERS_QUERY, { cursor }, `customers page ${pages + 1}`);
+    for (const c of data.customers.nodes ?? []) {
+      const tags = c.tags ?? [];
+      const isHouse = isHouseAccount(tags);
+      const orders = Number(c.numberOfOrders ?? 0);
+      allOrders += orders;
+      if (isHouse) { house++; houseOrders += orders; }
+      rows.push({
+        shopify_customer_id: String(c.id).split("/").pop(),
+        display_name: c.displayName ?? null,
+        customer_created_at: c.createdAt ? c.createdAt.slice(0, 10) : null,
+        orders_lifetime: orders,
+        amount_spent_jod: money3(Number(c.amountSpent?.amount ?? 0)),
+        has_email: Boolean(c.email),
+        has_phone: Boolean(c.phone),
+        email_consent: c.emailMarketingConsent?.marketingState ?? null,
+        sms_consent: c.smsMarketingConsent?.marketingState ?? null,
+        tags,
+        is_house_account: isHouse,
+      });
+    }
+    cursor = data.customers.pageInfo?.hasNextPage ? data.customers.pageInfo.endCursor : null;
+    pages++;
+    if (pages % 20 === 0) log.info(`  ${pages} pages, ${rows.length} customers`);
+  } while (cursor && pages < 1000);
+
+  log.ok(`${rows.length} customers across ${pages} pages`);
+  log.info(`  ${house} house/employee account(s) flagged, holding ${houseOrders} of ${allOrders} lifetime orders`);
+  return rows;
+}

@@ -150,7 +150,34 @@ total compares to nothing, push clicks do not exist in Klaviyo at all, loyalty
 tier blanks mean unmeasured rather than zero, and the 4% population gap
 (20,019 vs 19,163) is stated as open.
 
-**Order-level sweep — running.** `scripts/sync-orders.mjs`, populating
+**Order-level sweep — DONE.** 163,584 orders in `shopify_orders`, 655 pages,
+13m43s, **zero unmapped source names**. 9,757 cancelled and 26,209 with no
+customer, both stored rather than skipped.
+
+**It reconciles.** Against `shopify_daily_sales` for August, all 110 settled
+day-and-channel combinations match EXACTLY. The only five that disagree are
+2026-08-29 and 08-30 — the daily table is stale on the trailing days, which is
+the retroactive-change problem already queued as Next item 2, not a fault in
+either table. Order-level: 2,225 orders / 179,196 JOD; daily table: 2,188 /
+176,440.
+
+**The migration pattern is real, and bigger by revenue than by orders.** Of
+customers acquired ONLINE, excluding each customer's own first order:
+
+| Acquired via | Later orders | Still online | Phone/draft | In store | Later revenue OFFLINE |
+|---|---|---|---|---|---|
+| Mobile App | 55,749 | 77.9% | 13.7% | 8.5% | **34.7%** |
+| Website | 16,362 | 76.5% | 15.1% | 8.4% | **35.0%** |
+
+About a fifth of later ORDERS from online-acquired customers go offline, but
+**over a third of their later REVENUE** does — offline baskets from these
+customers are materially bigger. This is the effect Naim predicted: marketing
+acquired them, the sales channels get credited.
+
+**Coverage confirmed at 84.4% of revenue**, exactly as estimated before the
+sweep. Only 2 orders have a customer but no acquisition channel.
+
+**Superseded sweep note.** `scripts/sync-orders.mjs`, populating
 `shopify_orders`. Naim approved it mid-turn; it is a backend job that changes
 nothing on screen, so it ran alongside the filter work rather than ahead of it.
 At last check 80,000 of ~154,000 rows, **zero Unknown channels**, 10,550 with
@@ -321,6 +348,10 @@ the toggles are exhaustive and all four selected does equal the total.
 - Standing: attribution August 37,615 → 28,260 (share 22.0% → 16.5%); Mobile
   App influence 35.8% → 19.2%; Mobile App YoY +831.8% → +23.8%; birthday
   rewards 0 → 131 in August; pending points 8.34% → 1.59%.
+- **"10.7% of orders have no customer" was wrong — it is 16.4%.** Estimated
+  from comparing two aggregates before order-level data existed; measured at
+  25,197 of 153,827 live orders. The REVENUE half of that claim was right and
+  is unchanged at 9.5%, as is the 84.4% assignable ceiling built on it.
 - **30 August: no figure changed.** The filter audit read code and found no
   stored or displayed number to be wrong today. `DATA_TODAY` will make range
   figures wrong from 1 September, which is a fault not yet expressed.

@@ -12,6 +12,9 @@ import {
   byAcquisitionChannel,
   posCapture,
   POS_CAPTURE_COMPARABLE_UNTIL,
+  busyDays,
+  BUSY_DAY_ORDERS,
+  BUSY_DAY_IDENTIFICATION,
   mixVersusDecay,
   channelDecay,
 } from "@/lib/customers";
@@ -39,6 +42,7 @@ function CustomersPage() {
     queryKey: ["pos-capture-sales"],
     queryFn: () => fetchDailySales({ from: "2019-01-01", to: POS_CAPTURE_COMPARABLE_UNTIL }),
   });
+  const busy = useMemo(() => (sq.data ? busyDays(sq.data) : []), [sq.data]);
   const capture = useMemo(
     () => (q.data && sq.data ? posCapture(sq.data, q.data) : []),
     [q.data, sq.data],
@@ -305,14 +309,33 @@ function CustomersPage() {
             </div>
 
             <p className="mb-4 text-sm">
-              Capture did not drift, it fell in one half-year:{" "}
-              <b>12.0 per 100 orders in 2023 H1, 5.2 in H2, 3.2 by 2024</b>, and it has sat between
-              3.0 and 4.0 ever since. And it tracks basket size — <b>83.5%</b> of POS orders over
-              250 JOD carry a customer against <b>24.7%</b> under 10 JOD, rising steadily through
-              every band. Staff are asking on orders where it feels worth the time. That makes this
-              a question about where the threshold should sit, with a price attached, rather than a
-              compliance problem.
+              <b>Capture tracks basket size.</b> 83.5% of POS orders over 250 JOD carry a customer,
+              against 24.7% under 10 JOD, rising steadily through every band. Staff are asking on
+              orders where it feels worth the time — so this is a question about where that
+              threshold should sit, with a price attached, not a compliance problem.
             </p>
+
+            <div className="mb-4 border-l-2 border-border pl-4 text-sm">
+              <p>
+                <b>What happened in July 2023 is not known.</b> The date is precise and the shape is
+                specific: identification on ordinary trading days went from 79.3% (2023 Q2) to 55.8%
+                (Q3), and customer, email and phone all fell together while tags stayed at 100%,
+                retail location at 100%, and the app remained <code>pos | Point of Sale</code>. Only
+                the identity fields changed.
+              </p>
+              <p className="mt-2">
+                Two explanations are ruled out. Not the loyalty platform migration — Smile.io
+                enrolments were flat through the same window, 826 in 2023 H2 against 774 in H1. And
+                not one configuration change: identification oscillates afterwards (41.9%, 61.1%,
+                41.7%, 35.2%, 52.3%), and a connector or till change does not recover to 61% and
+                fall again.
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                The cause is most likely something in the shop — staffing, till procedure, how
+                customers are asked — which none of these systems record. Left as an honest unknown
+                with a precise date rather than resolved into a story the evidence does not carry.
+              </p>
+            </div>
 
             <Table>
               <thead>
@@ -353,6 +376,42 @@ function CustomersPage() {
         ) : (
           <EmptyState>No POS orders in range.</EmptyState>
         )}
+      </Panel>
+
+      <Panel title="Busy days cost identification, and there are more of them">
+        <p className="mb-4 text-sm">
+          On days with {BUSY_DAY_ORDERS} or more POS orders, identification runs{" "}
+          <b>{BUSY_DAY_IDENTIFICATION.busyDaysRange}</b> against{" "}
+          <b>{BUSY_DAY_IDENTIFICATION.normalDaysRange}</b> on ordinary days. Those days have gone
+          from none at all to a regular occurrence, so the blended rate falls even if nothing about
+          how staff work changes. This is actionable without knowing what happened in July 2023.
+        </p>
+        <Table>
+          <thead>
+            <tr>
+              <Th>Quarter</Th>
+              <Th align="right">Busy days</Th>
+              <Th align="right">Trading days</Th>
+              <Th align="right">Share of POS orders on busy days</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy.slice(-12).map((b) => (
+              <tr key={b.quarter}>
+                <Td>{b.quarter}</Td>
+                <Td align="right">{num(b.busy)}</Td>
+                <Td align="right">{num(b.days)}</Td>
+                <Td align="right">{b.busy ? pct(b.busyShareOfOrders) : "—"}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Frequency is computed from order counts and updates with the data. The identification
+          rates either side are a fixed measurement from {BUSY_DAY_IDENTIFICATION.measuredOn},
+          because per-order customer presence is not stored — only the daily total is. Re-measure
+          before quoting them as current.
+        </p>
       </Panel>
 
       <Panel title="Where customers are in their life cycle">

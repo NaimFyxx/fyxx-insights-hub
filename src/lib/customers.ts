@@ -315,3 +315,49 @@ export function posCapture(
       return { month, posOrders, newCustomers, per100: (newCustomers / posOrders) * 100 };
     });
 }
+
+/**
+ * How often the shop has a busy day, and what that costs in identification.
+ *
+ * A separate factor from the July 2023 drop, and actionable without knowing
+ * what caused it: when the shop is busy, capture falls. If busy days become
+ * more common, capture erodes on its own without anyone changing behaviour.
+ *
+ * Frequency is computed live from order counts. The identification RATES are
+ * fixed measurements from a sweep on 29 August 2026, because per-order customer
+ * presence is not stored — only the daily aggregate is.
+ */
+export const BUSY_DAY_ORDERS = 60;
+export const BUSY_DAY_IDENTIFICATION = {
+  measuredOn: "2026-08-29",
+  normalDaysRange: "35 to 79%",
+  busyDaysRange: "24 to 40%",
+};
+
+export function busyDays(sales: { date: string; sub_channel: string; orders: number }[]) {
+  const perDay = new Map<string, number>();
+  for (const s of sales) {
+    if (s.sub_channel !== "POS") continue;
+    perDay.set(s.date, (perDay.get(s.date) ?? 0) + s.orders);
+  }
+  const byQuarter = new Map<
+    string,
+    { days: number; busy: number; busyOrders: number; orders: number }
+  >();
+  for (const [date, n] of perDay) {
+    const q = `${date.slice(0, 4)} Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1}`;
+    const v = byQuarter.get(q) ?? { days: 0, busy: 0, busyOrders: 0, orders: 0 };
+    v.days++;
+    v.orders += n;
+    if (n >= BUSY_DAY_ORDERS) {
+      v.busy++;
+      v.busyOrders += n;
+    }
+    byQuarter.set(q, v);
+  }
+  return [...byQuarter.entries()].sort().map(([quarter, v]) => ({
+    quarter,
+    ...v,
+    busyShareOfOrders: v.orders ? (v.busyOrders / v.orders) * 100 : 0,
+  }));
+}

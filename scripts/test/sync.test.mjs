@@ -490,5 +490,35 @@ check("unknown key-shaped strings are caught too",
   check("no script hardcodes an app source id", offenders.length === 0, offenders.join("; "));
 }
 
+
+// ---------------------------------------------------------------------------
+// Klaviyo's channel vocabulary must defer to SOURCE_MAP.
+//
+// Klaviyo sends BOTH bare source ids (the same ones Shopify uses) and human
+// display names. Maintaining a second taxonomy for the ids is what let 13,060
+// Mobile App orders worth 714,685 JOD accumulate silently in Unknown.
+{
+  const { subChannelFromKlaviyoSource, KLAVIYO_SOURCE_UNMAPPED } = await import("../lib/klaviyo.mjs");
+  for (const [src, want] of [
+    ["2653365", "Mobile App"],                  // Shopney, bare id — the one that broke
+    ["5382175", "Mobile App"],                  // Appmaker, bare id
+    ["Appmaker.xyz - Mobile app", "Mobile App"],// Klaviyo display name
+    ["Shopney - Mobile App", "Mobile App"],
+    ["Odoo Connector", "POS"],
+    ["179433", "POS"],                          // Odoo, bare id
+    ["pos", "POS"],
+    ["shopify_draft_order", "Draft Orders"],
+    ["web", "Website"],
+    ["checkout_next", "Website"],
+  ]) {
+    check(`klaviyo source "${src}" maps to ${want}`, subChannelFromKlaviyoSource(src) === want,
+      subChannelFromKlaviyoSource(src));
+  }
+  KLAVIYO_SOURCE_UNMAPPED.clear();
+  check("a genuinely new source is Unknown AND recorded",
+    subChannelFromKlaviyoSource("brand_new_channel") === "Unknown" && KLAVIYO_SOURCE_UNMAPPED.has("brand_new_channel"));
+  KLAVIYO_SOURCE_UNMAPPED.clear();
+}
+
 console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
 process.exit(failed ? 1 : 0);

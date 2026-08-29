@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { need } from "./env.mjs";
 import { Limiter, httpJson, withRetry, log, money3, int, rate4 } from "./log.mjs";
+import { classifySource } from "./shopify.mjs";
 
 const BASE = "https://a.klaviyo.com/api";
 const REVISION = "2026-07-15";
@@ -493,12 +494,23 @@ export const INFLUENCE_LOOKBACK_DAYS = 7;
  */
 export const KLAVIYO_SOURCE_UNMAPPED = new Map();
 
-function subChannelFromKlaviyoSource(src) {
+export function subChannelFromKlaviyoSource(src) {
   const s = String(src ?? "");
-  if (s === "web") return "Website";
+
+  // SOURCE_MAP first. It is the ONE definition of the channel taxonomy, and
+  // Klaviyo sends the same bare source ids Shopify does for some orders —
+  // `2653365` for Shopney, which no name pattern below matches. Keeping a
+  // second vocabulary here is what let 13,060 Mobile App orders worth 714,685
+  // JOD accumulate in Unknown, and it is the second time that has happened.
+  const mapped = classifySource(s);
+  if (mapped.sub_channel !== "Unknown") return mapped.sub_channel;
+
+  // Klaviyo additionally sends human display names that Shopify never uses,
+  // so these patterns handle that vocabulary and nothing else.
   if (/appmaker|shopney|mobile app/i.test(s)) return "Mobile App";
-  if (/odoo|point of sale|^pos$/i.test(s)) return "POS";
+  if (/odoo|point of sale/i.test(s)) return "POS";
   if (/draft|iphone|android/i.test(s)) return "Draft Orders";
+
   KLAVIYO_SOURCE_UNMAPPED.set(s, (KLAVIYO_SOURCE_UNMAPPED.get(s) ?? 0) + 1);
   return "Unknown";
 }

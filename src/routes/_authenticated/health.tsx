@@ -2,7 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { useDateRange } from "@/context/date-range-context";
-import { fetchSyncLog, summarise, fetchBackfillProgress, type SourceHealth } from "@/lib/health";
+import {
+  fetchSyncLog,
+  summarise,
+  fetchBackfillProgress,
+  fetchSeedResidue,
+  type SourceHealth,
+} from "@/lib/health";
 import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { num } from "@/lib/format";
@@ -30,9 +36,11 @@ const STATE_LABEL: Record<SourceHealth["state"], string> = {
 
 function StateBadge({ state }: { state: SourceHealth["state"] }) {
   const cls =
-    state === "ok" ? "text-foreground"
-    : state === "stale" || state === "paused" ? "text-muted-foreground"
-    : "text-destructive font-medium";
+    state === "ok"
+      ? "text-foreground"
+      : state === "stale" || state === "paused"
+        ? "text-muted-foreground"
+        : "text-destructive font-medium";
   return <span className={cls}>{STATE_LABEL[state]}</span>;
 }
 
@@ -43,11 +51,12 @@ function HealthPage() {
     queryKey: ["health", refreshKey],
     queryFn: async () => {
       const rows = await fetchSyncLog();
-      const [flows, reach] = await Promise.all([
+      const [flows, reach, seed] = await Promise.all([
         fetchBackfillProgress("klaviyo_flows", BACKFILL_FROM),
         fetchBackfillProgress("klaviyo_reach", BACKFILL_FROM),
+        fetchSeedResidue(),
       ]);
-      return { health: summarise(rows), rows, flows, reach };
+      return { health: summarise(rows), rows, flows, reach, seed };
     },
     refetchInterval: 60_000,
   });
@@ -83,11 +92,29 @@ function HealthPage() {
         </p>
       )}
 
+      {/* Placeholder data reads as real, so this is louder than a stale source.
+          The reports probe matters most: that row is invented NARRATIVE text,
+          and the report route renders it as the operator's own prose. */}
+      {data.seed.length ? (
+        <div className="border border-destructive bg-destructive/10 px-4 py-3 text-xs">
+          <p className="font-semibold">
+            Placeholder seed data is present in {data.seed.length} table
+            {data.seed.length === 1 ? "" : "s"}.
+          </p>
+          <p className="mt-1">{data.seed.map((s) => `${s.label} (${num(s.rows)})`).join(", ")}</p>
+          <p className="mt-1 text-muted-foreground">
+            Lovable&apos;s seed migration has re-applied. These rows are invented and will be read
+            as real. Remove them before trusting any figure, and re-check that the seed block in
+            supabase/migrations/20260827105917 is still commented out.
+          </p>
+        </div>
+      ) : null}
+
       {paused.length ? (
         <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
           {paused.map((p) => p.label).join(", ")} stopped on Klaviyo&apos;s daily quota. That is
-          expected during a backfill — work already done is saved and the next nightly run continues.
-          Nothing to fix.
+          expected during a backfill — work already done is saved and the next nightly run
+          continues. Nothing to fix.
         </p>
       ) : null}
 
@@ -107,7 +134,9 @@ function HealthPage() {
             {data.health.map((h) => (
               <tr key={h.key}>
                 <Td>{h.label}</Td>
-                <Td><StateBadge state={h.state} /></Td>
+                <Td>
+                  <StateBadge state={h.state} />
+                </Td>
                 {/* "Data through" is the furthest date covered, which is not
                     the same as when the job last ran — a job can run nightly
                     and still be months behind on a backfill. */}
@@ -159,8 +188,12 @@ function HealthPage() {
         <Table>
           <thead>
             <tr>
-              <Th>When</Th><Th>Source</Th><Th>Status</Th><Th>Range</Th>
-              <Th align="right">Rows</Th><Th>Message</Th>
+              <Th>When</Th>
+              <Th>Source</Th>
+              <Th>Status</Th>
+              <Th>Range</Th>
+              <Th align="right">Rows</Th>
+              <Th>Message</Th>
             </tr>
           </thead>
           <tbody>
@@ -173,9 +206,17 @@ function HealthPage() {
                     {r.status}
                   </span>
                 </Td>
-                <Td>{r.range_start ? `${r.range_start}${r.range_end && r.range_end !== r.range_start ? ` … ${r.range_end}` : ""}` : "—"}</Td>
+                <Td>
+                  {r.range_start
+                    ? `${r.range_start}${r.range_end && r.range_end !== r.range_start ? ` … ${r.range_end}` : ""}`
+                    : "—"}
+                </Td>
                 <Td align="right">{num(r.rows_written)}</Td>
-                <Td><span className="text-xs text-muted-foreground">{r.message?.slice(0, 60) ?? "—"}</span></Td>
+                <Td>
+                  <span className="text-xs text-muted-foreground">
+                    {r.message?.slice(0, 60) ?? "—"}
+                  </span>
+                </Td>
               </tr>
             ))}
           </tbody>

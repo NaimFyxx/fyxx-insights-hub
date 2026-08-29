@@ -608,6 +608,71 @@ by frontend code — the service-role key bypasses row-level security entirely.
 
 ## Known assumptions worth checking on the first real run
 
+### Placeholder data that reads as real
+
+Lovable's seed migration `20260827105917` inserted invented rows into **eight**
+tables: `shopify_daily_sales`, `ll_snapshots`, `klaviyo_campaigns`,
+`klaviyo_flows`, `klaviyo_push`, `activations`, `reports` and `sync_log`. Its
+seed block is commented out now, and the `'unknown'`/`'Unknown'` column
+defaults it relied on have been dropped from `shopify_daily_sales`, so an
+insert in that old shape fails loudly instead of arriving as a valid-looking
+Unknown channel row.
+
+**The `reports` row is the one to remember.** Every other seeded row is a
+number, and a wrong number can be caught by reconciling against the source.
+That row was *narrative*: a fluent, plausible paragraph about Champagne Week
+and a humidor drop, written into the table the `/report` route reads for
+`month_highlight`. Had it survived, selecting July 2026 would have rendered
+invented prose as the operator's own writing, above real figures, on the page
+that goes to Zeid. Nothing in the pipeline would have flagged it, because
+nothing was numerically wrong.
+
+The general rule this project keeps re-learning: **anything that writes
+narrative text to a table the report reads is higher risk than anything writing
+numbers.** A wrong number is falsifiable against its source. Wrong prose is
+not, and it inherits the author's credibility on the way out.
+
+The sync health page probes all eight tables for the seed signatures on every
+load (`SEED_PROBES` in `src/lib/health.ts`) and shows a red banner if any
+return rows. This exists because commenting out the seed block changed that
+migration file's checksum, and it is not known whether Lovable's tooling
+re-applies migrations by checksum or by version. If it ever re-seeds, the
+dashboard says so rather than it being discovered inside a total.
+
+### Cancel-and-re-place moves revenue between channels, but not much
+
+Since the Odoo changeover, an app or website order needing an edit is cancelled
+and re-placed the same day, sometimes as a draft order. That moves revenue out
+of the originating channel and into Draft Orders, which is reclassification
+rather than a real channel shift.
+
+Measured over 2025-01-01 to 2026-08-31 with
+`scripts/diagnose/replacements.mjs`, matching each cancelled `web` or
+`5382175` order against a same-day, same-customer non-cancelled order and
+grading by value closeness:
+
+- **The practice is real and it does start at the changeover.** The confident
+  match rate runs 0-14% through 2025, then 9% in March 2026, **35% in April**
+  and 29% in May, settling around 15%. Replacements landing in Draft Orders go
+  from 0-4 a month to 14, 20 and 11.
+- **It is immaterial to every trend on the dashboard.** Year on year, Website
+  is -43.0% reported against **-42.9% adjusted** — a tenth of a percentage
+  point. The peak single month is Mobile App in April 2026 at 2,139 JOD on
+  55,239, under 4%; Website never exceeds 1.2%.
+- Only **172 of 1,462** app/web cancellations have a confident same-day
+  replacement (10,432 JOD over 20 months). 1,169 have no same-day order from
+  that customer at all, so most cancellations are simply cancellations.
+- Confidence: the base rate of a same-day repeat among *non-cancelled* app/web
+  orders is **5.9%**, so a same-day match alone is weak evidence. The value
+  bands carry the argument, supported by 97 of 114 exact matches having the
+  replacement created after the original. 121 matches are ambiguous and are
+  reported separately rather than folded in.
+
+**Conclusion: the ~40% Website year-on-year decline is real, not an artefact of
+reclassification.** No dashboard caveat was added, because a correction of
+0.1pp invites more misreading than it prevents. Re-run the script rather than
+re-deriving this if it is questioned.
+
 ### LoyaltyLion field paths, established from live data
 
 - The tier name is at **`loyalty_tier_membership.loyalty_tier.name`**. It is

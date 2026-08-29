@@ -739,6 +739,42 @@ population produced 45,000 rows before it was noticed.
 `res.cursor?.next`. The fault was in ad-hoc scripts. Any sample size quoted
 from one of those before 29 August 2026 is inflated and contains duplicates.
 
+### POS customer capture collapsed in late 2023 and has not recovered
+
+New customers captured per 100 POS orders, by half-year:
+
+| | | | |
+|---|---|---|---|
+| 2022 H2 | 13.2 | 2024 H2 | 3.2 |
+| 2023 H1 | 12.0 | 2025 H1 | 3.5 |
+| **2023 H2** | **5.2** | 2025 H2 | 4.0 |
+| 2024 H1 | 3.2 | 2026 H1 | 3.0 |
+
+It did not drift. It fell in the second half of 2023 and has sat between 3.0
+and 4.0 for three years since. Whatever changed, changed then.
+
+**Capture tracks basket size**, which makes it a triage habit rather than an
+absence. Share of POS orders carrying a customer, 2025-01 to 2026-02:
+
+| Order value | Identified |
+|---|---|
+| 0-10 JOD | 24.7% |
+| 10-25 | 41.8% |
+| 25-50 | 56.7% |
+| 50-100 | 71.5% |
+| 100-250 | 77.7% |
+| 250+ | **83.5%** |
+
+Day of week barely matters: 53.4% (Saturday) to 66.0% (Monday). Staff ask on
+large baskets and skip on small ones. Median identified order is 52 JOD against
+30 JOD anonymous, and 6,554 anonymous orders worth 279,461 JOD passed through
+in fourteen months with nobody attached to them.
+
+**The metric stops at 27 February 2026.** From that date only POS orders with
+an identified customer sync at all, so the denominator becomes "identified POS
+orders" and the ratio stops meaning what it meant. 2026 H2 reads 12.1 on the
+old axis, which is an artefact and not a recovery.
+
 ### Enrolment is the single largest retention difference measured
 
 Repeat within 90 days, by acquisition channel, split on LoyaltyLion enrolment:

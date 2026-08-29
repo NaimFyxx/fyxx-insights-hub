@@ -4,11 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { Input } from "@/components/ui/input";
+import { fetchDailySales } from "@/lib/queries";
 import {
   fetchCustomers,
   summarise,
   cohorts,
   byAcquisitionChannel,
+  posCapture,
+  POS_CAPTURE_COMPARABLE_UNTIL,
   mixVersusDecay,
   channelDecay,
 } from "@/lib/customers";
@@ -31,6 +34,15 @@ function CustomersPage() {
   const today = ammanToday();
 
   const q = useQuery({ queryKey: ["customers"], queryFn: fetchCustomers });
+  // POS capture needs order counts as the denominator, so the whole history.
+  const sq = useQuery({
+    queryKey: ["pos-capture-sales"],
+    queryFn: () => fetchDailySales({ from: "2019-01-01", to: POS_CAPTURE_COMPARABLE_UNTIL }),
+  });
+  const capture = useMemo(
+    () => (q.data && sq.data ? posCapture(sq.data, q.data) : []),
+    [q.data, sq.data],
+  );
   const s = useMemo(
     () => (q.data ? summarise(q.data, today, windowDays) : null),
     [q.data, today, windowDays],
@@ -266,6 +278,65 @@ function CustomersPage() {
             which channel is losing ground and which is holding.
           </p>
         </div>
+      </Panel>
+
+      <Panel title="New customers captured per 100 POS orders">
+        {/* A staff-behaviour metric. Tracked monthly so a conversation with the
+            shop team can be measured rather than asked about. */}
+        {capture.length ? (
+          <>
+            <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
+              <StatTile
+                label="Latest comparable month"
+                value={capture.at(-1)!.per100.toFixed(1)}
+                note={`${num(capture.at(-1)!.newCustomers)} new from ${num(capture.at(-1)!.posOrders)} POS orders`}
+              />
+              <StatTile
+                label="Best month on record"
+                value={Math.max(...capture.map((c) => c.per100)).toFixed(1)}
+                note={capture.reduce((a, c) => (c.per100 > a.per100 ? c : a)).month}
+              />
+              <StatTile
+                label="Anonymous POS orders"
+                value={pct(
+                  100 -
+                    (capture.at(-1)!.per100 /
+                      Math.max(0.1, Math.max(...capture.map((c) => c.per100)))) *
+                      100,
+                )}
+                note="of the best month's capture rate, lost"
+              />
+            </div>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Month</Th>
+                  <Th align="right">POS orders</Th>
+                  <Th align="right">New customers</Th>
+                  <Th align="right">Per 100 orders</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {capture.slice(-18).map((c) => (
+                  <tr key={c.month}>
+                    <Td>{c.month}</Td>
+                    <Td align="right">{num(c.posOrders)}</Td>
+                    <Td align="right">{num(c.newCustomers)}</Td>
+                    <Td align="right">{c.per100.toFixed(1)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        ) : (
+          <EmptyState>No POS orders in range.</EmptyState>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          Stops at 27 February 2026. From that date only POS orders with an identified customer sync
+          at all, so the denominator changes meaning and later months would imply a recovery that is
+          an artefact. Capture tracks basket size: 83.5% of orders over 250 JOD carry a customer
+          against 24.7% of orders under 10, so this is a triage habit rather than an absence.
+        </p>
       </Panel>
 
       <Panel title="Where customers are in their life cycle">

@@ -267,3 +267,51 @@ export function channelDecay(all: CustomerRow[], today: string, windowDays = 90)
     };
   });
 }
+
+/**
+ * New customers captured per 100 POS orders, monthly.
+ *
+ * A staff-behaviour metric, not a data one. It collapsed in the second half of
+ * 2023 — 12.0 per 100 orders in 2023 H1, 5.2 in H2, 3.2 by 2024 — and has sat
+ * between 3.0 and 4.0 ever since. Capture tracks basket size: 83.5% of orders
+ * over 250 JOD carry a customer against 24.7% of orders under 10.
+ *
+ * Stops at the POS definition change. From 27 February 2026 only orders with an
+ * identified customer sync at all, so the denominator becomes "identified POS
+ * orders" and the ratio stops meaning what it meant before. Showing the later
+ * months on the same axis would imply a recovery that is an artefact.
+ */
+export const POS_CAPTURE_COMPARABLE_UNTIL = "2026-02-27";
+
+export type CaptureMonth = {
+  month: string;
+  posOrders: number;
+  newCustomers: number;
+  per100: number;
+};
+
+export function posCapture(
+  sales: { date: string; sub_channel: string; orders: number }[],
+  customers: CustomerRow[],
+): CaptureMonth[] {
+  const orders = new Map<string, number>();
+  for (const s of sales) {
+    if (s.sub_channel !== "POS" || s.date >= POS_CAPTURE_COMPARABLE_UNTIL) continue;
+    const m = s.date.slice(0, 7);
+    orders.set(m, (orders.get(m) ?? 0) + s.orders);
+  }
+  const acquired = new Map<string, number>();
+  for (const c of customers) {
+    if (c.is_house_account || c.first_order_channel !== "POS" || !c.first_order_date) continue;
+    if (c.first_order_date >= POS_CAPTURE_COMPARABLE_UNTIL) continue;
+    const m = c.first_order_date.slice(0, 7);
+    acquired.set(m, (acquired.get(m) ?? 0) + 1);
+  }
+  return [...orders.entries()]
+    .sort()
+    .filter(([, n]) => n >= 100) // below this a handful of orders swings the rate
+    .map(([month, posOrders]) => {
+      const newCustomers = acquired.get(month) ?? 0;
+      return { month, posOrders, newCustomers, per100: (newCustomers / posOrders) * 100 };
+    });
+}

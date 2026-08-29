@@ -639,6 +639,27 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### UNRESOLVED: the customer population differs by about 4%
+
+A full customer sweep (`scripts/diagnose/customers.mjs`, 77 pages to
+exhaustion) and a ShopifyQL export grouped by lifetime order count disagree:
+
+| | Sweep | Export | Delta |
+|---|---|---|---|
+| customer records | 19,163 | 20,019 | -856 |
+| never ordered | 5,133 | 5,547 | -414 |
+| at least one order | 14,030 | 14,472 | -442 |
+| implied lifetime orders | 137,326 | 138,923 | -1,597 |
+
+The **distribution agrees closely** — 1 order 42.5% vs 43.4%, 2-3 22.5% vs
+22.3%, 4-11 19.5% vs 19.1%, 12+ 15.5% vs 15.2% driving 77.5% vs 77.3% of
+orders — so both sides see the same shape and no conclusion depends on the gap.
+The counts still differ and it is **not explained**. The sweep paginated to
+exhaustion so it is not truncation, and the two ran at different times.
+
+Re-check once `shopify_customers` exists and both sides are queryable. Do not
+quietly adopt either number in the meantime.
+
 ### Cancelled orders inflate Klaviyo attribution
 
 Klaviyo's `Placed Order` event is never retracted when an order is cancelled.

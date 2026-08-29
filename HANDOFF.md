@@ -22,6 +22,18 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 ## Resolved
 
+- **Identity table built.** 18,929 rows. 18,864 carry a LoyaltyLion id (99.7%),
+  6,649 a Klaviyo profile (35.1%), 6,584 both.
+  - **64 conflicts** — Klaviyo profiles whose orders belong to several Shopify
+    customers, over 20 months. The worst is one profile spanning 5 customers
+    and 171 orders. Tracked over time in `identity_snapshots` so the RATE is
+    visible, which is the maintenance signal.
+  - **9,892 Klaviyo contacts have no order since 2025-01-01** — 57% of the
+    17,358 contact base. Note the window: a profile that bought in 2023 and not
+    since counts here, so it is "no recent order", NOT "never bought".
+  - Klaviyo linkage is 35.1% because the edge runs through orders and only
+    reaches people who have bought. That is the design, not a shortfall.
+
 - **Push clicks: closed question.** Report no longer says "under
   investigation". Klaviyo emits opens and bounces for push and no click event,
   so opens are the only push signal available to anyone.
@@ -237,7 +249,7 @@ programme, tiers and point values.
 
 ## Next
 
-1. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
+1. ~~Identity table~~ DONE. Next: **retroactive-change fixes** — `customer_identity` joining Shopify, Klaviyo and
    LoyaltyLion ids with `matched_how`, plus the Klaviyo profiles mapping to
    several Shopify customers as a merge-detection list. **DDL at the bottom of
    this file, awaiting approval.**

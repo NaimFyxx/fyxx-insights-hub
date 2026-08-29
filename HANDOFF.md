@@ -101,15 +101,27 @@ anonymous orders worth 279,461 JOD in fourteen months. Staff ARE asking, just
 not on small baskets — which is a different fix, and a policy question with a
 price rather than a compliance failure.
 
-**Smile.io rules the platform migration OUT as the cause of the cliff.** Smile
-enrolments by half-year: 1,410 (2022 H2), 774, **826 (2023 H2)**, 738, 857, 723
-(2025 H1) — flat straight through the window where POS capture fell 12.0 to 5.2
-to 3.2. Staff kept enrolling people at a steady rate while they stopped
-attaching customers to POS orders in Shopify. The two are **decoupled**, which
-points at how POS orders reach Shopify — the Odoo connector or till config —
-rather than at staff engagement. Suggestive not conclusive: a Smile enrolment
-could come through a web widget rather than the till. **A connector or till
-change in H2 2023 is the thing to look for.**
+**Dated to Q2→Q3 2023, on ordinary days — but it is NOT a single switch.**
+Identification on days under 60 orders: 70.9% (2023 Q1), **79.3% (Q2)**,
+**55.8% (Q3)**, 41.9%, 61.1%, 41.7%, 35.2%, 52.3% (2024 Q4).
+
+- The drop is on ORDINARY days, not an artefact of busy ones.
+- It is **identity capture specifically**: customer, email and phone all fell
+  together in July 2023 while tags stayed 100%, retail location 100%, and the
+  app remained `pos | Point of Sale`. Nothing else about the order changed.
+- **It oscillates afterwards** (41.9 → 61.1 → 41.7 → 35.2 → 52.3), which a
+  connector or till change would not do. A permanent system change does not
+  recover to 61% and fall again.
+- High-volume days are a SECOND factor: none in 2023 Q1, sixteen by 2024 Q3,
+  identifying at 24-40% against 35-79% on normal days.
+
+**CORRECTION to my previous handoff.** It said this "points at how POS orders
+reach Shopify rather than at staff engagement" and called it a systems problem.
+That was based on the Smile evidence alone and the oscillation contradicts it.
+Smile does rule out the loyalty platform migration — enrolments were flat, 826
+in 2023 H2 against 774 in H1 — but ruling that out is not the same as
+establishing a systems cause. **Do not take a systems framing to the shop team
+on this evidence.**
 
 The metric stops at 27 Feb 2026: after that only identified POS orders sync, so
 the denominator changes meaning and 2026 H2 reads 12.1, an artefact.

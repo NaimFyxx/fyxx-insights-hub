@@ -803,7 +803,40 @@ large baskets and skip on small ones. Median identified order is 52 JOD against
 30 JOD anonymous, and 6,554 anonymous orders worth 279,461 JOD passed through
 in fourteen months with nobody attached to them.
 
-**Smile.io rules the platform migration OUT as the cause.** Smile enrolments
+**Dating the drop: Q2→Q3 2023, on ordinary days, but NOT a single switch.**
+
+Identification rate on POS orders, split by whether the day was busy:
+
+| Quarter | Normal days (<60 orders) | High-volume days |
+|---|---|---|
+| 2023 Q1 | 70.9% | none |
+| 2023 Q2 | **79.3%** | 1 day, 31.5% |
+| 2023 Q3 | **55.8%** | 5 days, 24.4% |
+| 2023 Q4 | 41.9% | 7 days, 35.2% |
+| 2024 Q1 | 61.1% | 2 days, 40.6% |
+| 2024 Q2 | 41.7% | 13 days, 39.4% |
+| 2024 Q3 | 35.2% | 16 days, 29.1% |
+| 2024 Q4 | 52.3% | 13 days, 53.6% |
+
+Three things this establishes:
+
+- **The drop is on ordinary days**, not an artefact of busy ones. 79.3% to
+  55.8% on days under 60 orders.
+- **It is identity capture specifically.** Customer, email and phone all fell
+  together in July 2023 (77.4% to 53.7%, 65.3% to 43.9%, 63.3% to 42.9%) while
+  tags stayed at 100%, retail location at 100%, and the app remained
+  `pos | Point of Sale` throughout. Nothing else about the order changed.
+- **It is NOT one switch being thrown.** Identification oscillates afterwards —
+  41.9%, 61.1%, 41.7%, 35.2%, 52.3% — which a connector or till change would
+  not do. A permanent system change does not recover to 61% and fall again.
+
+High-volume days are a second, separate factor: none in 2023 Q1, sixteen by
+2024 Q3, and they identify at 24-40% against 35-79% on normal days.
+
+**Do not describe this as a systems problem.** An earlier draft did, on the
+strength of the Smile evidence alone. The oscillation argues against it.
+
+**Smile.io rules the platform migration out as the cause.** Smile enrolments
 by half-year: 1,410 (2022 H2), 774, **826 (2023 H2)**, 738, 857, 723 (2025 H1).
 Flat right through the window where POS capture fell 12.0 to 5.2 to 3.2. Staff
 kept enrolling people in the loyalty programme at a steady rate while they

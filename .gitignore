@@ -36,3 +36,6 @@ dist-ssr
 .env.local
 .env.*.local
 *.csv
+
+# Generated verification packs — regenerate with scripts/verify-pack.mjs
+verification-pack-*.xlsx

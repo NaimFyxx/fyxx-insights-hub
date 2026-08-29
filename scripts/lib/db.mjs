@@ -139,3 +139,33 @@ export async function previousSnapshot(before) {
     return null;
   }
 }
+
+/**
+ * Read every row matching a PostgREST query, paging past the 1000-row cap.
+ *
+ * The cap is silent: ask for 5000 rows of a 2364-row table and you get 1000
+ * with no indication anything was withheld. The frontend already learned this
+ * the hard way (see fetchAllRows in src/lib/queries.ts); this is the same
+ * guarantee for scripts. Advance by what the server returned, not by what was
+ * requested.
+ */
+export async function selectAll(table, query = "") {
+  const { url, key } = config();
+  const PAGE = 1000;
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const sep = query ? "&" : "";
+    const res = await withRetry(`select ${table}`, () =>
+      httpJson(
+        `${url}/rest/v1/${table}?${query}${sep}limit=${PAGE}&offset=${from}`,
+        { headers: authHeaders(key) },
+        `select ${table}`,
+      ),
+    );
+    const rows = Array.isArray(res) ? res : [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+    if (out.length > 500_000) throw new Error(`selectAll(${table}) did not terminate`);
+  }
+  return out;
+}

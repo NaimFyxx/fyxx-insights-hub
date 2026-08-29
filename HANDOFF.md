@@ -22,6 +22,9 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 ## Resolved
 
+- **Enrolment before/after test done** — result inverts the cross-sectional
+  finding. See the enrolment section above.
+
 - **Customer section COMPLETE.** The cohort panel now states that the flat
   section is two opposing forces cancelling, not a recovery. Enrolment is a
   first-class retention dimension with its correlational caveat inline.
@@ -85,10 +88,18 @@ acquisition channel:
 | POS | 40.7% | 24.4% | +16.3 |
 | Draft Orders | 46.0% | 31.6% | +14.4 |
 
-An enrolled POS customer retains close to the app average. **Correlational with
-severe selection bias** — loyal customers are likelier to enrol. It shows where
-to look, not what to conclude. If this reaches Zeid it must read "enrolled
-customers retain far better", never "enrolling customers makes them retain".
+**TESTED WITHIN-CUSTOMER, AND THE GAP DOES NOT SURVIVE.** Comparing 4,115
+customers against themselves either side of their own enrolment — 180 days each
+way, enrolment-day order excluded — orders fell from 1.92 to 1.42 per customer,
+**-25.9%**. The 416 who enrolled on a day they were already buying show +21.4%,
+which is the bias made visible: their "after" window opens on a purchase.
+
+So the cross-sectional gap above is almost certainly **selection, not effect** —
+engaged customers enrol, rather than enrolment making customers engaged. Likely
+regression to the mean: people enrol during an active spell and revert.
+**Do not build a case for pushing enrolment at the till on these numbers.**
+Neither test is causal in either direction; enrolment is chosen, never assigned.
+Limitation: a single 180-day window. 90 and 365 would test robustness.
 
 **Why POS fell.** Not identification: an unidentified POS order has no customer
 record, so the 23.1% is measured on identified customers only. Not Odoo: the
@@ -200,24 +211,19 @@ programme, tiers and point values.
 
 ## Next
 
-1. **Enrolment before/after test** — approved. `enrolled_at` confirmed on
-   every enrolled customer. Compare a customer order rate before and after
-   their own enrolment. Label it exactly: enrolment usually happens AT a
-   purchase, so the after window starts at demonstrated engagement and biases
-   toward improvement. Closer than cross-sectional, never causal.
-2. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
+1. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
    surface, then one real probe per untried endpoint, timeboxed, into the
    README with the date. **Include `/v2/orders` on LoyaltyLion**: never used,
    carries `cancellation_status`, `total_refunded` and
    `metadata.shopify_source_name`, so it is a third independent view of every
    order and would let Shopify be cross-checked against something other than
    itself.
-3. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
+2. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
    LoyaltyLion ids, with `matched_how`; surface the 20 Klaviyo profiles that
    map to several Shopify customers as a merge-detection list
-4. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
+3. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
    repair, and the Klaviyo trailing-90-day campaign re-fetch (one API call)
-5. **Critical review of the whole dashboard and report** — once the queue is
+4. **Critical review of the whole dashboard and report** — once the queue is
    empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
    what exists because it was built rather than because it would be used.
 

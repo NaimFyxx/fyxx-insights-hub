@@ -22,6 +22,12 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 ## Resolved
 
+- **Push clicks: closed question.** Report no longer says "under
+  investigation". Klaviyo emits opens and bounces for push and no click event,
+  so opens are the only push signal available to anyone.
+- **Webhooks and bulk operations decided**, both recorded in the README with
+  the reasoning rather than just the outcome.
+
 - **API capability sweep done**, recorded in the README with the date. Three
   findings that change what is next:
   - **Push clicks do not exist.** Klaviyo has `Opened Push` and `Bounced Push`
@@ -231,21 +237,19 @@ programme, tiers and point values.
 
 ## Next
 
-1. **Report wording: push clicks.** One line. "Under investigation" is wrong —
-   Klaviyo does not emit a push-click metric at all.
-2. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
-   LoyaltyLion ids, with `matched_how`; surface the 20 Klaviyo profiles that
-   map to several Shopify customers as a merge-detection list.
-3. **Retroactive-change fixes, still unbuilt**: the `updated_at`-driven Shopify
-   repair and the Klaviyo trailing-90-day campaign re-fetch (one API call).
-   **Reconsider first**: Shopify `ORDERS_CANCELLED` webhooks would do this
-   properly rather than approximately, but need something listening. Decide
-   between polling now and a Supabase Edge Function.
-4. **`/v2/orders` on LoyaltyLion** — still untapped. A third independent view
-   of every order carrying `cancellation_status`, `total_refunded` and
-   `metadata.shopify_source_name`, so Shopify can be cross-checked against
-   something other than itself.
-5. **Critical review of the whole dashboard and report** — once the queue is
+1. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
+   LoyaltyLion ids with `matched_how`, plus the Klaviyo profiles mapping to
+   several Shopify customers as a merge-detection list. **DDL at the bottom of
+   this file, awaiting approval.**
+2. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
+   Klaviyo trailing-90-day campaign re-fetch (one API call). **Decided: poll
+   now, webhooks later** — approximate and observable beats exact and silent.
+3. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
+   source. It carries `cancellation_status`, `total_refunded` and
+   `metadata.shopify_source_name`, so it is a third view of every order that is
+   not Shopify. Compare against what we hold and report where they disagree.
+   Agreement everywhere is itself a useful result.
+4. **Critical review of the whole dashboard and report** — once the queue is
    empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
    what exists because it was built rather than because it would be used.
    **Include a three-way split of every number: MEASURED, INFERRED, and NEVER
@@ -254,3 +258,80 @@ programme, tiers and point values.
    retention gap. Untested numbers deserve the same scepticism, and the third
    category is where the next wrong belief is sitting.
 
+
+---
+
+## DDL awaiting approval — customer_identity
+
+```sql
+-- One row per person, holding the id each system knows them by.
+--
+-- Two of the three edges are HARD KEYS and neither uses email:
+--   LoyaltyLion -> Shopify   customers.merchant_id IS the Shopify customer id.
+--                            99.8% of 2,000 sampled. Email would have been
+--                            worse: only 79% of LoyaltyLion customers have one.
+--   Klaviyo -> Shopify       derived through ORDERS. A Placed Order event
+--                            carries the Klaviyo profile and the Shopify order
+--                            id; the order carries the customer. 99.3% of
+--                            profiles resolve to exactly one customer.
+--
+-- Klaviyo's own external_id is useless here: populated on 10.4% of profiles and
+-- zero of those are Shopify ids.
+--
+-- The Klaviyo edge only reaches people who have ORDERED. A subscriber who has
+-- never bought has no order to route through and stays unlinked. Fine for every
+-- question asked so far, all of which are about buyers.
+CREATE TABLE public.customer_identity (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shopify_customer_id   text NOT NULL,
+  klaviyo_profile_id    text,
+  loyaltylion_id        text,
+
+  -- Audit trail, not a confidence score. Both edges are hard keys, so this
+  -- records WHICH key was used rather than how sure we are.
+  matched_how           text NOT NULL,   -- 'merchant_id' | 'order_id' | 'manual'
+  klaviyo_order_matches integer NOT NULL DEFAULT 0,
+
+  first_confirmed_at    timestamptz NOT NULL DEFAULT now(),
+  last_confirmed_at     timestamptz NOT NULL DEFAULT now(),
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (shopify_customer_id)
+);
+CREATE INDEX customer_identity_klaviyo_idx ON public.customer_identity (klaviyo_profile_id);
+CREATE INDEX customer_identity_ll_idx      ON public.customer_identity (loyaltylion_id);
+
+-- A Klaviyo profile whose orders belong to more than one Shopify customer.
+-- Not noise: either Lori has not merged two customers yet, or Klaviyo merged
+-- two people who should not have been. Twenty cases in four months, and
+-- currently no other way to see them.
+CREATE TABLE public.identity_conflicts (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  klaviyo_profile_id   text NOT NULL,
+  shopify_customer_ids text[] NOT NULL,
+  order_count          integer NOT NULL DEFAULT 0,
+  detected_at          timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (klaviyo_profile_id)
+);
+
+ALTER TABLE public.customer_identity  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.identity_conflicts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "customer_identity_select_authenticated"
+  ON public.customer_identity FOR SELECT TO authenticated USING (true);
+CREATE POLICY "identity_conflicts_select_authenticated"
+  ON public.identity_conflicts FOR SELECT TO authenticated USING (true);
+REVOKE ALL ON public.customer_identity  FROM anon, authenticated;
+REVOKE ALL ON public.identity_conflicts FROM anon, authenticated;
+GRANT SELECT ON public.customer_identity, public.identity_conflicts TO authenticated;
+GRANT ALL    ON public.customer_identity, public.identity_conflicts TO service_role;
+```
+
+Three notes:
+
+- **No email column**, consistent with `shopify_customers`. Neither edge needs
+  one and storing it would add PII for no join.
+- **`matched_how` is an audit trail, not a confidence score.** It was scoped as
+  provenance for an email match; both edges turned out to be hard keys, so it
+  records which key was used.
+- **Conflicts get their own table** rather than a flag, because the useful thing
+  is the LIST — which profiles, which customers — not a count.

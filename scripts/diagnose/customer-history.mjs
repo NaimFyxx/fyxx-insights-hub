@@ -48,9 +48,13 @@ do {
     const cust = o.customer?.id ? String(o.customer.id).split("/").pop() : null;
     if (!cust) { noCustomer++; continue; }
     const day = ammanDay(o.createdAt);
-    const v = byCustomer.get(cust) ?? { days: [], orders: 0, revenue: 0, firstChannel: null };
+    const v = byCustomer.get(cust) ?? { days: [], orders: 0, revenue: 0, channelByDay: [] };
     v.days.push(day);
-    if (!v.firstChannel) v.firstChannel = classifySource(o.sourceName).sub_channel;
+    // Keep (day, channel) pairs so the ACQUISITION channel is the one attached
+    // to the earliest order, not merely the first row the API happened to
+    // return. Orders come back sorted, but relying on that would be silent if
+    // it ever changed.
+    v.channelByDay.push([day, classifySource(o.sourceName).sub_channel]);
     v.orders++; v.revenue += Number(o.currentTotalPriceSet?.shopMoney?.amount ?? 0);
     byCustomer.set(cust, v);
   }
@@ -64,6 +68,8 @@ log.ok(`${scanned} orders scanned, ${cancelled} cancelled, ${noCustomer} with no
 // than inferred from a running comparison.
 for (const v of byCustomer.values()) {
   v.days.sort();
+  v.channelByDay.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  v.firstChannel = v.channelByDay[0]?.[1] ?? null;
   v.first = v.days[0];
   v.second = v.days.length > 1 ? v.days[1] : null;
   v.last = v.days[v.days.length - 1];
@@ -89,6 +95,7 @@ if (WRITE) {
     shopify_customer_id: id,
     first_order_date: v.first,
     second_order_date: v.second,
+    first_order_channel: v.firstChannel,
     last_order_date: v.last,
     revenue_jod: Math.round(v.revenue * 1000) / 1000,
   }));

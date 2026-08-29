@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedActivationsRouteImport } from './routes/_authenticated/activations'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
+import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated/customers'
 import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
 import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
 import { Route as AuthenticatedHealthRouteImport } from './routes/_authenticated/health'
@@ -46,6 +47,11 @@ const AuthenticatedActivationsRoute =
 const AuthenticatedCampaignsRoute = AuthenticatedCampaignsRouteImport.update({
   id: '/campaigns',
   path: '/campaigns',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCustomersRoute = AuthenticatedCustomersRouteImport.update({
+  id: '/customers',
+  path: '/customers',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedExportRoute = AuthenticatedExportRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/activations': typeof AuthenticatedActivationsRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
+  '/customers': typeof AuthenticatedCustomersRoute
   '/export': typeof AuthenticatedExportRoute
   '/flows': typeof AuthenticatedFlowsRoute
   '/health': typeof AuthenticatedHealthRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/activations': typeof AuthenticatedActivationsRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
+  '/customers': typeof AuthenticatedCustomersRoute
   '/export': typeof AuthenticatedExportRoute
   '/flows': typeof AuthenticatedFlowsRoute
   '/health': typeof AuthenticatedHealthRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/activations': typeof AuthenticatedActivationsRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
+  '/_authenticated/customers': typeof AuthenticatedCustomersRoute
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/_authenticated/flows': typeof AuthenticatedFlowsRoute
   '/_authenticated/health': typeof AuthenticatedHealthRoute
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/activations'
     | '/campaigns'
+    | '/customers'
     | '/export'
     | '/flows'
     | '/health'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/activations'
     | '/campaigns'
+    | '/customers'
     | '/export'
     | '/flows'
     | '/health'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/activations'
     | '/_authenticated/campaigns'
+    | '/_authenticated/customers'
     | '/_authenticated/export'
     | '/_authenticated/flows'
     | '/_authenticated/health'
@@ -220,6 +232,13 @@ declare module '@tanstack/react-router' {
       path: '/campaigns'
       fullPath: '/campaigns'
       preLoaderRoute: typeof AuthenticatedCampaignsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/customers': {
+      id: '/_authenticated/customers'
+      path: '/customers'
+      fullPath: '/customers'
+      preLoaderRoute: typeof AuthenticatedCustomersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/export': {
@@ -284,6 +303,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedActivationsRoute: typeof AuthenticatedActivationsRoute
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRoute
+  AuthenticatedCustomersRoute: typeof AuthenticatedCustomersRoute
   AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
   AuthenticatedHealthRoute: typeof AuthenticatedHealthRoute
@@ -297,6 +317,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedActivationsRoute: AuthenticatedActivationsRoute,
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRoute,
+  AuthenticatedCustomersRoute: AuthenticatedCustomersRoute,
   AuthenticatedExportRoute: AuthenticatedExportRoute,
   AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
   AuthenticatedHealthRoute: AuthenticatedHealthRoute,

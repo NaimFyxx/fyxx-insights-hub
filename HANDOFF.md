@@ -95,12 +95,12 @@ worth acting on.
 
 ## Open questions needing input
 
-1. **`second_order_date` sweep** to age-normalise the cohort table? One more
-   ~11 minute pass. Without it the retention decline cannot be interpreted.
-2. **4% population gap** (19,163 vs 20,019) still unexplained.
-3. **Should the three imports become live API sources?** `/v2/activities` and
-   `/v2/transactions` both work. Agreed to decide after the sweep — it is now
-   after the sweep.
+1. **4% population gap** — re-checked with both sides queryable, still
+   unexplained. Ruled out: no orphan customers, and the 1,373 reporting orders
+   with none found are the cancelled-only case. Documented and parked.
+2. **Live API sources for activities and transactions** — decided yes, not yet
+   built. Rewards stays an import: `/v2/rewards` AND the per-customer nested
+   path both 404, so it is genuinely unavailable, established not inferred.
 
 ## Next
 

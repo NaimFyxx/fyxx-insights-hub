@@ -97,7 +97,7 @@ const unwrap = <T>(res: { data: T | null; error: { message: string } | null }): 
  * by what was asked for.
  */
 const PAGE = 1000;
-async function fetchAllRows<T>(
+export async function fetchAllRows<T>(
   build: (
     from: number,
     to: number,

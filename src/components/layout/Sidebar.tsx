@@ -7,6 +7,7 @@ const NAV = [
   { to: "/campaigns", label: "Email campaigns" },
   { to: "/flows", label: "Flows" },
   { to: "/push", label: "Push" },
+  { to: "/customers", label: "Customers" },
   { to: "/loyalty", label: "Loyalty" },
   { to: "/activations", label: "Activations" },
   { to: "/export", label: "Export report" },
@@ -27,8 +28,7 @@ export function Sidebar() {
             to={item.to}
             className="label-xs border-l-2 border-transparent px-5 py-3 text-muted-foreground transition-colors hover:text-foreground"
             activeProps={{
-              className:
-                "label-xs border-l-2 border-accent bg-secondary px-5 py-3 text-foreground",
+              className: "label-xs border-l-2 border-accent bg-secondary px-5 py-3 text-foreground",
             }}
           >
             {item.label}

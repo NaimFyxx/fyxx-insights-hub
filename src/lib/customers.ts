@@ -1,0 +1,163 @@
+import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/queries";
+
+/**
+ * The customer population.
+ *
+ * Two rules are baked in here rather than left to the caller:
+ *
+ *   House accounts are excluded by TAG, never by order volume. Venue tables,
+ *   "By The Glass", "Free of Charge Goods FOC" and staff carry
+ *   CUSTOMER_INTERNAL or "CUSTOMER TYPE_Employee". Filtering by volume instead
+ *   would drop a genuine customer with 708 orders and 79,840 JOD who carries
+ *   no such tag. What is excluded is reported, not hidden.
+ *
+ *   Value figures use revenue_jod, computed from orders, NOT amount_spent_jod.
+ *   Of 808 customers tested, amountSpent matched the non-cancelled sum 572
+ *   times, the all-orders sum 175 times and neither 61 times. It is fine for
+ *   ranking and wrong for arithmetic.
+ */
+export type CustomerRow = {
+  shopify_customer_id: string;
+  orders_lifetime: number;
+  revenue_jod: number | null;
+  first_order_date: string | null;
+  second_order_date: string | null;
+  last_order_date: string | null;
+  first_order_channel: string | null;
+  has_email: boolean;
+  has_phone: boolean;
+  email_consent: string | null;
+  sms_consent: string | null;
+  is_house_account: boolean;
+};
+
+export const fetchCustomers = () =>
+  fetchAllRows<CustomerRow>((from, to) =>
+    supabase
+      .from("shopify_customers")
+      .select(
+        "shopify_customer_id,orders_lifetime,revenue_jod,first_order_date,second_order_date,last_order_date,first_order_channel,has_email,has_phone,email_consent,sms_consent,is_house_account",
+      )
+      .order("shopify_customer_id")
+      .range(from, to),
+  );
+
+const days = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
+
+export type CustomerPicture = ReturnType<typeof summarise>;
+
+export function summarise(all: CustomerRow[], today: string, activeWindowDays = 90) {
+  const house = all.filter((c) => c.is_house_account);
+  const real = all.filter((c) => !c.is_house_account);
+  const buyers = real.filter((c) => c.first_order_date !== null);
+  const rev = (c: CustomerRow) => Number(c.revenue_jod ?? 0);
+  const totalRevenue = buyers.reduce((a, c) => a + rev(c), 0);
+
+  const cutoff = (n: number) => {
+    const d = new Date(Date.parse(today));
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  const activeCut = cutoff(activeWindowDays);
+  const lapsingCut = cutoff(activeWindowDays * 2);
+
+  const bucket = (c: CustomerRow) => {
+    if (!c.last_order_date) return "never" as const;
+    if (c.last_order_date >= activeCut) return "active" as const;
+    if (c.last_order_date >= lapsingCut) return "lapsing" as const;
+    return "lapsed" as const;
+  };
+
+  // A single order only means "never returned" once it has HAD time to repeat.
+  const mature = buyers.filter((c) => c.first_order_date && days(c.first_order_date, today) >= 90);
+  const oneAndDone = mature.filter((c) => c.orders_lifetime === 1);
+
+  const sorted = [...buyers].sort((a, b) => rev(b) - rev(a));
+  const shareOfTop = (pct: number) => {
+    const n = Math.max(1, Math.round(sorted.length * (pct / 100)));
+    return totalRevenue > 0
+      ? (sorted.slice(0, n).reduce((a, c) => a + rev(c), 0) / totalRevenue) * 100
+      : 0;
+  };
+  const values = buyers.map(rev).sort((a, b) => a - b);
+  const quantile = (q: number) =>
+    values.length ? (values[Math.floor((values.length - 1) * q)] ?? 0) : 0;
+
+  const sub = (c: CustomerRow) =>
+    c.email_consent === "SUBSCRIBED" || c.sms_consent === "SUBSCRIBED";
+  const unreachable = buyers.filter((c) => !sub(c));
+
+  return {
+    houseExcluded: {
+      count: house.length,
+      orders: house.reduce((a, c) => a + c.orders_lifetime, 0),
+    },
+    totalCustomers: real.length,
+    buyers: buyers.length,
+    neverOrdered: real.length - buyers.length,
+
+    lifecycle: {
+      active: buyers.filter((c) => bucket(c) === "active").length,
+      lapsing: buyers.filter((c) => bucket(c) === "lapsing").length,
+      lapsed: buyers.filter((c) => bucket(c) === "lapsed").length,
+    },
+
+    oneAndDone: {
+      count: oneAndDone.length,
+      of: mature.length,
+      pct: mature.length ? (oneAndDone.length / mature.length) * 100 : 0,
+    },
+
+    concentration: {
+      top1: shareOfTop(1),
+      top5: shareOfTop(5),
+      top10: shareOfTop(10),
+      mean: buyers.length ? totalRevenue / buyers.length : 0,
+      median: quantile(0.5),
+      p90: quantile(0.9),
+      p10: quantile(0.1),
+      totalRevenue,
+    },
+
+    reach: {
+      unreachable: unreachable.length,
+      unreachablePct: buyers.length ? (unreachable.length / buyers.length) * 100 : 0,
+      unreachableRevenue: unreachable.reduce((a, c) => a + rev(c), 0),
+      unreachableRevenuePct: totalRevenue
+        ? (unreachable.reduce((a, c) => a + rev(c), 0) / totalRevenue) * 100
+        : 0,
+      neverOptedIn: unreachable.filter((c) => c.has_email && c.email_consent === "NOT_SUBSCRIBED")
+        .length,
+      optedOut: unreachable.filter((c) => c.email_consent === "UNSUBSCRIBED").length,
+      smsOnly: buyers.filter((c) => c.has_phone && !sub(c)).length,
+      smsOnlyRevenue: buyers.filter((c) => c.has_phone && !sub(c)).reduce((a, c) => a + rev(c), 0),
+    },
+  };
+}
+
+/** Repeat rate by acquisition year, comparable because it is age-limited. */
+export function cohorts(all: CustomerRow[], today: string, windowDays = 90) {
+  const buyers = all.filter((c) => !c.is_house_account && c.first_order_date);
+  const byYear = new Map<string, CustomerRow[]>();
+  for (const c of buyers) {
+    const y = c.first_order_date!.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y)!.push(c);
+  }
+  return [...byYear.entries()].sort().map(([year, rows]) => {
+    // Only customers who have HAD the window to repeat in. Without this the
+    // rate falls every year purely because newer cohorts have had less time,
+    // which reads as collapse and is not.
+    const eligible = rows.filter((c) => days(c.first_order_date!, today) >= windowDays);
+    const repeated = eligible.filter(
+      (c) => c.second_order_date && days(c.first_order_date!, c.second_order_date) <= windowDays,
+    );
+    return {
+      year,
+      acquired: rows.length,
+      eligible: eligible.length,
+      repeatPct: eligible.length ? (repeated.length / eligible.length) * 100 : null,
+    };
+  });
+}

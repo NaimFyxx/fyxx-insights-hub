@@ -639,6 +639,28 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### REQUIRED: how to sample when testing an assumption
+
+Two wrong conclusions in one session came from the same habit — sampling the
+newest rows — and both looked convincing.
+
+- **Testing whether a filter works: use a window that does NOT touch today.**
+  A check on 1–29 August "proved" LoyaltyLion ignored its date filter, because
+  the newest 250 rows *inside* that range and the newest 250 rows *overall*
+  are necessarily the same rows. Re-run against 1–10 July, the filter was
+  honoured on every endpoint. Nothing was broken.
+- **Sampling for a state distribution: sample across the full range.** Reading
+  the newest activities showed birthday rewards 138 of 138 `pending` and
+  suggested customers never receive them. Across the full history it is 1,753
+  approved to 30 pending. The newest rows are pending *by construction* —
+  they have not had time to approve.
+- **Sampling for a total: use the whole population or say it is a sample.**
+  Pending points were reported at 8.34% from 10,000 of 21,264 customers. The
+  true figure is 1.59%.
+
+The common failure is that a biased sample does not look biased. If the answer
+would change the conclusion, size the sample against the full population first.
+
 ### REQUIRED: resolve an unknown source id by app lookup, never by name
 
 A numeric Shopify `sourceName` is an app id. Ask Shopify what it is:
@@ -824,6 +846,27 @@ re-deriving this if it is questioned.
 > The 2% residual is timing between our scan and their end-of-day close.
 > Guests are included deliberately: an unenrolled customer's balance is still
 > money owed. Note this differs from the TIER counts, which are members only.
+>
+> **Pending points are a SEPARATE pool, and LoyaltyLion excludes them too.**
+> Checked against LoyaltyLion's own customers export, 29 August 2026:
+>
+> | | Points |
+> |---|---|
+> | LoyaltyLion's `Points Approved`, summed | 8,620,816 |
+> | our stored `points_outstanding` | 8,620,578 |
+> | difference | **+0.00%** (238 points in 8.6M) |
+> | LoyaltyLion's `Points Pending`, summed | 137,218 — **1.59%** of approved |
+>
+> So our definition matches theirs exactly and both count approved only.
+> Pending is roughly 1,372 JOD of liability outside the figure, held by 290
+> members, and it DRAINS into approved rather than accumulating: over the full
+> exported history `$purchase` runs 19,855 approved against 483 pending, and
+> `$birthday` 1,753 approved against 30 pending. It is a lifecycle stage, not a
+> parallel balance.
+>
+> An earlier note put pending at 8.34%. That was wrong — it came from a
+> 10,000-customer API sample rather than the full 21,264. See the sampling rule
+> below.
 
 Both LoyaltyLion figures rest on an assumption, so every run prints the
 evidence needed to falsify it.

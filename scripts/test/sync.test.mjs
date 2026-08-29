@@ -520,5 +520,37 @@ check("unknown key-shaped strings are caught too",
   KLAVIYO_SOURCE_UNMAPPED.clear();
 }
 
+
+// ---------------------------------------------------------------------------
+// Every guard must actually be called somewhere.
+//
+// assertFilterHonoured was written for a specific hazard, exported, documented
+// in a banner comment — and never called. It sat unused while the exact fault
+// it was built to catch went undetected. A guard nobody invokes is worse than
+// no guard, because its presence implies the check is happening.
+//
+// This asserts the class, not the instance.
+{
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const libs = readdirSync("scripts/lib").filter((f) => f.endsWith(".mjs"));
+  const bodies = new Map(libs.map((f) => [f, readFileSync(`scripts/lib/${f}`, "utf8")]));
+  const all = [...bodies.values()].join("\n") +
+    readdirSync("scripts").filter((f) => f.endsWith(".mjs")).map((f) => readFileSync(`scripts/${f}`, "utf8")).join("\n") +
+    readdirSync("scripts/diagnose").filter((f) => f.endsWith(".mjs")).map((f) => readFileSync(`scripts/diagnose/${f}`, "utf8")).join("\n");
+
+  const orphans = [];
+  for (const [file, body] of bodies) {
+    for (const m of body.matchAll(/^export (?:async )?function ((?:assert|check|verify|ensure|require)[A-Za-z]*)/gm)) {
+      const fn = m[1];
+      // Count call sites, excluding the definition itself.
+      const calls = [...all.matchAll(new RegExp(`\\b${fn}\\s*\\(`, "g"))].length;
+      const defs = [...all.matchAll(new RegExp(`function\\s+${fn}\\s*\\(`, "g"))].length;
+      if (calls - defs < 1) orphans.push(`${fn} (${file})`);
+    }
+  }
+  check("every assert/check/verify guard is called somewhere", orphans.length === 0,
+    orphans.length ? `NEVER CALLED: ${orphans.join(", ")}` : "all guards invoked");
+}
+
 console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
 process.exit(failed ? 1 : 0);

@@ -932,6 +932,80 @@ Both count **approved only**. Pending is a separate 137,218 (1.59%) that drains
 into approved rather than accumulating. The question is closed; do not reopen it
 without an export to compare against.
 
+## API capability sweep — 29 August 2026
+
+Probed against the live accounts, not read off documentation. **These APIs
+change; re-run before trusting this.** Documented behaviour has been wrong here
+three times: Klaviyo takes `mobile_push` on one endpoint and
+`push-notification` on another, LoyaltyLion returns 200 for parameters it
+ignores, and Shopify's order search silently drops a `source_name` filter.
+
+### The three questions this was run to answer
+
+**1. Does anything remove a workaround we have built?**
+
+- **Shopify bulk operations are available** (`currentBulkOperation` answers).
+  They would replace the paginated sweeps — 163,000 orders currently takes
+  ~650 requests and 11 minutes — with one job. **But starting one is a
+  MUTATION** (`bulkOperationRunQuery`), and `assertReadOnly` blocks every
+  mutation by standing instruction. The mutation only runs a read query and
+  changes nothing, but that is an exception to a rule set deliberately, so it
+  is a decision to take rather than assume.
+- **Nothing removes the CSV imports.** LoyaltyLion claimed rewards are
+  unavailable at every path tried, and the Smile.io export has no live API at
+  all since the app is uninstalled.
+
+**2. Does anything answer a question closed as unanswerable?**
+
+- **Push click tracking: ANSWERED, and the answer is that it does not exist.**
+  Klaviyo's metric list contains `Opened Push` and `Bounced Push` but **no
+  push-click metric of any kind**. The zero is not a tracking fault under
+  investigation — Klaviyo does not emit the event. The report wording should
+  say so. Appmaker does send its own `Push Notification Opened On Mobile`
+  through the API integration, which is a separate signal we do not use.
+- **Attribution split by channel: already solved**, via `include=attributions`
+  on the events endpoint.
+- **Per-message revenue: already available and in use.** Campaign values group
+  by `campaign_message_id`, flow values by `flow_message_id`.
+
+**3. Can any of them push changes instead of us polling?**
+
+- **Shopify: YES, and it is the right fix for the retroactive-change problem.**
+  225 webhook topics exist, including `ORDERS_CANCELLED`, `ORDERS_UPDATED`,
+  `ORDERS_EDITED`, `REFUNDS_CREATE` and `CUSTOMERS_UPDATE`. `ORDERS_CANCELLED`
+  fires whenever a batch is cancelled, however old the order — which is exactly
+  what the trailing-window sync cannot see. None are registered today
+  (`webhookSubscriptions` returns an empty list) and the token carries 88 read
+  scopes. **The blocker is infrastructure, not permission**: a webhook needs an
+  always-on HTTPS endpoint, and this project is GitHub Actions plus Supabase
+  with nothing listening. A Supabase Edge Function would be the natural home.
+- **Klaviyo: NO.** `/webhooks` returns 403, "You must have Advanced KDP
+  enabled". Available on a higher plan, not on this one.
+- **LoyaltyLion: endpoint exists** (`/v2/webhooks`, returns an empty list) and
+  the docs list create and delete. Same infrastructure blocker as Shopify.
+
+### What each API offers, and whether we use it
+
+| API | Capability | State |
+|---|---|---|
+| Shopify | orders, customers, inventory + `unitCost`, locations, discounts | **in use** |
+| Shopify | `webhookSubscriptions` — 225 topics, none registered | **untapped, best fix for retroactive changes** |
+| Shopify | bulk operations | **untapped, blocked on the read-only rule** |
+| Shopify | `segments`, `customerSegmentMembers` | untapped |
+| Shopify | `abandonedCheckouts`, order-level `refunds` | untapped |
+| Shopify | `marketingActivities` | empty on this store |
+| Shopify | `productsCount` 3,260 products | untapped |
+| Klaviyo | events + `include=attributions`, metric aggregates, campaign and flow values | **in use** |
+| Klaviyo | `/segments`, `/lists`, `/tags`, `/forms`, `/images` | untapped |
+| Klaviyo | `/tracking-settings` — UTM parameters | untapped |
+| Klaviyo | bulk export jobs (POST only) | untapped |
+| Klaviyo | `/catalog-items`, `/coupons`, `/reviews` | empty on this account |
+| Klaviyo | `/webhooks` | **403, needs Advanced KDP** |
+| LoyaltyLion | `/customers`, `/activities`, `/transactions` | **in use** |
+| LoyaltyLion | `/orders` — cancellation status, refunds, channel | **untapped, third view of every order** |
+| LoyaltyLion | `/sites`, `/webhooks` | untapped |
+| LoyaltyLion | `/rewards`, `/rules`, `/tiers`, nested customer paths | **404 — do not exist** |
+
 ### The LoyaltyLion v2 Admin API surface, established rather than inferred
 
 Probed against the live account on 29 August 2026, after four scattered 404s

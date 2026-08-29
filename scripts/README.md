@@ -639,6 +639,51 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### The first measurable outcome we have for any flow
+
+Birthday rewards that expired unredeemed: **48 in total, every one of them
+Blue tier**, and confined entirely to **July 2025 (7) and August 2025 (41)**.
+None since. That coincides with the reward-expiry reminder flow going live.
+
+This is worth more than the problem it describes. It is the first time a flow
+can be tied to a measurable change in customer behaviour rather than to its own
+open and click rates. 41 expiries in a month, then zero for a year.
+
+It is not proof — nothing was held back as a control, and other things changed
+in the same period. But it is the strongest evidence of a flow working that
+this project has produced, and the shape of it (a sharp stop, sustained) is
+what a working intervention looks like.
+
+### Points liability reconciles to LoyaltyLion exactly
+
+Settled 29 August 2026, after two wrong definitions and several turns:
+
+| | Points |
+|---|---|
+| LoyaltyLion's own export, `Points Approved` summed | 8,620,816 |
+| our stored `points_outstanding` | 8,620,578 |
+| **difference** | **+0.00%** — 238 points in 8.6M |
+
+Both count **approved only**. Pending is a separate 137,218 (1.59%) that drains
+into approved rather than accumulating. The question is closed; do not reopen it
+without an export to compare against.
+
+### Three start dates, none of which is the start of the business
+
+| Source | Earliest data |
+|---|---|
+| Shopify orders | **2019-09-09** |
+| LoyaltyLion activities and transactions | **2023-02-21** |
+| Klaviyo (attributed, influence) | **2025-01-01** |
+| Klaviyo campaigns and flows | 2025-06-18 |
+| LoyaltyLion rewards | **2025-08-04** |
+| LoyaltyLion tier snapshots | 2025-08-26 |
+
+Any range spanning one of these boundaries must show an **absence**, never a
+zero. A "Klaviyo share of revenue: 0.0%" for early 2024 does not mean Klaviyo
+drove nothing; it means Klaviyo was not the platform. `ll_import_coverage`
+reports what each imported table actually spans.
+
 ### REQUIRED: how to sample when testing an assumption
 
 Two wrong conclusions in one session came from the same habit — sampling the

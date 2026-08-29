@@ -31,6 +31,11 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Decisions made this turn
 
+- LoyaltyLion history **imported**: 38,748 activities, 60,680 transactions,
+  2,211 rewards = 101,639 rows. Every row carries a `source` tag
+  (`ll_export_20260829`); `ll_import_coverage` reports what each table spans so
+  no reader has to remember a figure is imported rather than live.
+
 - `1830279` → **Draft Orders**, verified: app lookup returns "Shopify Web"
   (`shopify_web`, Shopify) and all 92 orders carry `app = "Draft Orders"`.
 - Unknown source ids are now resolved by **app lookup**, not name matching:
@@ -99,110 +104,32 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Open questions needing input
 
-1. **DDL for the three import tables** — full text at the bottom of this file,
-   needs approval before applying.
-2. **4% population gap** still unexplained; re-check once both sides queryable.
-3. **Should the three imports become live API sources?** `/v2/activities` and
+1. **4% population gap** still unexplained; re-check once both sides queryable.
+2. **Should the three imports become live API sources?** `/v2/activities` and
    `/v2/transactions` both work and the birthday fix already pulls activities
    live. As imports they stop at 29 Aug 2026 and go stale. Recommend deciding
    after the 2019 sweep rather than widening scope now.
 
 ## Next
 
-1. Importers for the three approved exports — DDL below needs approval first
-2. 2019 Shopify sweep, with guards: Klaviyo starts 2025-01, so pre-2025 ranges
+1. 2019 Shopify sweep, with guards: Klaviyo starts 2025-01, so pre-2025 ranges
    must not show "Klaviyo share 0%"; Mobile App gains Shopney history ending
    late 2024 then a gap
-3. Customer section, leading with the three headline numbers
-4. Identity table
+2. Customer section, leading with the three headline numbers
+3. Identity table
 
 
 ---
 
-## DDL awaiting approval — the three import tables
+## Applied this turn
 
-```sql
--- LoyaltyLion activities. Immutable event history, safe to import.
--- $birthday is now collected live via the API; this backfills 2023-02-21 on,
--- which predates the fix.
-CREATE TABLE public.ll_activities (
-  activity_id       text PRIMARY KEY,
-  ll_customer_id    text NOT NULL,
-  shopify_order_id  text,              -- "Order Reference", joins to orders
-  kind              text NOT NULL,     -- rule | import | manual_deduction | challenge | manual_addition
-  detail            text,              -- $purchase | $birthday | fyxx_cup_win | $signup | ...
-  state             text NOT NULL,     -- approved | pending | expired | declined | void
-  initial_points    integer NOT NULL DEFAULT 0,
-  points_remaining  integer NOT NULL DEFAULT 0,
-  points_expired    integer NOT NULL DEFAULT 0,
-  activity_date     date NOT NULL,
-  expires_at        date,
-  pre_enrollment    boolean NOT NULL DEFAULT false,
-  created_at        timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX ll_activities_date_idx   ON public.ll_activities (activity_date);
-CREATE INDEX ll_activities_detail_idx ON public.ll_activities (detail, state);
-CREATE INDEX ll_activities_order_idx  ON public.ll_activities (shopify_order_id);
+`ll_activities`, `ll_transactions`, `ll_rewards`, plus the
+`ll_import_coverage` view. RLS matches every other table.
 
--- Per-member points movement. 39,567 of 60,680 carry an Order ID, which is
--- what makes points-earned-against-spend answerable per customer.
-CREATE TABLE public.ll_transactions (
-  transaction_id    text PRIMARY KEY,
-  ll_customer_id    text NOT NULL,
-  shopify_order_id  text,
-  resource          text NOT NULL,     -- activity | adjustment | claimed_reward | expiry
-  activity_title    text,
-  flow_title        text,
-  points_approved   integer NOT NULL DEFAULT 0,
-  points_pending    integer NOT NULL DEFAULT 0,
-  occurred_at       timestamptz NOT NULL,
-  created_at        timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX ll_transactions_when_idx  ON public.ll_transactions (occurred_at);
-CREATE INDEX ll_transactions_order_idx ON public.ll_transactions (shopify_order_id);
-
--- Claimed rewards. NOTE: starts 2025-08-04. That is a DATA LIMIT, not the
--- start of the programme -- redemption history before it does not exist in
--- this export and must not be read as zero.
-CREATE TABLE public.ll_rewards (
-  ll_customer_id    text NOT NULL,
-  claimed_at        timestamptz NOT NULL,
-  title             text,
-  cost_points       integer NOT NULL DEFAULT 0,
-  state             text NOT NULL,     -- approved | expired | void
-  discount_type     text,
-  amount            numeric(12,3),
-  first_used_at     timestamptz,
-  order_total_jod   numeric(14,3),
-  used_with_orders  text,
-  expires_at        timestamptz,
-  created_at        timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (ll_customer_id, claimed_at, title)
-);
-CREATE INDEX ll_rewards_claimed_idx ON public.ll_rewards (claimed_at);
-
-ALTER TABLE public.ll_activities   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ll_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ll_rewards      ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "ll_activities_select_authenticated"   ON public.ll_activities   FOR SELECT TO authenticated USING (true);
-CREATE POLICY "ll_transactions_select_authenticated" ON public.ll_transactions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "ll_rewards_select_authenticated"      ON public.ll_rewards      FOR SELECT TO authenticated USING (true);
-
-REVOKE ALL ON public.ll_activities, public.ll_transactions, public.ll_rewards FROM anon, authenticated;
-GRANT SELECT ON public.ll_activities, public.ll_transactions, public.ll_rewards TO authenticated;
-GRANT ALL    ON public.ll_activities, public.ll_transactions, public.ll_rewards TO service_role;
-```
-
-Four decisions in it:
-
-- **No email columns**, though all three exports carry them. `ll_customer_id`
-  joins to LoyaltyLion and `merchant_id` reaches Shopify at 99.8%, so email
-  adds PII without adding a join.
-- **`ll_rewards` has no natural id.** The export gives none, so the key is
-  `(customer, claimed_at, title)`. A customer claiming two identical rewards in
-  the same second would collide. Flagged rather than papered over with a
-  surrogate that hides duplicates.
-- **`shopify_order_id` on both event tables** — the join worth having.
-- **Dates stay as exported**, all predating the 2025-01-01 baseline, so these
-  need the same pre-2025 guards as the 2019 sweep.
+The importer caught a fault worth recording: LoyaltyLion writes timestamp
+offsets as `+00`, which `Date.parse` REJECTS (it wants `+00:00`). Unhandled,
+every timestamp parsed to null, which collapsed the rewards key to
+`(customer, null, title)` and manufactured **894 collisions in a file that has
+none** — 2,211 distinct of 2,211. The importer now normalises the offset and
+REFUSES to write if any timestamp fails to parse, rather than importing
+undated rows.

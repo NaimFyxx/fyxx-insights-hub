@@ -18,8 +18,10 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
   figure.
 - **Pending is transient, not terminal.** Full history: `$birthday` 1,753
   approved / 48 expired / 30 pending. Customers do receive them.
-- **Mobile App click-influence 35.8% → 19.1% true.** 13,060 mobile orders sat
-  in `Unknown`. Never displayed. Mapping fixed; re-run in progress.
+- **Mobile App click-influence 35.8% → 19.2%. Re-run COMPLETE and verified.**
+  The `Unknown` bucket is gone: 13,099 rows and 717,166 JOD reclassified,
+  almost all Mobile App. Draft Orders unchanged at 20.4%, POS 18.0%, Website
+  13.3%. 41,419 rows, 2,959 duplicates collapsed on order_id. Never displayed.
 - **Attributed revenue, August: 37,615 → 28,260 JOD.** Klaviyo share 22.0% →
   16.5%. 2026 YTD 132,534 → 109,876, 17.1% overstated.
 - **Mobile App year on year was reported as +831.8%. It is +23.8%.**
@@ -81,14 +83,14 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Open questions needing input
 
-1. **4% population gap** still unexplained; re-check once both sides queryable.
+1. **DDL for the three import tables** — needs approval before applying.
+2. **4% population gap** still unexplained; re-check once both sides queryable.
 2. **48 expired birthday rewards** — issued, never redeemed. Programme
    question, not a data one.
 
 ## Next
 
-1. Influence re-run finishing (recomputes `sub_channel` on stored rows)
-2. Importers for the three approved exports
+1. Importers for the three approved exports — **DDL below needs approval first**
 3. 2019 Shopify sweep, with guards: Klaviyo starts 2025-01, so pre-2025 ranges
    must not show "Klaviyo share 0%"; Mobile App gains Shopney history ending
    late 2024 then a gap

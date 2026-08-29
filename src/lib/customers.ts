@@ -439,3 +439,92 @@ export const ENROLMENT_WITHIN_CUSTOMER = {
     { days: 365, cleanN: 2875, cleanChange: -23.7, biasedN: 194, biasedChange: 3.3 },
   ],
 };
+
+/**
+ * The lapsed segment: bought once, and not since the cutoff.
+ *
+ * Kept distinct from "never bought" deliberately. Before six years of history
+ * were loaded, the only available figure was "no order since 2025-01-01",
+ * which put someone who spent 3,000 JOD in 2023 in the same bucket as someone
+ * who has never ordered at all. Those are opposite marketing problems.
+ *
+ * CONSENT IS THE POINT OF THIS PANEL. The value of the segment is not its size
+ * but the part of it that can be emailed today with no opt-in step, so the
+ * subscribed subset is computed first and everything else is broken down
+ * WITHIN it. A band containing people who cannot be contacted would be a
+ * target list that quietly does not exist.
+ */
+export const LAPSED_SINCE = "2025-01-01";
+
+const VALUE_BANDS = [
+  { label: "1,000+", min: 1000 },
+  { label: "500 – 999", min: 500 },
+  { label: "100 – 499", min: 100 },
+  { label: "Under 100", min: 0 },
+] as const;
+
+export function lapsed(all: CustomerRow[], since: string = LAPSED_SINCE) {
+  const rev = (c: CustomerRow) => Number(c.revenue_jod ?? 0);
+  const sum = (rows: CustomerRow[]) => rows.reduce((a, c) => a + rev(c), 0);
+
+  const all_ = all.filter(
+    (c) => !c.is_house_account && c.first_order_date !== null && c.last_order_date !== null,
+  );
+  const rows = all_.filter((c) => c.last_order_date! < since);
+
+  // SUBSCRIBED only. "has an email address" is not consent, and NOT_SUBSCRIBED
+  // is not the same as UNSUBSCRIBED — neither can be mailed, but only one of
+  // them has ever been asked. Both are reported so the gap is visible.
+  const contactable = rows.filter((c) => c.email_consent === "SUBSCRIBED");
+  const unsubscribed = rows.filter((c) => c.email_consent === "UNSUBSCRIBED");
+  const neverAsked = rows.filter(
+    (c) => c.has_email && c.email_consent !== "SUBSCRIBED" && c.email_consent !== "UNSUBSCRIBED",
+  );
+
+  const band = (c: CustomerRow) => VALUE_BANDS.find((b) => rev(c) >= b.min)!.label;
+  const byValue = VALUE_BANDS.map((b) => {
+    const inBand = contactable.filter((c) => band(c) === b.label);
+    return {
+      band: b.label,
+      customers: inBand.length,
+      revenue: sum(inBand),
+      avgOrders: inBand.length
+        ? inBand.reduce((a, c) => a + c.orders_lifetime, 0) / inBand.length
+        : 0,
+    };
+  }).filter((b) => b.customers > 0);
+
+  const years = [...new Set(contactable.map((c) => c.last_order_date!.slice(0, 4)))].sort();
+  const byYear = years.map((y) => {
+    const inYear = contactable.filter((c) => c.last_order_date!.startsWith(y));
+    return {
+      year: y,
+      customers: inYear.length,
+      revenue: sum(inYear),
+      avgOrders: inYear.length
+        ? inYear.reduce((a, c) => a + c.orders_lifetime, 0) / inYear.length
+        : 0,
+    };
+  });
+
+  // Where to start: high value AND most recently lapsed. Recency matters
+  // because the further back the last order, the more likely the address is
+  // dead and the person has simply moved on.
+  const mostRecentYear = years.at(-1) ?? null;
+  const priority = contactable.filter(
+    (c) => rev(c) >= 1000 && mostRecentYear !== null && c.last_order_date!.startsWith(mostRecentYear),
+  );
+
+  return {
+    since,
+    total: { customers: rows.length, revenue: sum(rows) },
+    contactable: { customers: contactable.length, revenue: sum(contactable) },
+    unsubscribed: { customers: unsubscribed.length, revenue: sum(unsubscribed) },
+    neverAsked: { customers: neverAsked.length, revenue: sum(neverAsked) },
+    noEmail: rows.filter((c) => !c.has_email).length,
+    byValue,
+    byYear,
+    mostRecentYear,
+    priority: { customers: priority.length, revenue: sum(priority) },
+  };
+}

@@ -19,6 +19,8 @@ import {
   BUSY_DAY_IDENTIFICATION,
   mixVersusDecay,
   channelDecay,
+  lapsed,
+  LAPSED_SINCE,
 } from "@/lib/customers";
 import { ammanToday } from "@/lib/ranges";
 import { jod, num, pct } from "@/lib/format";
@@ -61,6 +63,7 @@ function CustomersPage() {
   );
   const mix = useMemo(() => (q.data ? mixVersusDecay(q.data, today, 90) : []), [q.data, today]);
   const decay = useMemo(() => (q.data ? channelDecay(q.data, today, 90) : []), [q.data, today]);
+  const lap = useMemo(() => (q.data ? lapsed(q.data) : null), [q.data]);
 
   if (q.isLoading || !s) {
     return (
@@ -110,6 +113,109 @@ function CustomersPage() {
           note={`${num(s.reach.unreachable)} buyers on neither email nor SMS, ${jod(s.reach.unreachableRevenue)}`}
         />
       </div>
+
+      {/* Placed directly under the headline tiles because it is the only
+          panel on this page that names a specific action for a specific list
+          of people, rather than describing a trend. */}
+      {lap ? (
+        <Panel title="Lapsed customers who can be emailed today">
+          <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+            Bought at least once, and nothing since {LAPSED_SINCE}. Separated from
+            customers who have never ordered at all — a bigger group, but a different
+            problem: these people already chose us once.
+          </p>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <StatTile
+              label="Lapsed customers"
+              value={num(lap.total.customers)}
+              note={`${jod(lap.total.revenue)} lifetime revenue between them`}
+            />
+            <StatTile
+              label="Contactable now"
+              value={num(lap.contactable.customers)}
+              note={`Subscribed to email. No opt-in step, ${jod(lap.contactable.revenue)} lifetime`}
+            />
+            <StatTile
+              label="Start here"
+              value={num(lap.priority.customers)}
+              note={`Subscribed, 1,000+ JOD, last bought in ${lap.mostRecentYear ?? "—"} — ${jod(lap.priority.revenue)}`}
+            />
+          </div>
+
+          {/* The three that CANNOT be mailed, stated next to the one that can.
+              Without them the headline reads as though the whole lapsed group
+              is addressable, and it is not. NOT_SUBSCRIBED and UNSUBSCRIBED
+              are separated because only one of them has ever been asked. */}
+          <p className="mt-4 text-xs text-muted-foreground">
+            Not contactable by email: {num(lap.neverAsked.customers)} have an address but
+            have never opted in, {num(lap.unsubscribed.customers)} have unsubscribed, and{" "}
+            {num(lap.noEmail)} have no address at all. Only the subscribed group above can
+            be emailed without asking first.
+          </p>
+
+          <div className="mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
+            <div>
+              <p className="label-xs mb-2 text-muted-foreground">
+                Contactable, by lifetime value
+              </p>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Lifetime value</Th>
+                    <Th align="right">Customers</Th>
+                    <Th align="right">Revenue</Th>
+                    <Th align="right">Avg orders</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lap.byValue.map((b) => (
+                    <tr key={b.band}>
+                      <Td>{b.band}</Td>
+                      <Td align="right">{num(b.customers)}</Td>
+                      <Td align="right">{jod(b.revenue)}</Td>
+                      <Td align="right">{b.avgOrders.toFixed(1)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+
+            <div>
+              <p className="label-xs mb-2 text-muted-foreground">
+                Contactable, by the year they stopped
+              </p>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Last ordered</Th>
+                    <Th align="right">Customers</Th>
+                    <Th align="right">Revenue</Th>
+                    <Th align="right">Avg orders</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lap.byYear.map((y) => (
+                    <tr key={y.year}>
+                      <Td>{y.year}</Td>
+                      <Td align="right">{num(y.customers)}</Td>
+                      <Td align="right">{jod(y.revenue)}</Td>
+                      <Td align="right">{y.avgOrders.toFixed(1)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+
+          <p className="mt-4 border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
+            Both tables count the SAME {num(lap.contactable.customers)} people, split two
+            ways — do not add them together. Value is lifetime, not recent, so a large
+            figure can belong to someone who stopped years ago; that is why the year
+            table sits beside it rather than below it.
+          </p>
+        </Panel>
+      ) : null}
 
       <Panel title="Repeat rate by acquisition year">
         {/* Age-limited so cohorts are comparable. The raw "ever repeated"

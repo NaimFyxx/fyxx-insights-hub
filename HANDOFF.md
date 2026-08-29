@@ -132,6 +132,56 @@ Shopify admin, Klaviyo and LoyaltyLion directly. Requirement worth preserving:
 That is as useful as the ones that can. The point is not bug-hunting; it is
 Naim rebuilding first-hand confidence rather than taking figures on trust.
 
+## House-account contamination — measured, and confined
+
+Naim's concern: house activity sitting inside a real customer's Klaviyo profile
+would corrupt any per-customer figure touching them, and any segment they are
+in. Measured rather than assumed:
+
+- **Inside this database: zero.** `customer_identity` holds 18,929 rows, 6,649
+  with a Klaviyo profile, and **every one of those profiles maps to exactly one
+  customer**. All 64 conflicted profiles are ABSENT from the table — the loader
+  quarantines an ambiguous profile rather than picking a winner. So no figure
+  computed here mixes a house account with a real customer. This was by
+  construction, not by luck, but it had never been checked.
+- **Inside Klaviyo: 3 profiles, 7 real customers.** Those 7 hold 611 lifetime
+  orders and 21,105 JOD — **0.50% of orders and 0.24% of revenue**. Confined.
+- **But severe for those 7 individually**: 1,502 house orders sit on the same
+  three profiles, so in Klaviyo those people's profiles carry roughly 2.5x more
+  house activity than their own.
+- **Two of the three profiles are SUBSCRIBED**, so they can receive campaigns
+  and sit in behavioural segments shaped by that mixed history. The affected
+  real customers are Omar Muhammad Khamash (`6607593505015`), Jireas Haddad
+  (`8312268947703`), Caroline Zawaideh (`4535572037785`), Jireas Sahawneh
+  (`9121758085367`) and three company records with no email.
+
+**Not fixable from here.** The merge lives in Klaviyo; this database only
+observes it. Unpicking it is manual work in Klaviyo's own UI.
+
+## The lapsed panel — built
+
+Live at `/customers`, directly under the headline tiles, because it is the only
+panel on that page naming a specific action for a specific list of people.
+`lapsed()` in `src/lib/customers.ts`; figures verified against SQL before
+shipping.
+
+- **6,392 lapsed** (bought at least once, nothing since 2025-01-01),
+  **1,478,104 JOD** lifetime between them.
+- **2,878 contactable today** — subscribed, no opt-in step — holding
+  **721,183 JOD**.
+- The other 3,514 are broken out and stated on the panel: 1,684 have an address
+  but were never asked, 771 unsubscribed, 1,059 have no address. The four
+  groups sum to 6,392 exactly.
+- **Start-here tile: 69 customers, 183,771 JOD** — subscribed, 1,000+ JOD
+  lifetime, last bought in 2024.
+- Value is concentrated: of the 2,878, **130 people at 1,000+ JOD hold 317,563
+  JOD — 4.5% of the people, 44% of the value**, averaging 36.9 lifetime orders.
+- Recency and value point the same way: the 1,029 who lapsed in 2024 are both
+  the largest group and the most valuable (355,049 JOD).
+
+Both tables on the panel split the SAME 2,878 people two ways, which the panel
+says explicitly so they are never added together.
+
 ## The filter audit — what it found
 
 Full detail and line references in `FILTERS.md`. The three that matter:

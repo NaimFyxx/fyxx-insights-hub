@@ -399,8 +399,16 @@ async function syncShopify({ from, to, dryRun, attributed }) {
   for (const r of rows) {
     totalByDate.set(r.date, (totalByDate.get(r.date) ?? 0) + Number(r.total_online_revenue_jod));
   }
+  // The CURRENT day is excluded. Both sources are mid-day and their cut-offs
+  // differ by hours, so Klaviyo pulled at 19:00 legitimately exceeds a Shopify
+  // figure written at 07:04. Checked on 2026-08-29: 1,025.620 attributed
+  // against 87.750 stored, a ratio of 11.69, entirely explained by three
+  // orders Shopify had not yet been asked for. Bounding an incomplete day
+  // fails every nightly run for a reason that is not a bug.
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
   const breaches = [];
   for (const [date, attr] of attributed ?? new Map()) {
+    if (date >= today) continue;
     const total = totalByDate.get(date);
     if (total === undefined) continue; // no Shopify rows for that day, nothing to bound against
     if (Number(attr) > total + 0.0005) {

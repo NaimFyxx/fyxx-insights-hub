@@ -28,19 +28,20 @@ export type Availability = { available: true } | { available: false; reason: str
 const ok: Availability = { available: true };
 
 /**
- * Our per-event attributed revenue disagrees with Klaviyo's own reporting by
- * roughly 2.3x (August 2026: 37,615 JOD here against 16,203 JOD in Klaviyo).
- * The cause is not yet known — duplicate events and multi-attribution summing
- * are the leading candidates.
+ * Attributed revenue was withheld from the report while our figure and
+ * Klaviyo's disagreed by roughly a factor of two. That is resolved: Klaviyo
+ * never retracts a Placed Order event when an order is cancelled, so the old
+ * metric-aggregate kept counting cancelled orders at full value. Attribution
+ * is now stored per order and netted against current cancellations at read
+ * time, and the daily figure is bounded by that day's total sales.
  *
- * Until that is settled the figure is withheld from the REPORT only. The
- * dashboard still shows it, because the dashboard has one user who knows the
- * discrepancy exists; the report goes to someone who does not, and a headline
- * revenue number that Klaviyo would contradict is worse than no number.
+ * August 2026 moved from 37,615 JOD to 28,260, and 5 August from an impossible
+ * 8,530 against 5,220 of sales to 1,618.
  *
- * Set to false once reconciled, and delete this block.
+ * Kept as a switch rather than deleted: if the bound is ever breached again,
+ * flipping this back withholds the figure instead of publishing a wrong one.
  */
-export const ATTRIBUTION_UNRECONCILED = true;
+export const ATTRIBUTION_UNRECONCILED = false;
 const no = (reason: string): Availability => ({ available: false, reason });
 
 /** Every day in the range, for coverage checks. */

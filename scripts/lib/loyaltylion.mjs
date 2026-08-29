@@ -267,18 +267,49 @@ export async function fetchPeriodActivity(from, to) {
   const allRuleNames = new Set();
   const matchedRules = new Set();
   const valueSpread = new Map(); // points value -> how many times it was issued
+  const birthdayStates = new Map();
 
-  for await (const batch of paginate(`/activities?${q}`, "activities", "activities")) {
+  // TWO faults were found here, and both produced a silent zero rather than an
+  // error, which is why it read as "no birthday rewards exist" for months.
+  //
+  //   1. /activities IGNORES created_at_min and created_at_max. Sending them
+  //      and sending nothing return byte-identical pages. This file's own
+  //      banner warns about exactly this, and assertFilterHonoured exists for
+  //      it, but this call never used it. Dates are filtered HERE instead.
+  //
+  //   2. Birthday activities are issued `pending` and stay pending. The old
+  //      code counted only `approved`, so it counted none of them, ever.
+  //      Measured: 115 of 115 in a recent sample were pending. A reward that
+  //      has been issued has been issued; only void and declined are excluded,
+  //      which matches how redemptions are counted above.
+  //
+  // The activities endpoint returns newest first, so paging stops once it is
+  // past the start of the range.
+  // Compare INSTANTS, not strings: min/max carry a +03:00 offset while
+  // created_at comes back as UTC "Z", so lexicographic comparison would be
+  // wrong at the boundaries.
+  const minT = Date.parse(min), maxT = Date.parse(max);
+  for await (const batch of paginate(`/activities`, "activities", "activities")) {
+    let allOlder = batch.length > 0;
     for (const a of batch) {
+      const at = Date.parse(a.created_at ?? "");
+      if (!Number.isFinite(at)) continue;
+      if (at >= minT) allOlder = false;
       const name = `${a.rule?.name ?? ""} ${a.rule?.title ?? ""}`.trim();
       if (name) allRuleNames.add(name);
       if (!/birthday/i.test(name)) continue;
+      if (at < minT || at > maxT) continue;
       matchedRules.add(name);
-      if (a.state !== "approved") continue;
+      birthdayStates.set(a.state, (birthdayStates.get(a.state) ?? 0) + 1);
+      if (a.state === "void" || a.state === "declined") continue;
       birthday++;
       const v = Number(a.value ?? 0);
       valueSpread.set(v, (valueSpread.get(v) ?? 0) + 1);
     }
+    if (allOlder) break; // everything from here back predates the range
+  }
+  if (birthdayStates.size) {
+    log.info(`  birthday activity states: ${[...birthdayStates].map(([k, v]) => `${k}=${v}`).join(", ")}`);
   }
 
   reportBirthdayMatch({ matchedRules, allRuleNames, birthday, valueSpread });

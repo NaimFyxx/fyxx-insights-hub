@@ -301,6 +301,21 @@ export function assertReadOnly(document, label = "graphql") {
  *   Mobile App : 2653365 (Shopney, previous) -> 5382175 (Appmaker, current)
  *   POS        : pos (Shopify POS, historic) -> 179433 (Odoo Connector, current)
  * --------------------------------------------------------------------- */
+/**
+ * Resolving an unknown source id.
+ *
+ * A numeric `sourceName` is a Shopify app id, and the app can be looked up
+ * directly rather than guessed at from a name:
+ *
+ *   query { node(id: "gid://shopify/App/1830279") {
+ *     ... on App { title handle developerName } } }
+ *
+ * That returned "Shopify Web" / shopify_web / Shopify, which settled a mapping
+ * that pattern-matching would have got wrong. Use it for any future unmapped
+ * id, then confirm against the orders themselves before adding a row here.
+ * Confirmed this way: 580111 Online Store, 5382175 Appmaker, 179433 Odoo
+ * Connector (Webkul), 1354745 Draft Orders, 1830279 Shopify Web.
+ */
 export const SOURCE_MAP = {
   web:                  { sub_channel: "Website",      channel: "Online Sales" },
   // Shopify's newer checkout, 2019-2023. All 286 of these orders carry
@@ -315,6 +330,11 @@ export const SOURCE_MAP = {
   shopify_draft_order:  { sub_channel: "Draft Orders", channel: "Draft Orders" },
   iphone:               { sub_channel: "Draft Orders", channel: "Draft Orders" },
   android:              { sub_channel: "Draft Orders", channel: "Draft Orders" },
+  // gid://shopify/App/1830279 = "Shopify Web" (handle shopify_web), the admin
+  // web interface. Same family as iphone and android: staff-created orders.
+  // Verified rather than inferred — all 92 of these orders carry
+  // app = "Draft Orders" and a customer.
+  "1830279":            { sub_channel: "Draft Orders", channel: "Draft Orders" },
 };
 
 /**

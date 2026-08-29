@@ -353,6 +353,50 @@ async function syncShopify({ from, to, dryRun, attributed }) {
     }
   }
 
+  // --- hard bound: attributed revenue can never exceed the day's total ------
+  //
+  // Klaviyo's Placed Order events keep counting orders that were LATER
+  // CANCELLED, at full value, and Klaviyo is never told about the cancellation.
+  // Our Shopify figure correctly excludes them, so on a day with large
+  // cancellations the attributed figure can exceed the day's entire revenue.
+  //
+  // Verified on 2026-08-05: 86 orders, of which 7 cancelled worth 6,912.500
+  // JOD, three of them draft orders over 1,900 each. Klaviyo reported 12,101
+  // JOD for the day against a true 5,220.573, and attributed 8,530.320 — more
+  // than the day took. Widening the sync window does not help, because the
+  // event is never retracted.
+  //
+  // This is a correctness bound, not a heuristic: attributed is a SUBSET of
+  // total. A breach means the figure is wrong, so the run fails rather than
+  // leaving an impossible number on the dashboard and in the report.
+  const totalByDate = new Map();
+  for (const r of rows) {
+    totalByDate.set(r.date, (totalByDate.get(r.date) ?? 0) + Number(r.total_online_revenue_jod));
+  }
+  const breaches = [];
+  for (const [date, attr] of attributed ?? new Map()) {
+    const total = totalByDate.get(date);
+    if (total === undefined) continue; // no Shopify rows for that day, nothing to bound against
+    if (Number(attr) > total + 0.0005) {
+      breaches.push({ date, attributed: money3(Number(attr)), total: money3(total) });
+    }
+  }
+  if (breaches.length) {
+    log.error(`ATTRIBUTED REVENUE EXCEEDS TOTAL SALES on ${breaches.length} day(s):`);
+    for (const b of breaches) {
+      log.error(`    ${b.date}  attributed ${b.attributed} JOD  >  total ${b.total} JOD`);
+    }
+    log.error("  Attributed revenue is a subset of total sales and cannot exceed it.");
+    log.error("  Most likely cause: orders cancelled after Klaviyo recorded the Placed Order event.");
+    if (!dryRun) {
+      await writeSyncLog(
+        { source: "klaviyo_attributed_daily", status: "error", rangeStart: from, rangeEnd: to, rowsWritten: 0,
+          message: `IMPOSSIBLE: attributed > total sales on ${breaches.length} day(s): ${breaches.map((b) => b.date).join(", ")}` },
+        { dryRun: false },
+      );
+    }
+  }
+
   if (dryRun) {
     log.info("Shopify — would write:");
     preview("shopify_daily_sales", rows, ["date", "source_name", "sub_channel", "total_online_revenue_jod", "orders"]);
@@ -365,6 +409,11 @@ async function syncShopify({ from, to, dryRun, attributed }) {
     { dryRun },
   );
   log.ok(`Shopify: ${w} day rows`);
+  if (breaches.length) {
+    throw new Error(
+      `attributed revenue exceeds total sales on ${breaches.length} day(s): ${breaches.map((b) => b.date).join(", ")}`,
+    );
+  }
   return w;
 }
 

@@ -696,6 +696,17 @@ grading by value closeness:
   is -43.0% reported against **-42.9% adjusted** — a tenth of a percentage
   point. The peak single month is Mobile App in April 2026 at 2,139 JOD on
   55,239, under 4%; Website never exceeds 1.2%.
+
+  > **Correction.** The first run of this analysis also reported Mobile App
+  > year on year as +831.8%. That was wrong. The script bucketed Mobile App on
+  > `5382175` (Appmaker) alone, while Shopney (`2653365`) ran until 6 August
+  > 2025 and carried 5,659 orders worth 315,633 JOD in 2025. Counting both, as
+  > `SOURCE_MAP` and the dashboard do, Mobile App is **+23.8%** year on year,
+  > not +831.8%. The stored `shopify_daily_sales` rows were always correct —
+  > both ids carry `sub_channel = 'Mobile App'` — so nothing on the dashboard
+  > was affected. Any ad-hoc script that groups by `source_name` must fold the
+  > two app ids together, or it will invent a channel launch that never
+  > happened.
 - Only **172 of 1,462** app/web cancellations have a confident same-day
   replacement (10,432 JOD over 20 months). 1,169 have no same-day order from
   that customer at all, so most cancellations are simply cancellations.

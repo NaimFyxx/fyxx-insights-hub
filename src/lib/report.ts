@@ -13,7 +13,7 @@ import {
   type Activation,
 } from "@/lib/queries";
 import { POS_DEFINITION_CHANGED } from "@/lib/channels";
-import type { DateRange } from "@/lib/ranges";
+import { settledOnly, rangeIncludesToday, type DateRange } from "@/lib/ranges";
 
 /**
  * A section that cannot be rendered honestly is marked unavailable with the
@@ -307,6 +307,8 @@ export type ReportData = {
     klaviyoAttributed: number;
     allChannels: number;
     sharePct: number | null;
+    /** True when the range runs into the day still in progress. */
+    shareIsPartial: boolean;
   };
   notices: string[];
 };
@@ -380,6 +382,17 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
 
+  // The SHARE divides two sources synced hours apart, so the day still in
+  // progress is excluded from both sides of it. The absolute figures above
+  // keep the whole range. A month-end export is unaffected; only an export run
+  // mid-month, which is exactly when someone is checking a figure early.
+  const klaviyoSettled = settledOnly(attributed).reduce((a, x) => a + Number(x.revenue_jod), 0);
+  const salesSettled = settledOnly(sales).reduce(
+    (a, x) => a + Number(x.total_online_revenue_jod),
+    0,
+  );
+  const shareIsPartial = rangeIncludesToday(range);
+
   const notices: string[] = [];
   if (range.from < POS_DEFINITION_CHANGED && range.to >= POS_DEFINITION_CHANGED) {
     notices.push(
@@ -418,7 +431,8 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
         : ok,
       klaviyoAttributed,
       allChannels,
-      sharePct: allChannels > 0 ? (klaviyoAttributed / allChannels) * 100 : null,
+      sharePct: salesSettled > 0 ? (klaviyoSettled / salesSettled) * 100 : null,
+      shareIsPartial,
     },
     notices,
   };

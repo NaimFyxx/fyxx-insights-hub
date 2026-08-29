@@ -270,6 +270,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                     </div>
                     <div className="l">
                       Share of all sales <b>({num(Math.round(revenue.allChannels))} JOD total)</b>
+                      {revenue.shareIsPartial ? " — to yesterday" : ""}
                     </div>
                   </>
                 )}

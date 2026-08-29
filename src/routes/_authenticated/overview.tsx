@@ -9,7 +9,7 @@ import {
   fetchPush,
   fetchSnapshots,
 } from "@/lib/queries";
-import { previousRange } from "@/lib/ranges";
+import { previousRange, settledOnly, rangeIncludesToday } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { attributionLimitNote, SUB_CHANNELS, describeChannels } from "@/lib/channels";
@@ -129,7 +129,13 @@ function OverviewPage() {
   // other Klaviyo figures the toggles do not affect.
   const allNow = sum(d.sales.map((x) => Number(x.total_online_revenue_jod)));
   const allPrev = sum(d.prevSales.map((x) => Number(x.total_online_revenue_jod)));
-  const shareNow = allNow > 0 ? (klaviyoNow / allNow) * 100 : null;
+  // The RATIO excludes the day still in progress. Klaviyo and Shopify are
+  // synced hours apart, so on the current day one source is further ahead than
+  // the other and the share is distorted in whichever direction synced later.
+  // The absolute tiles above still include today; only this quotient cannot.
+  const klaviyoSettled = sum(settledOnly(d.attributed).map((x) => Number(x.revenue_jod)));
+  const allSettled = sum(settledOnly(d.sales).map((x) => Number(x.total_online_revenue_jod)));
+  const shareNow = allSettled > 0 ? (klaviyoSettled / allSettled) * 100 : null;
   const sharePrev = allPrev > 0 ? (klaviyoPrev / allPrev) * 100 : null;
 
   // Tier counts exist only on days we scanned LoyaltyLion — 3 of 369, because
@@ -197,7 +203,11 @@ function OverviewPage() {
             delta={
               shareNow !== null && sharePrev !== null ? deltaPct(shareNow, sharePrev) : undefined
             }
-            note={`${jod(klaviyoNow)} of ${jod(allNow)} across every channel`}
+            note={
+              rangeIncludesToday(range)
+                ? `${jod(klaviyoSettled)} of ${jod(allSettled)} across every channel, to yesterday`
+                : `${jod(klaviyoSettled)} of ${jod(allSettled)} across every channel`
+            }
           />
         </div>
         {/* The share tile divides by every channel, so it inherits the channels

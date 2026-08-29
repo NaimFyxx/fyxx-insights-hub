@@ -571,6 +571,20 @@ export type Database = {
       };
     };
     Views: {
+      klaviyo_order_influence_net: {
+        Row: {
+          created_at: string | null;
+          date: string | null;
+          hours_since_click: number | null;
+          id: string | null;
+          order_id: string | null;
+          ordered_at: string | null;
+          revenue_jod: number | null;
+          sub_channel: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [];
+      };
       klaviyo_attributed_daily_net: {
         Row: {
           date: string | null;

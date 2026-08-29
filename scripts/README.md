@@ -957,7 +957,7 @@ ignores, and Shopify's order search silently drops a `source_name` filter.
 
 **2. Does anything answer a question closed as unanswerable?**
 
-- **Push click tracking: ANSWERED, and the answer is that it does not exist.**
+- **Push click tracking: ANSWERED. The metric does not exist.**
   Klaviyo's metric list contains `Opened Push` and `Bounced Push` but **no
   push-click metric of any kind**. The zero is not a tracking fault under
   investigation — Klaviyo does not emit the event. The report wording should
@@ -983,6 +983,36 @@ ignores, and Shopify's order search silently drops a `source_name` filter.
   enabled". Available on a higher plan, not on this one.
 - **LoyaltyLion: endpoint exists** (`/v2/webhooks`, returns an empty list) and
   the docs list create and delete. Same infrastructure blocker as Shopify.
+
+### Decisions taken on the sweep's findings, 30 August 2026
+
+**Webhooks: poll now, webhooks later.** Shopify `ORDERS_CANCELLED` is the
+properly correct fix for retroactive changes and we are deliberately not using
+it yet.
+
+> An Edge Function is a new piece of always-on infrastructure with its own
+> failure modes, and there would be no way to notice if it stopped receiving.
+> The `updated_at` poll runs inside a job already monitored on the sync health
+> page. **Approximate and observable beats exact and silent.**
+
+That reasoning is worth more than the decision. A webhook that silently stops
+delivering looks identical to a quiet week, and this project has spent a lot of
+effort removing figures that look fine when they are wrong. Revisit if the poll
+turns out to miss things.
+
+What it would take: a Supabase Edge Function with an HTTPS endpoint, HMAC
+verification of Shopify's signature, a registered subscription per topic
+(`ORDERS_CANCELLED`, `ORDERS_UPDATED`, `REFUNDS_CREATE`), and — the part that
+matters — a heartbeat so a silent failure is visible on the health page.
+
+**Bulk operations: no.** They would cut an eleven-minute sweep to one job, but
+starting one is a mutation and `assertReadOnly` blocks every mutation.
+
+> Don't relax the guard to save eleven minutes on a sweep that runs rarely. The
+> moment there's an exception the guard stops being a guard.
+
+Recorded as available if a sweep is ever genuinely too slow to run, which is not
+the case today.
 
 ### What each API offers, and whether we use it
 

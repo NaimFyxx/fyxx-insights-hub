@@ -488,8 +488,9 @@ export function ReportPage1({ data }: { data: ReportData }) {
               </tbody>
             </table>
             <p className="caption">
-              Push clicks are not reported: click tracking is recording zero across the account and
-              is under investigation, so a click column here would show a zero that means nothing.
+              Push clicks are not shown because Klaviyo does not measure them. It emits opens and
+              bounces for push, and no click event of any kind, so opens are the only push signal
+              available to anyone using Klaviyo. This is a closed question, not an outstanding one.
             </p>
           </Guard>
         </section>

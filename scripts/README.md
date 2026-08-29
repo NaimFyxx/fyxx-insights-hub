@@ -727,6 +727,39 @@ channel's all-time repeat rate, which for the app is dominated by its early
 years, so it flatters the mix explanation in later cohorts. What is solid is
 the direction and the ordering, not the precise six points.
 
+### LoyaltyLion pagination: use the body, never the Link header
+
+The response body carries `cursor.next`. The **Link header lists
+`rel="previous"` BEFORE `rel="next"` from page two onward**, so matching
+`/cursor=([^&>;]+)/` picks up the PREVIOUS cursor and the pagination
+ping-pongs: forward, back, forward, back. A sweep of a 21,264-customer
+population produced 45,000 rows before it was noticed.
+
+`scripts/lib/loyaltylion.mjs` has always been correct — it reads
+`res.cursor?.next`. The fault was in ad-hoc scripts. Any sample size quoted
+from one of those before 29 August 2026 is inflated and contains duplicates.
+
+### Enrolment is the single largest retention difference measured
+
+Repeat within 90 days, by acquisition channel, split on LoyaltyLion enrolment:
+
+| Acquired via | Enrolled | Not enrolled | Gap | Orders enrolled / not |
+|---|---|---|---|---|
+| Website | 56.7% | 26.6% | **+30.1** | 18.9 / 3.3 |
+| Mobile App | 48.9% | 30.5% | +18.4 | 16.0 / 4.7 |
+| Draft Orders | 46.0% | 31.6% | +14.4 | 23.6 / 5.4 |
+| **POS** | **40.7%** | **24.4%** | **+16.3** | 9.0 / 3.2 |
+
+An **enrolled POS customer repeats at 40.7%**, close to the app's 44.7% overall
+and above every channel's blended rate. A non-enrolled one repeats at 24.4%.
+Only 2,150 of 3,480 POS customers are enrolled.
+
+**This is correlational and the selection bias is severe.** Loyal customers are
+more likely to enrol, so the gap is not evidence that enrolment CAUSES
+retention. Establishing that needs a comparison the data cannot currently
+supply — customers who were offered enrolment and declined, against those who
+accepted. What the figure does support is where to look, not what to conclude.
+
 ### The first measurable outcome we have for any flow
 
 Birthday rewards that expired unredeemed: **48 in total, every one of them

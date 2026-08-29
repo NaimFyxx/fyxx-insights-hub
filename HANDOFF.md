@@ -22,6 +22,19 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 ## Resolved
 
+- **API capability sweep done**, recorded in the README with the date. Three
+  findings that change what is next:
+  - **Push clicks do not exist.** Klaviyo has `Opened Push` and `Bounced Push`
+    and NO push-click metric. The report says the zero is "under
+    investigation"; it should say Klaviyo does not emit the event.
+  - **Shopify webhooks are the right fix for retroactive changes**, better than
+    polling `updated_at`. `ORDERS_CANCELLED` fires however old the order. 225
+    topics, none registered, token has the scopes. Blocked on having nothing
+    listening — a Supabase Edge Function would be the home.
+  - **Shopify bulk operations** would replace the 11-minute sweeps with one
+    job, but starting one is a mutation and `assertReadOnly` blocks all
+    mutations by standing instruction. Needs a decision, not an assumption.
+
 - **Enrolment before/after test done** — result inverts the cross-sectional
   finding. See the enrolment section above.
 
@@ -218,19 +231,21 @@ programme, tiers and point values.
 
 ## Next
 
-1. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
-   surface, then one real probe per untried endpoint, timeboxed, into the
-   README with the date. **Include `/v2/orders` on LoyaltyLion**: never used,
-   carries `cancellation_status`, `total_refunded` and
-   `metadata.shopify_source_name`, so it is a third independent view of every
-   order and would let Shopify be cross-checked against something other than
-   itself.
+1. **Report wording: push clicks.** One line. "Under investigation" is wrong —
+   Klaviyo does not emit a push-click metric at all.
 2. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
    LoyaltyLion ids, with `matched_how`; surface the 20 Klaviyo profiles that
-   map to several Shopify customers as a merge-detection list
-3. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
-   repair, and the Klaviyo trailing-90-day campaign re-fetch (one API call)
-4. **Critical review of the whole dashboard and report** — once the queue is
+   map to several Shopify customers as a merge-detection list.
+3. **Retroactive-change fixes, still unbuilt**: the `updated_at`-driven Shopify
+   repair and the Klaviyo trailing-90-day campaign re-fetch (one API call).
+   **Reconsider first**: Shopify `ORDERS_CANCELLED` webhooks would do this
+   properly rather than approximately, but need something listening. Decide
+   between polling now and a Supabase Edge Function.
+4. **`/v2/orders` on LoyaltyLion** — still untapped. A third independent view
+   of every order carrying `cancellation_status`, `total_refunded` and
+   `metadata.shopify_source_name`, so Shopify can be cross-checked against
+   something other than itself.
+5. **Critical review of the whole dashboard and report** — once the queue is
    empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
    what exists because it was built rather than because it would be used.
    **Include a three-way split of every number: MEASURED, INFERRED, and NEVER

@@ -4,7 +4,7 @@ import { format, parseISO } from "date-fns";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchCampaigns } from "@/lib/queries";
 import { jod, num, pct, rate } from "@/lib/format";
-import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/campaigns")({
 
 function CampaignsPage() {
   const { range, refreshKey } = useDateRange();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["campaigns", range.from, range.to, refreshKey],
     queryFn: () => fetchCampaigns(range),
   });
@@ -46,7 +46,11 @@ function CampaignsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Email campaigns" subtitle="One row per campaign sent in the selected range." />
+      <PageHeader
+        title="Email campaigns"
+        subtitle="One row per campaign sent in the selected range. Klaviyo cannot split by Shopify sales channel, so no channel filter applies here."
+      />
+      {isError ? <QueryFailed error={error} /> : null}
 
       <Panel title="Revenue per campaign">
         {rows.length ? (

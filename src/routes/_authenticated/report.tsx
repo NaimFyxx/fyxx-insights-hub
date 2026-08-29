@@ -1,13 +1,14 @@
 import { useMemo, useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO, endOfMonth, startOfMonth, subMonths } from "date-fns";
+import { format, parseISO, endOfMonth, startOfMonth } from "date-fns";
 import { PageHeader } from "@/components/fyxx/primitives";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { buildReport, saveNarrative, type Availability, type ReportData } from "@/lib/report";
-import { DATA_TODAY, iso, type DateRange } from "@/lib/ranges";
+import { ammanNow, iso, type DateRange } from "@/lib/ranges";
+import { useDateRange } from "@/context/date-range-context";
 import { num, pct, jod } from "@/lib/format";
 import { attributionLimitNote, SUB_CHANNELS } from "@/lib/channels";
 import "@/styles/report.css";
@@ -39,7 +40,11 @@ function Guard({
 }
 
 function ReportPage() {
-  const [month, setMonth] = useState(() => format(subMonths(DATA_TODAY, 0), "yyyy-MM"));
+  const [month, setMonth] = useState(() => format(ammanNow(), "yyyy-MM"));
+
+  // Refresh must reach this page too; the month picker below is its own
+  // control and deliberately ignores the global date range.
+  const { refreshKey } = useDateRange();
 
   const range: DateRange = useMemo(() => {
     const base = parseISO(`${month}-01`);
@@ -47,7 +52,7 @@ function ReportPage() {
   }, [month]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["report", range.from, range.to],
+    queryKey: ["report", range.from, range.to, refreshKey],
     queryFn: () => buildReport(range),
   });
 
@@ -56,7 +61,7 @@ function ReportPage() {
       <div className="no-print space-y-6">
         <PageHeader
           title="Report"
-          subtitle="The monthly page sent to Zeid. Print to PDF at A4, no scaling, background graphics on."
+          subtitle="The monthly page sent to Zeid. Pick the month below — the date range above does not apply. Print to PDF at A4, no scaling, background graphics on."
         />
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
@@ -64,7 +69,7 @@ function ReportPage() {
             <Input
               type="month"
               value={month}
-              max={format(DATA_TODAY, "yyyy-MM")}
+              max={format(ammanNow(), "yyyy-MM")}
               onChange={(e) => setMonth(e.target.value)}
               className="w-44"
             />
@@ -109,7 +114,7 @@ function NarrativeEditor({ range, data }: { range: DateRange; data: ReportData }
           .map((b) => b.trim())
           .filter(Boolean),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["report", range.from, range.to] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["report"] }),
   });
 
   return (

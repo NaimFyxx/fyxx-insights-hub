@@ -15,10 +15,32 @@ export type DateRange = { from: string; to: string };
 
 export const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
-/** The seeded dataset covers June–August 2026. */
-export const DATA_TODAY = parseISO("2026-08-31");
+/**
+ * The Amman calendar date right now.
+ *
+ * Sources are synced at different times of day: Shopify might be written at
+ * 07:04 while Klaviyo is pulled that evening. Any figure that DIVIDES one
+ * source by another is distorted for the day still in progress, in whichever
+ * direction was synced later.
+ */
+export const ammanToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
 
-export function presetRange(key: PresetKey, today: Date = DATA_TODAY): DateRange {
+/** The same instant as a Date, for the date-fns calendar helpers. */
+export const ammanNow = () => parseISO(ammanToday());
+
+/**
+ * Presets read the REAL clock, deliberately.
+ *
+ * This previously defaulted to `DATA_TODAY`, hardcoded to 2026-08-31 by the
+ * Lovable seed with the comment "the seeded dataset covers June-August 2026".
+ * It was harmless only while the real date happened to match it. From
+ * 1 September 2026 "This month" would have meant August and "Last month" July,
+ * silently and permanently, and the report page would have refused to open
+ * September at all. Nothing would have looked broken.
+ *
+ * `today` stays a parameter so the behaviour can be tested at any date.
+ */
+export function presetRange(key: PresetKey, today: Date = ammanNow()): DateRange {
   switch (key) {
     case "last_month": {
       const m = subMonths(today, 1);
@@ -62,17 +84,6 @@ export const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "last_3_months", label: "Last 3 months" },
   { key: "custom", label: "Custom" },
 ];
-
-/**
- * The Amman calendar date right now.
- *
- * Distinct from DATA_TODAY, which is a fixed reference for range presets. This
- * is the real clock, and it matters because sources are synced at different
- * times of day: Shopify might be written at 07:04 while Klaviyo is pulled that
- * evening. Any figure that DIVIDES one source by another is distorted for the
- * day still in progress, in whichever direction was synced later.
- */
-export const ammanToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
 
 /**
  * Drop the day still in progress from a cross-source ratio.

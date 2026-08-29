@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchActivations, type Activation } from "@/lib/queries";
-import { PageHeader, Panel, EmptyState, SectionLabel } from "@/components/fyxx/primitives";
+import { PageHeader, Panel, EmptyState, SectionLabel, QueryFailed } from "@/components/fyxx/primitives";
+import { useDateRange } from "@/context/date-range-context";
 
 export const Route = createFileRoute("/_authenticated/activations")({
   head: () => ({
@@ -38,7 +39,11 @@ function ActivationsPage() {
   const [month, setMonth] = useState<string>("all");
   const [draft, setDraft] = useState<Draft | null>(null);
 
-  const { data, isLoading } = useQuery({ queryKey: ["activations"], queryFn: fetchActivations });
+  const { refreshKey } = useDateRange();
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["activations", refreshKey],
+    queryFn: fetchActivations,
+  });
 
   const months = useMemo(() => {
     const set = new Set((data ?? []).map((a) => a.date.slice(0, 7)));
@@ -60,7 +65,7 @@ function ActivationsPage() {
     },
     onSuccess: () => {
       setDraft(null);
-      qc.invalidateQueries({ queryKey: ["activations"] });
+      qc.invalidateQueries({ queryKey: ["activations"] }); // prefix match, survives refreshKey
     },
   });
 
@@ -77,7 +82,11 @@ function ActivationsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Activations" subtitle="In-store and event calendar." />
+      <PageHeader
+        title="Activations"
+        subtitle="In-store and event calendar. Filtered by its own month picker, not the date range above."
+      />
+      {isError ? <QueryFailed error={error} /> : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <SectionLabel>Month</SectionLabel>

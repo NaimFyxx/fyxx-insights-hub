@@ -9,7 +9,7 @@ import {
   fetchSeedResidue,
   type SourceHealth,
 } from "@/lib/health";
-import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { num } from "@/lib/format";
 
@@ -47,7 +47,7 @@ function StateBadge({ state }: { state: SourceHealth["state"] }) {
 function HealthPage() {
   const { refreshKey } = useDateRange();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["health", refreshKey],
     queryFn: async () => {
       const rows = await fetchSyncLog();
@@ -60,6 +60,15 @@ function HealthPage() {
     },
     refetchInterval: 60_000,
   });
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Sync health" />
+        <QueryFailed error={error} />
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (

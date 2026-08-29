@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { PageHeader, Panel, StatTile, EmptyState, QueryFailed } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { Input } from "@/components/ui/input";
 import { fetchDailySales } from "@/lib/queries";
@@ -23,6 +23,7 @@ import {
   LAPSED_SINCE,
 } from "@/lib/customers";
 import { ammanToday } from "@/lib/ranges";
+import { useDateRange } from "@/context/date-range-context";
 import { jod, num, pct } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/customers")({
@@ -39,11 +40,15 @@ export const Route = createFileRoute("/_authenticated/customers")({
 function CustomersPage() {
   const [windowDays, setWindowDays] = useState(90);
   const today = ammanToday();
+  // This page is deliberately all-time, so it ignores the date range. It must
+  // still honour Refresh: without refreshKey in the key the button was inert
+  // here, which is indistinguishable from a page that simply never updates.
+  const { refreshKey } = useDateRange();
 
-  const q = useQuery({ queryKey: ["customers"], queryFn: fetchCustomers });
+  const q = useQuery({ queryKey: ["customers", refreshKey], queryFn: fetchCustomers });
   // POS capture needs order counts as the denominator, so the whole history.
   const sq = useQuery({
-    queryKey: ["pos-capture-sales"],
+    queryKey: ["pos-capture-sales", refreshKey],
     queryFn: () => fetchDailySales({ from: "2019-01-01", to: POS_CAPTURE_COMPARABLE_UNTIL }),
   });
   const enrol = useMemo(() => (q.data ? byEnrolment(q.data, today, 90) : []), [q.data, today]);
@@ -64,6 +69,15 @@ function CustomersPage() {
   const mix = useMemo(() => (q.data ? mixVersusDecay(q.data, today, 90) : []), [q.data, today]);
   const decay = useMemo(() => (q.data ? channelDecay(q.data, today, 90) : []), [q.data, today]);
   const lap = useMemo(() => (q.data ? lapsed(q.data) : null), [q.data]);
+
+  if (q.isError || sq.isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Customers" />
+        <QueryFailed error={q.error ?? sq.error} />
+      </div>
+    );
+  }
 
   if (q.isLoading || !s) {
     return (
@@ -94,6 +108,13 @@ function CustomersPage() {
         title="Customers"
         subtitle={`${num(s.totalCustomers)} customers, ${num(s.buyers)} of whom have ordered. ${num(s.houseExcluded.count)} house and staff accounts excluded, holding ${num(s.houseExcluded.orders)} lifetime orders.`}
       />
+
+      {/* The date presets sit above this page and do nothing to it. Correct —
+          every figure here is lifetime — but silence reads as a broken filter. */}
+      <p className="border-l-2 border-border bg-secondary/40 px-4 py-2 text-xs text-muted-foreground">
+        Every figure on this page is <b>lifetime, across all channels</b>. The date range
+        and channel controls do not apply here and are not being ignored by mistake.
+      </p>
 
       {/* The three that matter, before any chart. */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

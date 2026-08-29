@@ -4,7 +4,7 @@ import { useDateRange } from "@/context/date-range-context";
 import { fetchSnapshots } from "@/lib/queries";
 import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct, pointsToJod } from "@/lib/format";
-import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { TierLineChart } from "@/components/charts/TierLineChart";
 
 export const Route = createFileRoute("/_authenticated/loyalty")({
@@ -47,13 +47,22 @@ function LoyaltyPage() {
   const { range, refreshKey } = useDateRange();
   const prev = previousRange(range);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["loyalty", range.from, range.to, refreshKey],
     queryFn: async () => {
       const [current, previous] = await Promise.all([fetchSnapshots(range), fetchSnapshots(prev)]);
       return { current, previous };
     },
   });
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Loyalty" />
+        <QueryFailed error={error} />
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (

@@ -162,7 +162,12 @@ function OverviewPage() {
   for (const s of selSales) {
     totalByDate.set(s.date, (totalByDate.get(s.date) ?? 0) + Number(s.total_online_revenue_jod));
   }
-  const linePoints = [...totalByDate.keys()].sort().map((date) => ({
+  // Union of both series, not just the selected channels. Taking the axis from
+  // sales alone silently dropped any day with Klaviyo revenue but no sales in
+  // the current selection, removing that day's Klaviyo point with it — the
+  // channel filter reaching a series it does not apply to.
+  const axis = [...new Set([...totalByDate.keys(), ...attributedByDate.keys()])].sort();
+  const linePoints = axis.map((date) => ({
     date,
     klaviyo: attributedByDate.get(date) ?? 0,
     total: totalByDate.get(date) ?? 0,

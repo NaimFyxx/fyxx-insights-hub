@@ -21,8 +21,17 @@ export const Route = createFileRoute("/_authenticated/export")({
 function ExportPage() {
   const navigate = useNavigate();
   const { range } = useDateRange();
+  // Seeded from the global range and then FOLLOWS it. Previously these were
+  // initial state only, so changing the preset while on this page left the
+  // export covering a period the user was no longer looking at.
   const [from, setFrom] = useState(range.from);
   const [to, setTo] = useState(range.to);
+  const [seeded, setSeeded] = useState(`${range.from}|${range.to}`);
+  if (seeded !== `${range.from}|${range.to}`) {
+    setSeeded(`${range.from}|${range.to}`);
+    setFrom(range.from);
+    setTo(range.to);
+  }
   const [highlight, setHighlight] = useState("");
   const [bullets, setBullets] = useState(["", "", ""]);
   const [error, setError] = useState<string | null>(null);

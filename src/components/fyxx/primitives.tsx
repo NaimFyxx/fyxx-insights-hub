@@ -81,3 +81,21 @@ export function StatTile({
 export function EmptyState({ children }: { children: ReactNode }) {
   return <p className="py-10 text-center text-sm text-muted-foreground">{children}</p>;
 }
+
+/**
+ * A query that FAILED, rendered as a failure.
+ *
+ * Every page used to fall back to `data ?? []` or `isLoading || !data`, so an
+ * error appeared either as "No campaigns in range." — a confident factual claim
+ * manufactured by a network error — or as "Loading…" forever. Both are worse
+ * than an error, because both look like answers.
+ */
+export function QueryFailed({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    <div className="border border-destructive/40 bg-destructive/5 px-4 py-3">
+      <p className="text-sm text-destructive">This could not be loaded, so nothing below is a real figure.</p>
+      <p className="mt-1 text-xs text-muted-foreground">{message}</p>
+    </div>
+  );
+}

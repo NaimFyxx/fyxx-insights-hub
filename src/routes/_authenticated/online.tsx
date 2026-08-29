@@ -14,7 +14,7 @@ import {
   concentrationOf,
   type Granularity,
 } from "@/lib/timeseries";
-import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { DualAxisChart } from "@/components/charts/DualAxisChart";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ function OnlineChannelsPage() {
 
   const lastYear = sameRangeLastYear(range.from, range.to);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["online", range.from, range.to, refreshKey],
     queryFn: async () => {
       const [now, prior] = await Promise.all([fetchDailySales(range), fetchDailySales(lastYear)]);
@@ -66,6 +66,15 @@ function OnlineChannelsPage() {
     () => buildSeries(data?.prior ?? [], granularity),
     [data, granularity],
   );
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Online channels" />
+        <QueryFailed error={error} />
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (

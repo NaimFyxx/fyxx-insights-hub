@@ -33,17 +33,22 @@ export function TopBar() {
 
         {preset === "custom" ? (
           <div className="flex items-center gap-2 text-xs">
+            {/* An <input type="date"> emits "" while it is being cleared or
+                half-typed. That reached PostgREST as `date >= ''`, which the
+                database rejects outright — so a keystroke could put every page
+                into a permanent loading state. Hold the last good value until
+                a complete date arrives. */}
             <input
               type="date"
               value={range.from}
-              onChange={(e) => setCustom({ ...range, from: e.target.value })}
+              onChange={(e) => e.target.value && setCustom({ ...range, from: e.target.value })}
               className="rounded-sm border border-input px-2 py-1"
             />
             <span className="text-muted-foreground">to</span>
             <input
               type="date"
               value={range.to}
-              onChange={(e) => setCustom({ ...range, to: e.target.value })}
+              onChange={(e) => e.target.value && setCustom({ ...range, to: e.target.value })}
               className="rounded-sm border border-input px-2 py-1"
             />
           </div>

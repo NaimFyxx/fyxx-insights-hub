@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchPush } from "@/lib/queries";
 import { jod, num, pct, rate } from "@/lib/format";
-import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 
 export const Route = createFileRoute("/_authenticated/push")({
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/push")({
 
 function PushPage() {
   const { range, refreshKey } = useDateRange();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["push", range.from, range.to, refreshKey],
     queryFn: () => fetchPush(range),
   });
@@ -58,7 +58,11 @@ function PushPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Push" subtitle="Grouped by the flow or campaign that sent the notification." />
+      <PageHeader
+        title="Push"
+        subtitle="Grouped by the flow or campaign that sent the notification. Klaviyo cannot split by Shopify sales channel, so no channel filter applies here."
+      />
+      {isError ? <QueryFailed error={error} /> : null}
       <Panel title="Push notifications">
         {isLoading ? (
           <EmptyState>Loading…</EmptyState>

@@ -865,11 +865,28 @@ An **enrolled POS customer repeats at 40.7%**, close to the app's 44.7% overall
 and above every channel's blended rate. A non-enrolled one repeats at 24.4%.
 Only 2,150 of 3,480 POS customers are enrolled.
 
-**This is correlational and the selection bias is severe.** Loyal customers are
-more likely to enrol, so the gap is not evidence that enrolment CAUSES
-retention. Establishing that needs a comparison the data cannot currently
-supply — customers who were offered enrolment and declined, against those who
-accepted. What the figure does support is where to look, not what to conclude.
+**Tested within-customer, and the gap does not survive.** Comparing customers
+against THEMSELVES either side of their own enrolment — 180 days each way, the
+enrolment-day order excluded from both windows:
+
+| Group | Customers | Before | After | Change |
+|---|---|---|---|---|
+| enrolled on a day they did NOT order | 4,115 | 1.92 | 1.42 | **-25.9%** |
+| enrolled on a day they were buying | 416 | 5.27 | 6.40 | +21.4% |
+
+The second row is the bias made visible: its "after" window opens on a
+purchase, so it rises regardless of what enrolment does. The first row is the
+cleaner comparison and it goes the OTHER WAY.
+
+So the cross-sectional gap is almost certainly **selection, not effect**:
+engaged customers enrol, rather than enrolment making customers engaged. The
+likely mechanism is regression to the mean — people enrol during an active
+spell and then return to their normal rate.
+
+**Do not build a case for pushing enrolment on these numbers.** Neither test is
+causal in either direction, because enrolment is chosen and never assigned. One
+limitation worth noting: this is a single 180-day window. Re-running at 90 and
+365 days would test whether the direction is robust.
 
 ### The first measurable outcome we have for any flow
 

@@ -57,6 +57,7 @@ while (pages < 300) {
       loyalty_enrolled: Boolean(c.enrolled),
       loyalty_tier: c.loyalty_tier_membership?.loyalty_tier?.name ?? null,
       loyalty_points: Number(c.points_approved ?? 0),
+      loyalty_enrolled_at: c.enrolled_at ? String(c.enrolled_at).slice(0, 10) : null,
     });
   }
   cursor = j.cursor?.next ?? null;   // body, never the Link header

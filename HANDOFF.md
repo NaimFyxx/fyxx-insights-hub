@@ -207,17 +207,17 @@ programme, tiers and point values.
    toward improvement. Closer than cross-sectional, never causal.
 2. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
    surface, then one real probe per untried endpoint, timeboxed, into the
-   README with the date. Include `/v2/orders` on LoyaltyLion.
-3. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
-   surface, then one real probe per untried endpoint, timeboxed, into the
    README with the date. **Include `/v2/orders` on LoyaltyLion**: never used,
    carries `cancellation_status`, `total_refunded` and
    `metadata.shopify_source_name`, so it is a third independent view of every
    order and would let Shopify be cross-checked against something other than
    itself.
-4. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
+3. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
    LoyaltyLion ids, with `matched_how`; surface the 20 Klaviyo profiles that
    map to several Shopify customers as a merge-detection list
-5. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
+4. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
    repair, and the Klaviyo trailing-90-day campaign re-fetch (one API call)
+5. **Critical review of the whole dashboard and report** — once the queue is
+   empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
+   what exists because it was built rather than because it would be used.
 

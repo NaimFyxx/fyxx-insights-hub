@@ -320,12 +320,22 @@ function CustomersPage() {
             ))}
           </tbody>
         </Table>
-        <p className="mt-2 border-l-2 border-border pl-4 text-xs text-muted-foreground">
-          <b>Correlational, and the selection bias is severe.</b> Loyal customers are more likely to
-          enrol, so this cannot show that enrolling someone makes them retain. It shows where to
-          look. Phrase it as &ldquo;enrolled customers retain far better&rdquo;, never as
-          &ldquo;enrolling customers makes them retain&rdquo;.
-        </p>
+        <div className="mt-4 border-l-2 border-destructive/40 pl-4 text-xs">
+          <p>
+            <b>Tested within-customer, and the gap does not survive.</b> Comparing 4,115 customers
+            against themselves either side of their own enrolment — same people, 180 days each way,
+            the enrolment-day order excluded — orders fell from 1.92 to 1.42 per customer,{" "}
+            <b>-25.9%</b>. The 416 who enrolled on a day they were already buying show +21.4%, which
+            is the bias showing itself: their &ldquo;after&rdquo; window opens on a purchase.
+          </p>
+          <p className="mt-2 text-muted-foreground">
+            So the gap in this table is almost certainly SELECTION, not effect: engaged customers
+            enrol, rather than enrolment making customers engaged. The likely mechanism is
+            regression to the mean — people enrol during an active spell and then return to their
+            normal rate. Do not build a case for pushing enrolment on these numbers. Neither test is
+            causal in either direction; enrolment is chosen, never assigned.
+          </p>
+        </div>
       </Panel>
 
       <Panel title="New customers captured per 100 POS orders">

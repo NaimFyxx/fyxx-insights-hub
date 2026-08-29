@@ -119,7 +119,7 @@ const headers = async () => ({
  * unlucky, so a 401 triggers one forced refresh and a single retry. Beyond
  * that the error is real and is allowed through.
  */
-async function gql(query, variables, label, { authRetried = false } = {}) {
+export async function gql(query, variables, label, { authRetried = false } = {}) {
   // Nothing reaches Shopify without passing this.
   assertReadOnly(query, label);
 

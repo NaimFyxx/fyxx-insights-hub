@@ -115,13 +115,20 @@ Identification on days under 60 orders: 70.9% (2023 Q1), **79.3% (Q2)**,
 - High-volume days are a SECOND factor: none in 2023 Q1, sixteen by 2024 Q3,
   identifying at 24-40% against 35-79% on normal days.
 
-**CORRECTION to my previous handoff.** It said this "points at how POS orders
-reach Shopify rather than at staff engagement" and called it a systems problem.
-That was based on the Smile evidence alone and the oscillation contradicts it.
-Smile does rule out the loyalty platform migration — enrolments were flat, 826
-in 2023 H2 against 774 in H1 — but ruling that out is not the same as
-establishing a systems cause. **Do not take a systems framing to the shop team
-on this evidence.**
+**The cause is UNKNOWN and the investigation is closed.** Two explanations are
+ruled out — the loyalty migration (Smile enrolments flat, 826 in 2023 H2 against
+774 in H1) and a single configuration change (the oscillation). What remains is
+most likely staffing, till procedure or something else in the shop that none of
+these systems record. Naim is asking Anna what changed around July 2023. Do not
+re-derive either story from the chart; the panel says so explicitly.
+
+**Two findings stand on their own and are actionable without knowing the cause:**
+- **Capture tracks basket size** — 83.5% over 250 JOD against 24.7% under 10.
+  A threshold question with a price, not a compliance failure.
+- **Busy days cost identification and there are more of them** — days with 60+
+  POS orders identify at 24-40% against 35-79% on ordinary days, and went from
+  none in 2023 Q1 to sixteen in 2024 Q3. Busy days alone erode capture over
+  time with nobody changing behaviour.
 
 The metric stops at 27 Feb 2026: after that only identified POS orders sync, so
 the denominator changes meaning and 2026 H2 reads 12.1, an artefact.
@@ -149,6 +156,13 @@ clean cutover. Nothing spanning the migration is comparable — different
 programme, tiers and point values.
 
 ## Traps worth knowing
+
+- **A silent no-op edit is the same fault as a silent zero.** `str.replace`
+  does nothing when its target has been reformatted, and `git add -A` commits
+  the unrelated files without complaint — so a change can be reported as landed
+  when it was not. It happened twice: a handoff rewrite and a panel rewrite.
+  Assert the target exists before replacing, and grep the result before
+  committing.
 
 - **LoyaltyLion Link header lists `rel="previous"` BEFORE `rel="next"`.** Read
   `cursor.next` from the body. A naive `/cursor=/` match paginates backwards.

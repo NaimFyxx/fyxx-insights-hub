@@ -6,14 +6,18 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Changed a previously reported figure
 
-- **Birthday rewards were never zero. August 2026 alone is 131.** Spread
-  400/500/600/700 points, matching the tier structure. Two faults, both
-  producing a silent zero: (a) `/v2/activities` **ignores** `created_at_min`
-  and `created_at_max` — sending them and sending nothing return identical
-  pages; (b) birthday activities are issued `pending` and stay pending, and
-  the sync counted only `approved`. Measured: 115 of 115 were pending. Both
-  fixed. **The report's "not collected" wording is now wrong in the other
-  direction and must change to the live figure.**
+- **CORRECTION TO MY OWN LAST HANDOFF.** I reported that `/v2/activities`
+  ignores `created_at_min`/`created_at_max`. **It does not.** That check used a
+  window ending today, so "newest N in range" and "newest N overall" were the
+  same rows. Re-tested against a window not touching today: the filter is
+  honoured on `/activities`, `/transactions` and `/customers`, at every limit.
+  Server-side filtering restored.
+- **Birthday rewards were never zero. August 2026 is 131**, spread
+  400/500/600/700 points across the tiers. ONE fault, not two: they are issued
+  `pending` and the sync counted only `approved`. Report now shows the live
+  figure.
+- **Pending is transient, not terminal.** Full history: `$birthday` 1,753
+  approved / 48 expired / 30 pending. Customers do receive them.
 - **Mobile App click-influence 35.8% → 19.1% true.** 13,060 mobile orders sat
   in `Unknown`. Never displayed. Mapping fixed; re-run in progress.
 - **Attributed revenue, August: 37,615 → 28,260 JOD.** Klaviyo share 22.0% →
@@ -37,11 +41,17 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 ## Findings
 
 **LoyaltyLion API, newly established**
-- `/v2/activities` exposes `$birthday` — the sync was not wrong to look there,
-  it was filtering on the wrong state and trusting an ignored date parameter
-- `/v2/transactions` exists; `/rewards`, `/rules`, `/events` return 404
-- The file's own `assertFilterHonoured` guard existed for exactly fault (a)
-  and had never been applied to this call
+- `/v2/activities` exposes `$birthday`; `/v2/transactions` exists;
+  `/rewards`, `/rules`, `/events` return 404
+- Date filters ARE honoured on all three parameterised endpoints
+- `assertFilterHonoured` existed and had **never been called anywhere**. It now
+  runs once per loyalty sync against both endpoints
+- **Pending is a normal lifecycle state, not a birthday quirk.** `$purchase`
+  runs 19,855 approved against 483 pending. `points_pending` is **8.34% of
+  `points_approved`** in a 10,000-customer sample (~618 JOD there), and drains
+  into approved rather than accumulating
+- Sampling the newest rows biases toward `pending` and toward "the filter does
+  nothing". Both errors this turn came from that habit
 
 **Customer population** (19,163 records; export says 20,019 — 4% gap open)
 - 42.7% of buyers ordered once and never returned
@@ -71,9 +81,9 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Open questions needing input
 
-1. **Report wording on birthday rewards** — now that it is collected live,
-   confirm switching from "not collected" to the figure.
-2. **4% population gap** still unexplained; re-check once both sides queryable.
+1. **4% population gap** still unexplained; re-check once both sides queryable.
+2. **48 expired birthday rewards** — issued, never redeemed. Programme
+   question, not a data one.
 
 ## Next
 

@@ -38,6 +38,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      cancelled_orders: {
+        Row: {
+          cancelled_at: string;
+          created_at: string;
+          order_id: string;
+        };
+        Insert: {
+          cancelled_at: string;
+          created_at?: string;
+          order_id: string;
+        };
+        Update: {
+          cancelled_at?: string;
+          created_at?: string;
+          order_id?: string;
+        };
+        Relationships: [];
+      };
+      klaviyo_attributed_orders: {
+        Row: {
+          created_at: string;
+          date: string;
+          id: string;
+          order_id: string;
+          revenue_jod: number;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          date: string;
+          id?: string;
+          order_id: string;
+          revenue_jod?: number;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          date?: string;
+          id?: string;
+          order_id?: string;
+          revenue_jod?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       klaviyo_attributed_daily: {
         Row: {
           created_at: string;
@@ -526,7 +571,14 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      klaviyo_attributed_daily_net: {
+        Row: {
+          date: string | null;
+          orders: number | null;
+          revenue_jod: number | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       klaviyo_reach_counts: {

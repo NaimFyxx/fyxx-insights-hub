@@ -182,11 +182,32 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   }
 
   // --- attributed revenue: event-date basis, a different question ---------
-  const attributed = new Map();
+  //
+  // Stored per ORDER, not per day. Klaviyo never retracts a Placed Order event
+  // when an order is cancelled, so a stored daily total can only ever drift
+  // upward. The daily figure is a view over these rows minus whatever is
+  // cancelled at the time it is read.
+  const cancelledMetricId = await klaviyo.findMetricIdByName("Cancelled Order");
+  const attributedOrders = [];
+  const cancellations = [];
   for (const c of chunks) {
     if (chunks.length > 1) log.info(`  attributed revenue ${c.from} … ${c.to}`);
-    const part = await klaviyo.fetchAttributedRevenueByDay({ ...c, conversionMetricId: metricId });
-    for (const [d, v] of part) attributed.set(d, v);
+    const part = await klaviyo.fetchAttributedByOrder({
+      ...c,
+      conversionMetricId: metricId,
+      cancelledMetricId,
+      // Look for cancellations well past the order date: 19.5% of them happen
+      // more than three days later, and a Monday batch can reach back a week.
+      cancelWindowEnd: to,
+    });
+    attributedOrders.push(...part.orders);
+    cancellations.push(...part.cancellations);
+  }
+  const attributed = new Map();
+  const cancelledIds = new Set(cancellations.map((c) => c.order_id));
+  for (const o of attributedOrders) {
+    if (cancelledIds.has(o.order_id)) continue;
+    attributed.set(o.date, (attributed.get(o.date) ?? 0) + Number(o.revenue_jod));
   }
 
   // Attributed revenue is a whole-account, order-date figure. It is written
@@ -208,6 +229,11 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
     return { rows: campaignRows.length + flowRows.length + pushRows.length, attributed };
   }
 
+  const ow = await upsert("klaviyo_attributed_orders", attributedOrders, "order_id", { dryRun });
+  const cw2 = await upsert("cancelled_orders", cancellations, "order_id", { dryRun });
+  log.ok(`attributed orders: ${ow} row(s); cancellations: ${cw2} row(s)`);
+  // Kept in step with the per-order rows so anything still reading the daily
+  // table sees the netted figure rather than the old inflated one.
   const aw = await upsert("klaviyo_attributed_daily", attributedRows, "date", { dryRun });
   const cw = await upsert("klaviyo_campaigns", campaignRows, "campaign_id,campaign_message_id", { dryRun });
   const pw = await upsert("klaviyo_push", campaignPush, "source_type,source_id,message_id,sent_on", { dryRun });

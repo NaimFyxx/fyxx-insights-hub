@@ -273,27 +273,37 @@ export async function fetchAttributedByOrder({ from, to, conversionMetricId, can
   // An order placed inside the range can be cancelled long after it.
   const cancels = await pullRawEvents(
     cancelledMetricId, ammanMidnightUtc(from), ammanMidnightUtc(cancelWindowEnd ?? to, 1),
-    (e) => String(e.attributes?.event_properties?.$event_id ?? ""),
+    (e) => ({
+      orderId: String(e.attributes?.event_properties?.$event_id ?? ""),
+      t: Date.parse(e.attributes?.datetime),
+    }),
     "cancelled orders",
   );
-  const cancelled = new Set(cancels);
+  const cancelled = new Set(cancels.map((c) => c.orderId));
 
-  const byDay = new Map();
-  let attributed = 0, dropped = 0, droppedValue = 0, multi = 0;
+  // Per-order rows, NOT a daily total. The daily figure is derived at read time
+  // from whatever is cancelled then, which is the only shape that survives a
+  // batch of cancellations landing weeks after the orders.
+  const orders = [];
+  let attributed = 0, alreadyCancelled = 0, multi = 0;
+  const seen = new Set();
   for (const o of placed) {
     if (!o.attributions) continue;          // not credited to Klaviyo
+    if (!o.orderId || seen.has(o.orderId)) continue;
+    seen.add(o.orderId);                    // once per ORDER, not per attribution
     attributed++;
     if (o.attributions > 1) multi++;
-    if (cancelled.has(o.orderId)) { dropped++; droppedValue += o.value; continue; }
-    const day = toAmmanDate(o.t);
-    const d = byDay.get(day) ?? { revenue: 0, orders: 0 };
-    d.revenue += o.value; d.orders++;       // once per EVENT, not per attribution
-    byDay.set(day, d);
+    if (cancelled.has(o.orderId)) alreadyCancelled++;
+    orders.push({ order_id: o.orderId, date: toAmmanDate(o.t), revenue_jod: money3(o.value) });
   }
   log.ok(`attributed: ${attributed} of ${placed.length} orders credited to Klaviyo`);
   if (multi) log.info(`  ${multi} carried more than one attribution and were counted once each`);
-  if (dropped) log.warn(`  ${dropped} attributed order(s) were CANCELLED; ${money3(droppedValue)} JOD excluded`);
-  return byDay;
+  log.info(`  ${cancelled.size} cancellation(s) seen in the window; ${alreadyCancelled} of them attributed`);
+
+  return {
+    orders,
+    cancellations: cancels.map((c) => ({ order_id: c.orderId, cancelled_at: new Date(c.t).toISOString() })),
+  };
 }
 
 export async function fetchAttributedRevenueByDay({ from, to, conversionMetricId }) {

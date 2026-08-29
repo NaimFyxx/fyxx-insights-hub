@@ -303,6 +303,11 @@ export function assertReadOnly(document, label = "graphql") {
  * --------------------------------------------------------------------- */
 export const SOURCE_MAP = {
   web:                  { sub_channel: "Website",      channel: "Online Sales" },
+  // Shopify's newer checkout, 2019-2023. All 286 of these orders carry
+  // app "Online Store" and channelName "Online Store", identical to `web`.
+  checkout_next:        { sub_channel: "Website",      channel: "Online Sales" },
+  // gid://shopify/App/580111 — the Online Store app itself.
+  "580111":             { sub_channel: "Website",      channel: "Online Sales" },
   "5382175":            { sub_channel: "Mobile App",   channel: "Online Sales" }, // Appmaker, current
   "2653365":            { sub_channel: "Mobile App",   channel: "Online Sales" }, // Shopney, previous
   pos:                  { sub_channel: "POS",          channel: "POS Sales" },    // Shopify POS, historic

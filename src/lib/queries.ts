@@ -81,7 +81,7 @@ export type Activation = {
   notes: string | null;
 };
 
-const unwrap = <T,>(res: { data: T | null; error: { message: string } | null }): T => {
+const unwrap = <T>(res: { data: T | null; error: { message: string } | null }): T => {
   if (res.error) throw new Error(res.error.message);
   return (res.data ?? []) as T;
 };
@@ -98,7 +98,10 @@ const unwrap = <T,>(res: { data: T | null; error: { message: string } | null }):
  */
 const PAGE = 1000;
 async function fetchAllRows<T>(
-  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  build: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -120,7 +123,9 @@ export const fetchDailySales = (r: DateRange) =>
   fetchAllRows<DailySales>((from, to) =>
     supabase
       .from("shopify_daily_sales")
-      .select("date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values")
+      .select(
+        "date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values",
+      )
       .gte("date", r.from)
       .lte("date", r.to)
       .order("date")
@@ -131,16 +136,28 @@ export const fetchDailySales = (r: DateRange) =>
  * Klaviyo-attributed revenue, ORDER-date basis, whole account.
  * Deliberately not on shopify_daily_sales: it cannot be split by channel.
  */
-export const fetchAttributed = (r: DateRange) =>
-  fetchAllRows<AttributedDay>((from, to) =>
+/**
+ * Reads the NETTED view, not the stored daily table. Klaviyo never retracts a
+ * Placed Order event when an order is cancelled, so a stored daily total only
+ * drifts upward. The view subtracts whatever is cancelled at the moment it is
+ * read, so an order cancelled today corrects a figure from three weeks ago.
+ */
+export const fetchAttributed = async (r: DateRange): Promise<AttributedDay[]> => {
+  const rows = await fetchAllRows<{ date: string | null; revenue_jod: number | null }>((from, to) =>
     supabase
-      .from("klaviyo_attributed_daily")
+      .from("klaviyo_attributed_daily_net")
       .select("date,revenue_jod")
       .gte("date", r.from)
       .lte("date", r.to)
       .order("date")
       .range(from, to),
   );
+  // The view groups by date, so neither column can be null in practice. The
+  // generated types widen them because Postgres cannot prove that for a view.
+  return rows
+    .filter((x) => x.date !== null)
+    .map((x) => ({ date: x.date as string, revenue_jod: Number(x.revenue_jod ?? 0) }));
+};
 
 export const fetchCampaigns = async (r: DateRange) =>
   unwrap<Campaign[]>(

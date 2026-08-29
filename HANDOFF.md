@@ -4,140 +4,114 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ---
 
+## NEEDS ACTION
+
+**Run this delete.** An ad-hoc join upserted all 21,264 LoyaltyLion customers
+into `shopify_customers`, which held 19,163. The 2,400 extra inserted as rows
+with a loyalty tier and nothing else — no orders, no created date, no consent.
+They inflate the population and deflate every "share of customers" figure.
+
+```sql
+SELECT count(*) FROM shopify_customers WHERE customer_created_at IS NULL;  -- expect 2400
+DELETE FROM shopify_customers WHERE customer_created_at IS NULL;
+```
+
+Every genuine Shopify customer has `customer_created_at`; only the ghosts lack
+it. `scripts/diagnose/loyalty-join.mjs` replaces the ad-hoc script and is
+UPDATE-only by construction, but it cannot distinguish the ghosts until they
+are gone, because they are now in the known-customer set it checks against.
+
 ## Changed a previously reported figure
 
-- **One-and-never-returned: 42.7% → 37.9%.** The old figure was computed
-  without knowing that **74.3% of buyers first bought before 2025** (9,400 of
-  12,657). Requiring the order to be old enough to have had a chance to repeat
-  gives **34.6%**. Still the single largest segment, but materially smaller.
-- **Concentration is sharper than reported, not softer.** Top 1% of buyers take
-  **34.8%** of revenue, top 5% take 62.7%, top 10% take 76.0%. The 12+ orders
-  group is 16.8% of buyers and **78.2%** of revenue.
-- **Mean customer value 701.2 JOD, median 97.8.** A 7.2x gap. Never show the
-  mean alone.
-- **August 2026 revenue 171,018 → 176,441 JOD** after the 2019 sweep. Not a
-  recomputation: 31 orders arrived after the 07:04 sync. June and July are
-  byte-identical, and no historical figure moved.
-- Earlier corrections still standing: Klaviyo attribution August 37,615 →
-  28,260 (share 22.0% → 16.5%); Mobile App influence 35.8% → 19.2%; Mobile App
-  YoY +831.8% → +23.8%; birthday rewards zero → 131 in August; pending points
-  8.34% → 1.59%.
+- **The 2026 "stabilisation" is NOT a recovery.** App share of new customers
+  recovered to 48.4%, pushing mix-predicted repeat to 39.9%, its highest since
+  2020 — but actual was 33.7%, a **-6.2 gap, the widest recorded**. The line
+  held flat only because mix gain offset continued within-channel decay. If mix
+  recovery stalls it resumes falling. My earlier "it stopped" framing was too
+  comfortable.
+- **Retention decline is real but smaller than the raw table showed.** Age-
+  normalised, 90-day repeat runs 55.8% (2019) to 33.7% (2026). The raw "ever
+  repeated" column runs 86.5% to 39.4% and reads as collapse.
+- **One-and-never-returned 42.7% → 37.9%**, after the 2019 sweep revealed that
+  74.3% of buyers first bought before 2025.
+- Standing: attribution August 37,615 → 28,260 (share 22.0% → 16.5%); Mobile
+  App influence 35.8% → 19.2%; Mobile App YoY +831.8% → +23.8%; birthday
+  rewards 0 → 131 in August; pending points 8.34% → 1.59%.
 
-## Decisions made this turn
+## Findings this turn
 
-- **2019 Shopify sweep landed.** 163,547 orders, 9,757 cancelled, 2,364 days,
-  10,415 day rows, back to 2019-09-09.
-- **Zero unmapped source names** across six years and 11 distinct values. The
-  three resolved pre-emptively all fired: `checkout_next` 1,904 orders,
-  `580111` 686, `1830279` 82. Without that work they would have been a new
-  Unknown bucket.
-- `shopify_customers` now carries computed `first_order_date`,
-  `last_order_date` and `revenue_jod` for 12,657 buyers, from orders rather
-  than the unreliable `amountSpent`.
+**Why POS retention fell 20 points — three answers**
 
-## Findings
+1. **Not an identification artefact.** An unidentified POS order has no
+   customer record, so it can never enter the analysis. The 23.1% is measured
+   on identified customers only — real decay among people we CAN see. But
+   capture at the till has collapsed: new POS customers per 100 POS orders went
+   12.5 (2022) → 7.7 → **3.2 (2024)** → 3.8 → 4.1.
+2. **It predates the Odoo changeover by four years.** By half-year: 43.3%
+   (2021 H2), 38.5, 37.9, 34.3, 26.5, 36.2, 29.0, 30.7, 25.8, 23.1 (2026 H1).
+   No discontinuity at February 2026. The connector is not the cause. 2026 H1
+   is only 52 customers because the POS definition changed — different
+   population, do not compare like for like.
+3. **Enrolment is the largest retention difference in the project.**
 
-**Cohort retention — what six years of history unlocks**
-
-| Cohort | Acquired | Ever repeated | Still active (90d) | Revenue/customer |
+| Acquired via | Enrolled | Not enrolled | Gap | Orders enrolled / not |
 |---|---|---|---|---|
-| 2019 | 52 | 86.5% | 30.8% | 4,720.6 |
-| 2020 | 1,272 | 80.0% | 16.1% | 1,606.2 |
-| 2021 | 1,539 | 78.1% | 16.2% | 1,175.3 |
-| 2022 | 2,850 | 65.8% | 11.3% | 728.6 |
-| 2023 | 1,936 | 61.9% | 13.1% | 523.7 |
-| 2024 | 1,684 | 59.4% | 12.9% | 546.5 |
-| 2025 | 2,142 | 48.6% | 15.1% | 250.5 |
-| 2026 | 1,110 | 39.4% | 65.9% | 162.0 |
+| Website | 56.7% | 26.6% | **+30.1** | 18.9 / 3.3 |
+| Mobile App | 48.9% | 30.5% | +18.4 | 16.0 / 4.7 |
+| **POS** | **40.7%** | **24.4%** | **+16.3** | 9.0 / 3.2 |
+| Draft Orders | 46.0% | 31.6% | +14.4 | 23.6 / 5.4 |
 
-**AGE-NORMALISED, and the decline is REAL.** `second_order_date` now captured,
-so cohorts are comparable at the same age:
+An enrolled POS customer retains close to the app average. Only 2,150 of 3,480
+POS customers are enrolled. **Correlational, with severe selection bias** —
+loyal customers are likelier to enrol, so this shows where to look, not what to
+conclude.
 
-| Cohort | Repeat within 90d | Within 365d |
-|---|---|---|
-| 2019 | 55.8% | 63.5% |
-| 2020 | 49.4% | 61.3% |
-| 2021 | 47.1% | 62.8% |
-| 2022 | 39.8% | 53.4% |
-| 2023 | 36.3% | 49.5% |
-| 2024 | 33.7% | 49.5% |
-| 2025 | 33.0% | 46.0% |
-| 2026 | 33.7% | — |
+**Decay is concentrated, not even.** Change in 90-day repeat 2021→2026: POS
+**-20.2**, Website -16.0, Mobile App -14.8, Draft Orders **-1.2**. POS decayed
+worst AND grew fastest as a share of acquisition (3.9% of new customers in
+2020, 48.2% in 2022). Draft Orders has barely moved.
 
-Two findings the raw table could not give:
-- **90-day repeat fell from ~49% (2020-21) to ~33%**, a third of the rate lost.
-  Real, not elapsed time.
-- **It STOPPED falling.** 2024 33.7%, 2025 33.0%, 2026 33.7% — flat for three
-  cohorts. The deterioration was 2021 to 2024 and has since stabilised.
+**Acquisition channel quality**, all-time: Mobile App 44.7% repeat and 13.5
+lifetime orders; Website 36.1% / 8.2; Draft Orders 34.8% / 9.5; POS 34.5% / 6.7.
 
-The raw "ever repeated" column overstated it badly (86.5% to 39.4% reads as
-collapse). The truth is severe but different, and the flattening is the part
-worth acting on.
+**Mix versus decay:** the mix shift explains ~6 of the 16 points lost between
+2019 and 2022. From 2023 actual runs BELOW mix-predicted and the gap widens to
+-6.2, so the rest is every channel retaining worse than its own history.
+Indicative not exact — the prediction uses all-time channel rates.
 
-**Why retention fell, 2021-2024** — acquisition channel now captured
-- App-acquired customers repeat at **44.7%** vs 34.5-36.1% for POS, Website and
-  Draft Orders, and place **13.5** lifetime orders against 6.7-9.5
-- App share of NEW customers: 71.0% (2020), 60.4% (2021), **29.9% (2022)**,
-  33.0%, 36.4%, 25.5%, 48.4% (2026). POS went 3.9% to 48.2% over 2020-2022
-- Mix shift alone predicts a fall of ~6 points of the 16-point drop. From 2023
-  actual runs BELOW mix-predicted and the gap widens to -6.2, so the rest is
-  every channel retaining worse than its own history
-- **Decay is CONCENTRATED, not even.** Change in 90-day repeat, 2021 to 2026:
-  POS **-20.2**, Website -16.0, Mobile App -14.8, Draft Orders **-1.2**. POS
-  decays worst and grew fastest as a share of acquisition (3.9% of new
-  customers in 2020, 48.2% in 2022). If there is one place to look, it is POS.
-- **The 2026 flattening is NOT a recovery.** App share recovered to 48.4% and
-  mix-predicted rose to 39.9%, its highest since 2020, but actual was 33.7% —
-  a -6.2 gap, the widest recorded. The line held flat only because mix gain
-  offset continued channel decay. If mix recovery stalls, it resumes falling.
-  This corrects the earlier "it stopped" framing, which was too comfortable.
-- Indicative, not exact: the prediction uses all-time channel rates
+**LoyaltyLion pagination trap.** The response body carries `cursor.next`. The
+**Link header lists `rel="previous"` BEFORE `rel="next"`** from page two, so a
+naive `/cursor=/` match paginates backwards and ping-pongs — 45,000 rows from a
+21,264 population. `scripts/lib/loyaltylion.mjs` has always been correct;
+ad-hoc scripts were not, so any sample size quoted from one before today is
+inflated.
 
-**Revenue concentration** (house accounts excluded, computed revenue)
-- top 1% of buyers → **34.8%** of revenue
-- top 5% → 62.7%, top 10% → 76.0%
-- 12+ lifetime orders: 16.8% of buyers → **78.2%** of revenue
-- mean 701.2 JOD, **median 97.8**, p90 1,284.7
+## Standing findings
 
-**Reach ceiling** (unchanged, still the most actionable)
-- **5,926 buyers (42.5%) reachable on neither email nor SMS — 31.6% of spend**
-- workable list: **2,884 never opted in**, NOT the 1,362 who opted out
-- priority: **85 customers**, ordered in last 90 days, 200+ JOD, 324,901 JOD
-- **SMS: 5,427 buyers reachable ONLY by SMS**, 2,391,700 JOD. 572 subscribers
-  against 14,309 phone numbers
+- **5,926 buyers (42.5%) reachable on neither channel — 31.6% of revenue.**
+  Workable list 2,884 never opted in, NOT the 1,362 who opted out. Priority 85
+  customers, 324,901 JOD.
+- **SMS: 5,427 buyers reachable ONLY by SMS**, 2,391,700 JOD, against 572
+  subscribers.
+- Concentration: top 1% take 34.8% of revenue, top 5% 62.7%, top 10% 76.0%.
+  Mean 701.2 JOD against median 97.8.
+- Identity join: LoyaltyLion `merchant_id` 99.8%; Klaviyo via order id 99.3%;
+  Klaviyo `external_id` useless.
+- LoyaltyLion API surface established: `/sites`, `/customers`, `/activities`,
+  `/transactions`, `/orders`, `/webhooks` work. **`/v2/orders` has never been
+  used** and carries cancellation status, refunds and channel. Claimed rewards
+  genuinely unavailable, so the CSV import is justified.
 
-**Identity join** — LoyaltyLion `merchant_id` 99.8%; Klaviyo via order id
-99.3%; Klaviyo `external_id` useless (10.4% populated, 0% Shopify ids)
+## Open questions
 
-**LoyaltyLion history imported** — 101,639 rows, every one tagged
-`ll_export_20260829`. Coverage in `data_coverage`.
-
-## Open questions needing input
-
-1. **4% population gap** — re-checked with both sides queryable, still
-   unexplained. Ruled out: no orphan customers, and the 1,373 reporting orders
-   with none found are the cancelled-only case. Documented and parked.
-2. **Live API sources for activities and transactions** — decided yes, not yet
-   built. Rewards stays an import: `/v2/rewards` AND the per-customer nested
-   path both 404, so it is genuinely unavailable, established not inferred.
+1. **4% population gap** (19,163 vs 20,019) — no orphans, cause unknown, parked.
+2. **Live API sources for activities and transactions** — decided yes, unbuilt.
 
 ## Next
 
-1. Customer section, leading with: 37.9% bought once, top 1% take 34.8% of
-   revenue, 31.6% of revenue unreachable
-2. Identity table
-3. `updated_at`-driven Shopify repair and the Klaviyo 90-day campaign re-fetch,
-   both still unbuilt from the retroactive-change work
-
-## Applied this turn
-
-`ll_activities`, `ll_transactions`, `ll_rewards` and the `data_coverage` view,
-which replaced the narrower `ll_import_coverage`. RLS matches every other
-table.
-
-The importer caught a fault worth recording: LoyaltyLion writes timestamp
-offsets as `+00`, which `Date.parse` REJECTS. Unhandled, every timestamp parsed
-to null, collapsing the rewards key to `(customer, NULL, title)` and
-manufacturing **894 collisions in a file that has none**. The composite key
-exposed it by colliding; a surrogate id would have imported 2,211 undated rows
-and reported success.
+1. Customer section: carry the "flat because mix gain offset decay" framing
+   into the UI, and surface enrolment as a retention dimension
+2. Capability sweep of all three APIs, timeboxed, recorded in the README
+3. Identity table
+4. `updated_at` Shopify repair and the Klaviyo 90-day campaign re-fetch, both
+   still unbuilt from the retroactive-change work

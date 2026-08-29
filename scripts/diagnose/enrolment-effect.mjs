@@ -30,7 +30,9 @@ import { gql } from "../lib/shopify.mjs";
 loadEnv();
 const args = process.argv.slice(2);
 const argOf = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const WINDOW = Number(argOf("--window", "180"));
+// Several windows from ONE sweep. Running the sweep three times to vary a
+// number would be three times the API calls for the same 163,000 orders.
+const WINDOWS = argOf("--windows", "90,180,365").split(",").map(Number);
 const TODAY = argOf("--today", "2026-08-29");
 
 const n0 = (v) => Math.round(v).toLocaleString("en-US");
@@ -74,43 +76,48 @@ do {
 } while (cursor && pages < 8000);
 log.ok(`${scanned} orders scanned`);
 
-// Complete windows both sides only.
-const usable = [], tooRecent = [], tooNew = [];
-for (const [, rec] of enrolled) {
-  if (!rec.at || !rec.first) continue;
-  if (dayDiff(rec.at, TODAY) < WINDOW) { tooRecent.push(rec); continue; }
-  if (dayDiff(rec.first, rec.at) < WINDOW) { tooNew.push(rec); continue; }
-  usable.push(rec);
-}
-
-let onDay = { n: 0, before: 0, after: 0 }, offDay = { n: 0, before: 0, after: 0 };
-for (const rec of usable) {
-  const enrolledOnAnOrderDay = rec.days.includes(rec.at);
-  let before = 0, after = 0;
-  for (const d of rec.days) {
-    const delta = dayDiff(rec.at, d);
-    if (delta === 0) continue;                      // day zero excluded from both
-    if (delta < 0 && delta >= -WINDOW) before++;
-    if (delta > 0 && delta <= WINDOW) after++;
+function analyse(WINDOW) {
+  // A customer counts only when BOTH windows are complete, so a recent
+  // enrolment cannot show a short "after" against a long "before".
+  const usable = [], tooRecent = [], tooNew = [];
+  for (const [, rec] of enrolled) {
+    if (!rec.at || !rec.first) continue;
+    if (dayDiff(rec.at, TODAY) < WINDOW) { tooRecent.push(rec); continue; }
+    if (dayDiff(rec.first, rec.at) < WINDOW) { tooNew.push(rec); continue; }
+    usable.push(rec);
   }
-  const bucket = enrolledOnAnOrderDay ? onDay : offDay;
-  bucket.n++; bucket.before += before; bucket.after += after;
+  const onDay = { n: 0, before: 0, after: 0 }, offDay = { n: 0, before: 0, after: 0 };
+  for (const rec of usable) {
+    const enrolledOnAnOrderDay = rec.days.includes(rec.at);
+    let before = 0, after = 0;
+    for (const d of rec.days) {
+      const delta = dayDiff(rec.at, d);
+      if (delta === 0) continue;                    // day zero excluded from both
+      if (delta < 0 && delta >= -WINDOW) before++;
+      if (delta > 0 && delta <= WINDOW) after++;
+    }
+    const bucket = enrolledOnAnOrderDay ? onDay : offDay;
+    bucket.n++; bucket.before += before; bucket.after += after;
+  }
+  return { WINDOW, usable: usable.length, tooRecent: tooRecent.length, tooNew: tooNew.length, onDay, offDay };
 }
 
-console.log(`\n=== ORDERS IN THE ${WINDOW} DAYS EITHER SIDE OF A CUSTOMER'S OWN ENROLMENT ===\n`);
-console.log(`  enrolled customers with a date : ${n0(enrolled.size)}`);
-console.log(`    excluded, enrolled too recently for a full window : ${n0(tooRecent.length)}`);
-console.log(`    excluded, first order too close to enrolment      : ${n0(tooNew.length)}`);
-console.log(`    USABLE                                            : ${n0(usable.length)}\n`);
-const show = (label, b) => {
-  if (!b.n) return console.log(`  ${label}: none`);
-  const bp = b.before / b.n, ap = b.after / b.n;
-  console.log(`  ${label}`);
-  console.log(`    customers ${n0(b.n)}   before ${bp.toFixed(2)} orders/customer   after ${ap.toFixed(2)}   ` +
-    `change ${bp > 0 ? ((ap - bp) / bp * 100).toFixed(1) + "%" : "n/a"}`);
-};
-show("enrolled ON a day they ordered  (biased: engagement moment)", onDay);
-show("enrolled on a day they did NOT order  (cleaner)", offDay);
-console.log(`\n  The second group is the one to read. The first has its "after" window`);
-console.log(`  opening at a purchase, which inflates it regardless of what enrolment does.`);
-console.log(`  Neither is causal: enrolment is chosen, not assigned.`);
+const chg = (b) => (b.n && b.before ? ((b.after / b.n - b.before / b.n) / (b.before / b.n)) * 100 : null);
+console.log(`\n=== ORDERS EITHER SIDE OF A CUSTOMER'S OWN ENROLMENT ===\n`);
+console.log(`  enrolled customers with a date: ${n0(enrolled.size)}\n`);
+console.log("  " + "window".padEnd(9) + "usable".padStart(8) +
+  "before".padStart(9) + "after".padStart(8) + "change".padStart(9) + "   group");
+for (const w of WINDOWS) {
+  const r = analyse(w);
+  for (const [label, b] of [["did NOT order that day (cleaner)", r.offDay], ["ordered that day (biased)", r.onDay]]) {
+    if (!b.n) continue;
+    const c = chg(b);
+    console.log("  " + `${w}d`.padEnd(9) + n0(b.n).padStart(8) +
+      (b.before / b.n).toFixed(2).padStart(9) + (b.after / b.n).toFixed(2).padStart(8) +
+      `${c >= 0 ? "+" : ""}${c.toFixed(1)}%`.padStart(9) + "   " + label);
+  }
+}
+console.log(`\n  Read the "cleaner" rows. The biased rows open their "after" window on a`);
+console.log(`  purchase, so they rise regardless of what enrolment does — they are shown`);
+console.log(`  to make that bias visible rather than asserted.`);
+console.log(`  Neither is causal: enrolment is chosen, never assigned.`);

@@ -13,6 +13,7 @@ import {
   byEnrolment,
   posCapture,
   POS_CAPTURE_COMPARABLE_UNTIL,
+  ENROLMENT_WITHIN_CUSTOMER,
   busyDays,
   BUSY_DAY_ORDERS,
   BUSY_DAY_IDENTIFICATION,
@@ -292,6 +293,67 @@ function CustomersPage() {
       </Panel>
 
       <Panel title="Retention by loyalty enrolment">
+        {/* The within-customer result sits ABOVE the cross-sectional table, not
+            under it. Someone who reads only the tiles must come away knowing
+            the gap is selection rather than effect. */}
+        <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+          <StatTile
+            label="Same customers, after enrolling"
+            value={`${ENROLMENT_WITHIN_CUSTOMER.clean.changePct}%`}
+            note={`${num(ENROLMENT_WITHIN_CUSTOMER.clean.customers)} customers, ${ENROLMENT_WITHIN_CUSTOMER.clean.before} orders before vs ${ENROLMENT_WITHIN_CUSTOMER.clean.after} after`}
+          />
+          <StatTile
+            label="Same test, biased subset"
+            value={`+${ENROLMENT_WITHIN_CUSTOMER.biased.changePct}%`}
+            note={`${num(ENROLMENT_WITHIN_CUSTOMER.biased.customers)} who enrolled on a day they were already buying`}
+          />
+          <StatTile
+            label="What the gap below is"
+            value="Selection"
+            note="engaged customers enrol; enrolment does not appear to engage customers"
+          />
+        </div>
+        <p className="mb-4 text-sm">
+          <b>The table below does not mean enrolment works.</b> Comparing customers against
+          themselves either side of their own enrolment — {ENROLMENT_WITHIN_CUSTOMER.windowDays}{" "}
+          days each way, the enrolment-day order excluded — orders <b>fell</b> by{" "}
+          {Math.abs(ENROLMENT_WITHIN_CUSTOMER.clean.changePct)}%. The subset who enrolled on a day
+          they were already buying rose {ENROLMENT_WITHIN_CUSTOMER.biased.changePct}%, which is the
+          bias made visible rather than asserted: their &ldquo;after&rdquo; window opens on a
+          purchase. Likely regression to the mean — people enrol during an active spell and revert.
+        </p>
+        <div className="mb-4">
+          <p className="label-xs mb-2 text-muted-foreground">
+            Tested at three window widths, {ENROLMENT_WITHIN_CUSTOMER.measuredOn}
+          </p>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Window</Th>
+                <Th align="right">Customers</Th>
+                <Th align="right">Change, cleaner group</Th>
+                <Th align="right">Change, biased subset</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {ENROLMENT_WITHIN_CUSTOMER.windows.map((w) => (
+                <tr key={w.days}>
+                  <Td>{w.days} days each way</Td>
+                  <Td align="right">{num(w.cleanN)}</Td>
+                  <Td align="right">{w.cleanChange}%</Td>
+                  <Td align="right">+{w.biasedChange}%</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+          <p className="mt-2 text-xs text-muted-foreground">
+            The direction holds at every width. The two columns also move in opposite ways as the
+            window grows: the biased subset decays from +25.6% to +3.3%, because the single purchase
+            its window opens on matters less over a longer span, while the cleaner result stays
+            between -23.7% and -32.5%. A real effect would not dissolve on one side and persist on
+            the other.
+          </p>
+        </div>
         <Table>
           <thead>
             <tr>
@@ -320,7 +382,7 @@ function CustomersPage() {
             ))}
           </tbody>
         </Table>
-        <div className="mt-4 border-l-2 border-destructive/40 pl-4 text-xs">
+        <div className="mt-4 border-l-2 border-border pl-4 text-xs text-muted-foreground">
           <p>
             <b>Tested within-customer, and the gap does not survive.</b> Comparing 4,115 customers
             against themselves either side of their own enrolment — same people, 180 days each way,

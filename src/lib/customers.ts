@@ -403,3 +403,39 @@ export function byEnrolment(all: CustomerRow[], today: string, windowDays = 90) 
     };
   }).filter((r) => r.enrolled + r.notEnrolled > 0);
 }
+
+/**
+ * The within-customer enrolment test, as measured on 29 August 2026.
+ *
+ * Held as constants rather than computed live because it needs each customer's
+ * full order history relative to their enrolment date, which is a 163,000-order
+ * sweep and is not stored. Re-run scripts/diagnose/enrolment-effect.mjs and
+ * update these; the panel prints the date so a stale figure is visible.
+ *
+ * Kept next to the cross-sectional numbers deliberately. On its own the
+ * cross-sectional gap reads as an argument for pushing enrolment, and it is
+ * not one.
+ */
+export const ENROLMENT_WITHIN_CUSTOMER = {
+  measuredOn: "2026-08-29",
+  windowDays: 180,
+  clean: { customers: 4115, before: 1.92, after: 1.42, changePct: -25.9 },
+  biased: { customers: 416, before: 5.27, after: 6.4, changePct: 21.4 },
+
+  /**
+   * Three windows, one sweep. The direction holds at every width, and the two
+   * rows move in opposite ways as the window grows — which is itself evidence
+   * that the split is doing its job.
+   *
+   * The biased subset decays from +25.6% to +3.3% as the window widens, because
+   * the single purchase its "after" window opens on matters less across a
+   * longer span. The clean result stays between -23.7% and -32.5%. If the
+   * effect were real rather than selection, widening the window would not
+   * dissolve the positive result and leave the negative one standing.
+   */
+  windows: [
+    { days: 90, cleanN: 4792, cleanChange: -32.5, biasedN: 497, biasedChange: 25.6 },
+    { days: 180, cleanN: 4115, cleanChange: -25.9, biasedN: 416, biasedChange: 21.4 },
+    { days: 365, cleanN: 2875, cleanChange: -23.7, biasedN: 194, biasedChange: 3.3 },
+  ],
+};

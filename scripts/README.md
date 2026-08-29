@@ -883,10 +883,25 @@ engaged customers enrol, rather than enrolment making customers engaged. The
 likely mechanism is regression to the mean — people enrol during an active
 spell and then return to their normal rate.
 
+Tested at three window widths from a single sweep:
+
+| Window | Customers | Cleaner group | Biased subset |
+|---|---|---|---|
+| 90 days | 4,792 | **-32.5%** | +25.6% |
+| 180 days | 4,115 | **-25.9%** | +21.4% |
+| 365 days | 2,875 | **-23.7%** | +3.3% |
+
+**The direction holds at every width**, and the two columns move in opposite
+ways as the window grows. The biased subset decays from +25.6% to +3.3%,
+because the single purchase its window opens on matters less over a longer
+span. The cleaner result stays between -23.7% and -32.5%. A real effect would
+not dissolve on one side and persist on the other — that pattern is what
+selection looks like.
+
 **Do not build a case for pushing enrolment on these numbers.** Neither test is
-causal in either direction, because enrolment is chosen and never assigned. One
-limitation worth noting: this is a single 180-day window. Re-running at 90 and
-365 days would test whether the direction is robust.
+causal in either direction, because enrolment is chosen and never assigned. An
+experiment — offering enrolment to a random half — is the only thing that would
+settle it.
 
 ### The first measurable outcome we have for any flow
 

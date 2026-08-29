@@ -97,9 +97,16 @@ which is the bias made visible: their "after" window opens on a purchase.
 So the cross-sectional gap above is almost certainly **selection, not effect** —
 engaged customers enrol, rather than enrolment making customers engaged. Likely
 regression to the mean: people enrol during an active spell and revert.
+**Tested at 90, 180 and 365 days. The direction holds at every width**: -32.5%
+(4,792 customers), -25.9% (4,115), -23.7% (2,875). The biased subset decays the
+other way — +25.6%, +21.4%, +3.3% — because the purchase its window opens on
+matters less over a longer span. A real effect would not dissolve on one side
+and persist on the other; that pattern IS selection.
+
 **Do not build a case for pushing enrolment at the till on these numbers.**
 Neither test is causal in either direction; enrolment is chosen, never assigned.
-Limitation: a single 180-day window. 90 and 365 would test robustness.
+An experiment — offering enrolment to a random half — is the only thing that
+would settle it.
 
 **Why POS fell.** Not identification: an unidentified POS order has no customer
 record, so the 23.1% is measured on identified customers only. Not Odoo: the
@@ -226,4 +233,9 @@ programme, tiers and point values.
 4. **Critical review of the whole dashboard and report** — once the queue is
    empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
    what exists because it was built rather than because it would be used.
+   **Include a three-way split of every number: MEASURED, INFERRED, and NEVER
+   CHALLENGED.** Two believed hypotheses have now been tested and both were
+   artefacts — the draft-order marketing-influence story and the enrolment
+   retention gap. Untested numbers deserve the same scepticism, and the third
+   category is where the next wrong belief is sitting.
 

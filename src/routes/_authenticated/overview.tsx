@@ -86,14 +86,19 @@ function OverviewPage() {
   const shareNow = onlineNow > 0 ? (klaviyoNow / onlineNow) * 100 : 0;
   const sharePrev = onlinePrev > 0 ? (klaviyoPrev / onlinePrev) * 100 : 0;
 
-  const last = d.snaps.at(-1);
-  const prevLast = d.prevSnaps.at(-1);
+  // Tier counts exist only on days we scanned LoyaltyLion — 3 of 369, because
+  // the imported year of points history carries none. Taking the latest
+  // snapshot of ANY kind means an imported day wins and the tile reads 0
+  // members, which claims the programme is empty rather than unmeasured.
+  const tiered = (rows: typeof d.snaps) => rows.filter((r) => r.blue_members > 0);
+  const last = tiered(d.snaps).at(-1) ?? null;
+  const prevLast = tiered(d.prevSnaps).at(-1) ?? null;
   const members = last
     ? last.blue_members + last.silver_members + last.gold_members + last.platinum_members
-    : 0;
+    : null;
   const membersPrev = prevLast
     ? prevLast.blue_members + prevLast.silver_members + prevLast.gold_members + prevLast.platinum_members
-    : 0;
+    : null;
 
   // Collapse the per-channel rows to one point per day before charting,
   // otherwise each day appears once per channel.
@@ -141,8 +146,26 @@ function OverviewPage() {
           // the full sentence, because Zeid has no other context.
           note={`All channels ÷ ${describeChannels(channels)} — attribution can't be split by channel`}
         />
-        <StatTile label="Loyalty members" value={num(members)} delta={deltaPct(members, membersPrev)} />
+        <StatTile
+          label="Loyalty members"
+          value={members === null ? "—" : num(members)}
+          delta={members !== null && membersPrev !== null ? deltaPct(members, membersPrev) : undefined}
+          note={
+            members === null
+              ? "Not measured in this range — tier snapshots start 27 Aug 2026"
+              : `As at ${last!.snapshot_date}`
+          }
+        />
       </div>
+
+      {channels.includes("POS") ? (
+        <p className="border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
+          ⚠️ POS is selected, so the Klaviyo-attributed share below is understated. Klaviyo can only
+          see about 35% of POS orders — the Odoo connector syncs only those with an identified
+          customer — but the denominator counts all POS revenue. Deselect POS for a share figure
+          that means anything.
+        </p>
+      ) : null}
 
       <ConcentrationNotice rows={selSales} channels={channels} />
 

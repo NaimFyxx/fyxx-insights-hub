@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchPush } from "@/lib/queries";
-import { num, pct, rate } from "@/lib/format";
+import { jod, num, pct, rate } from "@/lib/format";
 import { PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 
@@ -73,6 +73,8 @@ function PushPage() {
                 <Th align="right">Sent</Th>
                 <Th align="right">Opened</Th>
                 <Th align="right">Open rate</Th>
+                <Th align="right">Orders</Th>
+                <Th align="right">Revenue JOD</Th>
               </tr>
             </thead>
             <tbody>
@@ -83,6 +85,8 @@ function PushPage() {
                   <Td align="right">{num(r.sent)}</Td>
                   <Td align="right">{num(r.opened)}</Td>
                   <Td align="right">{pct(rate(r.opened, r.delivered))}</Td>
+                  <Td align="right">{num(r.conversions)}</Td>
+                  <Td align="right">{jod(r.revenue)}</Td>
                 </tr>
               ))}
               <TotalsRow>
@@ -91,6 +95,8 @@ function PushPage() {
                 <Td align="right">{num(t.sent)}</Td>
                 <Td align="right">{num(t.opened)}</Td>
                 <Td align="right">{pct(rate(t.opened, t.delivered))}</Td>
+                <Td align="right">{num(t.conversions)}</Td>
+                <Td align="right">{jod(t.revenue)}</Td>
               </TotalsRow>
             </tbody>
           </Table>

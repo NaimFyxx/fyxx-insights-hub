@@ -59,7 +59,7 @@ export function StatTile({
 }: {
   label: string;
   value: string;
-  delta?: number | null;
+  delta?: number | null | undefined;
   note?: string;
 }) {
   return (

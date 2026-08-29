@@ -31,7 +31,7 @@ type Agg = {
   revenue: number;
 };
 
-type SortKey = "flow_name" | "recipients" | "open_rate" | "conversion_rate" | "revenue";
+type SortKey = "flow_name" | "recipients" | "open_rate" | "click_rate" | "conversion_rate" | "revenue";
 
 function FlowsPage() {
   const { range, refreshKey } = useDateRange();
@@ -72,6 +72,8 @@ function FlowsPage() {
           return f.recipients;
         case "open_rate":
           return rate(f.opened, f.delivered);
+        case "click_rate":
+          return rate(f.clicked, f.delivered);
         case "conversion_rate":
           return rate(f.conversions, f.delivered);
         default:
@@ -130,6 +132,7 @@ function FlowsPage() {
                 {header("flow_name", "Flow", "left")}
                 {header("recipients", "Recipients")}
                 {header("open_rate", "Open rate")}
+                {header("click_rate", "Click rate")}
                 {header("conversion_rate", "Conversion rate")}
                 {header("revenue", "Revenue JOD")}
               </tr>
@@ -140,6 +143,7 @@ function FlowsPage() {
                   <Td>{r.flow_name}</Td>
                   <Td align="right">{num(r.recipients)}</Td>
                   <Td align="right">{pct(rate(r.opened, r.delivered))}</Td>
+                  <Td align="right">{pct(rate(r.clicked, r.delivered))}</Td>
                   <Td align="right">{pct(rate(r.conversions, r.delivered), 2)}</Td>
                   <Td align="right">{jod(r.revenue)}</Td>
                 </tr>
@@ -148,6 +152,7 @@ function FlowsPage() {
                 <Td>Total</Td>
                 <Td align="right">{num(t.recipients)}</Td>
                 <Td align="right">{pct(rate(t.opened, t.delivered))}</Td>
+                <Td align="right">{pct(rate(t.clicked, t.delivered))}</Td>
                 <Td align="right">{pct(rate(t.conversions, t.delivered), 2)}</Td>
                 <Td align="right">{jod(t.revenue)}</Td>
               </TotalsRow>

@@ -90,7 +90,11 @@ function LoyaltyPage() {
 
   const birthdayRewards = data.current.reduce((a, s) => a + s.birthday_rewards_issued, 0);
 
-  const chart = data.current.map((s) => ({
+  // Only days we actually scanned. Plotting the points-only imported days
+  // draws their zero tier counts as real values — a year-long flat line at
+  // zero followed by a vertical spike, which reads as explosive growth rather
+  // than as the day measurement began.
+  const chart = scanned.map((s) => ({
     date: s.snapshot_date,
     Blue: s.blue_members,
     Silver: s.silver_members,
@@ -100,7 +104,7 @@ function LoyaltyPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Loyalty" subtitle="Latest daily snapshot in the selected range." />
+      <PageHeader title="Loyalty" subtitle="Points from LoyaltyLion\u2019s own accounting; tiers and redemptions from nightly scans." />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         {hasScanData ? (
@@ -156,7 +160,20 @@ function LoyaltyPage() {
       </div>
 
       <Panel title="Members per tier over time">
-        <TierLineChart data={chart} />
+        {chart.length > 1 ? (
+          <>
+            <TierLineChart data={chart} />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {chart.length} measured day{chart.length === 1 ? "" : "s"}. Tier snapshots began
+              27 Aug 2026; LoyaltyLion cannot report tiers historically.
+            </p>
+          </>
+        ) : (
+          <EmptyState>
+            Not enough measured days to draw a trend — tier snapshots began 27 Aug 2026 and there
+            {chart.length === 1 ? " is 1 day" : " are none"} in this range.
+          </EmptyState>
+        )}
       </Panel>
     </div>
   );

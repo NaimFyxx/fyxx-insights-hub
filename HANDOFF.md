@@ -1,4 +1,4 @@
-# Handoff — 30 August 2026
+# Handoff — 30 August 2026 (later)
 
 State for someone picking this up cold. Rewritten every turn. No transcripts.
 
@@ -109,7 +109,58 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
   silently stopping.
 - **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
+## Done this turn
+
+**Filter fixes — all applied, build clean.**
+
+- **A1 first, as asked, because it had a deadline.** `DATA_TODAY` is gone.
+  Presets now read the real Amman clock; verified at three dates — on
+  2026-09-01 "This month" correctly returns September, which it would not have.
+  The report month picker follows the same clock, so September is selectable.
+- **A2** `refreshKey` added to `customers`, `pos-capture-sales`, `activations`
+  and `report`. Zero query keys now lack it. Two `invalidateQueries` calls
+  pointed at keys that had gained a member and would silently have stopped
+  matching; both switched to prefix matching.
+- **A3** Export page now FOLLOWS the range instead of seeding from it once.
+- **A4** The overview chart axis is the union of both series, so a day with
+  Klaviyo revenue but no selected-channel sales no longer vanishes.
+- **D1/D2** `QueryFailed` added to primitives and wired into **all ten pages**.
+  A failed query can no longer render as "No campaigns in range." or hang on
+  "Loading…" forever.
+- **D3** The custom date inputs ignore an empty value, so a keystroke can no
+  longer send `date >= ''` to PostgREST and break every page.
+- **C** Captions added where a control correctly does not apply: the Customers
+  page says every figure is lifetime across all channels, Activations and
+  Report name their own month pickers, and Campaigns/Flows/Push say Klaviyo
+  cannot split by Shopify sales channel.
+
+**Verification pack — built and self-verified.**
+`scripts/verify-pack.mjs --month 2026-08`. Eight sheets; totals are live Excel
+formulas so filtering recomputes them. Output is gitignored — regenerate rather
+than committing it.
+
+Every total was read back out of the workbook and reconciled against SQL:
+sales 2,188 orders / 176,440.643 JOD over 115 rows; campaigns 72,211 sent /
+10,127.485; flows 1,690 recipients / 516.900; push 126,853 sent / 1,947.818;
+attribution 37,615.045 gross and 28,260.112 net. All exact.
+
+The pack names what CANNOT be checked, which was the requirement: netted
+attribution has no Klaviyo equivalent, "messages sent" counts sends so its
+total compares to nothing, push clicks do not exist in Klaviyo at all, loyalty
+tier blanks mean unmeasured rather than zero, and the 4% population gap
+(20,019 vs 19,163) is stated as open.
+
+**Order-level sweep — running.** `scripts/sync-orders.mjs`, populating
+`shopify_orders`. Naim approved it mid-turn; it is a backend job that changes
+nothing on screen, so it ran alongside the filter work rather than ahead of it.
+At last check 80,000 of ~154,000 rows, **zero Unknown channels**, 10,550 with
+no customer, 5,845 cancelled (stored, not skipped). When it finishes, items 1
+and 2 of the acquisition-channel request become buildable.
+
 ## Waiting on a decision
+
+**Nothing.** The filter fix list below is DONE; kept for the record of what was
+proposed and why.
 
 **The filter fix list.** A correctness pass over every page and figure is
 written up in `FILTERS.md` — which range filter each uses, which channel

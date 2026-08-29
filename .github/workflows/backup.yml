@@ -1,0 +1,112 @@
+name: Database backup
+
+# ---------------------------------------------------------------------------
+# Deliberately its own workflow rather than a step in the sync.
+#
+#   * It CANNOT spend Klaviyo's 225-call daily quota or delay a backfill,
+#     because it contains no sync steps at all. That is a stronger guarantee
+#     than an input flag that skips them.
+#   * A backup failure reads as a backup failure, not a failed data sync.
+#   * It can be run on demand without queueing behind a five-hour backfill.
+#
+# The Supabase free tier includes NO backups of any kind, and the backfilled
+# history costs roughly 20 hours of rate-limited API calls to rebuild.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # Sundays 01:00 UTC = 04:00 Asia/Amman, well clear of the nightly sync.
+    - cron: "0 1 * * 0"
+  workflow_dispatch:
+
+# Its own group: a backup should never queue behind a long backfill, and a
+# dump during writes is fine — Postgres gives it a consistent snapshot.
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dump database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL is not set. Supabase → Project Settings → Database → Connection string (URI), SESSION POOLER, port 5432, region ap-northeast-1."
+            exit 1
+          fi
+          if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::BACKUP_PASSPHRASE is not set. Refusing to upload an unencrypted dump."
+            exit 1
+          fi
+
+          # Must match the server major version or pg_dump refuses to run.
+          # This project is on Postgres 17.6.
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+
+          STAMP="$(date -u +%Y-%m-%d)"
+          # public only: Supabase's internal schemas are managed and not ours.
+          pg_dump --schema=public --no-owner --no-privileges --format=custom \
+                  --file="fyxx-${STAMP}.dump" "$SUPABASE_DB_URL"
+
+          RAW=$(du -h "fyxx-${STAMP}.dump" | cut -f1)
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in "fyxx-${STAMP}.dump" -out "fyxx-${STAMP}.dump.enc" \
+            -pass env:BACKUP_PASSPHRASE
+          rm -f "fyxx-${STAMP}.dump"
+
+          SIZE=$(du -h "fyxx-${STAMP}.dump.enc" | cut -f1)
+          echo "BACKUP_FILE=fyxx-${STAMP}.dump.enc" >> "$GITHUB_ENV"
+          echo "BACKUP_SIZE=${SIZE}" >> "$GITHUB_ENV"
+          echo "Dumped ${RAW} raw, ${SIZE} encrypted."
+
+      - name: Upload dump
+        uses: actions/upload-artifact@v5
+        with:
+          name: db-backup-${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          # ~13 weekly dumps retained, so one bad dump is never the only copy.
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Record in sync_log
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          curl -sS -o /dev/null -w "sync_log <- HTTP %{http_code}\n" \
+            -X POST "$SUPABASE_URL/rest/v1/sync_log" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{\"source\":\"database_backup\",\"status\":\"success\",\"rows_written\":1,\"message\":\"${BACKUP_FILE} (${BACKUP_SIZE}, encrypted artifact, 90-day retention)\"}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Database backup — ${{ job.status }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`${BACKUP_FILE:-none}\` |"
+            echo "| Size | ${BACKUP_SIZE:-—} |"
+            echo "| Retention | 90 days |"
+            echo ""
+            echo "Restore: \`openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in <file>.enc -out restore.dump\` then \`pg_restore\`."
+          } >> "$GITHUB_STEP_SUMMARY"

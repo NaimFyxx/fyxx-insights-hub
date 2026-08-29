@@ -530,9 +530,40 @@ function yearChunks(from, to) {
   return chunks;
 }
 
+/**
+ * On 28 August 2026 a run came back with a null sourceName for EVERY order in
+ * its window. classifySource did the right thing and bucketed them as
+ * "unknown" rather than dropping them, but that wrote one whole-day aggregate
+ * per date. Later runs got proper source names and wrote the per-channel rows
+ * alongside, so 24 to 26 August each carried its full revenue twice. The
+ * dashboard read 182,820 JOD for August when the truth was 171,018.
+ *
+ * A whole day of null source names is an API anomaly, not a channel. A day is
+ * therefore refused if EVERY order in it is unknown-sourced. This does not
+ * weaken the safety valve it might look like it weakens: a genuinely new
+ * Shopify channel arrives with a real id (say "9999999"), is stored under that
+ * id, and is reported as unrecognised. Only the null case is refused, and only
+ * when it accounts for the entire day.
+ */
+export function splitAnomalousDays(byDay, days) {
+  const anomalies = [];
+  for (const date of days) {
+    const perSource = byDay.get(date);
+    if (!perSource || perSource.size === 0) continue;
+    const total = [...perSource.values()].reduce((a, v) => a + v.orders, 0);
+    const unknown = perSource.get("unknown");
+    if (unknown && unknown.orders === total && total > 0) {
+      anomalies.push({ date, orders: total, revenue: unknown.revenue });
+    }
+  }
+  return anomalies;
+}
+
 export function toSalesRows(byDay, days) {
   const rows = [];
+  const anomalousDates = new Set(splitAnomalousDays(byDay, days).map((a) => a.date));
   for (const date of days) {
+    if (anomalousDates.has(date)) continue;
     const perSource = byDay.get(date);
     if (!perSource) continue;
     for (const [source_name, v] of perSource) {

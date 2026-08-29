@@ -19,7 +19,18 @@ export type RevenuePoint = {
   total: number;
 };
 
-export function RevenueLineChart({ data }: { data: RevenuePoint[] }) {
+/**
+ * `totalLabel` names what the second series actually covers. It used to be
+ * hardcoded to "Total online" while the series followed the channel toggles,
+ * so selecting POS or Draft Orders produced a line labelled online that wasn't.
+ */
+export function RevenueLineChart({
+  data,
+  totalLabel = "Total",
+}: {
+  data: RevenuePoint[];
+  totalLabel?: string;
+}) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
@@ -50,7 +61,7 @@ export function RevenueLineChart({ data }: { data: RevenuePoint[] }) {
         <Line
           type="linear"
           dataKey="total"
-          name="Total online"
+          name={totalLabel}
           stroke={CHART_BLACK}
           strokeWidth={1.5}
           dot={false}

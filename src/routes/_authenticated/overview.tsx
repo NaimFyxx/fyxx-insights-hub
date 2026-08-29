@@ -1,7 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDateRange } from "@/context/date-range-context";
-import { fetchAttributed, fetchCampaigns, fetchDailySales, fetchFlows, fetchPush, fetchSnapshots } from "@/lib/queries";
+import {
+  fetchAttributed,
+  fetchCampaigns,
+  fetchDailySales,
+  fetchFlows,
+  fetchPush,
+  fetchSnapshots,
+} from "@/lib/queries";
 import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
@@ -33,22 +40,47 @@ function OverviewPage() {
   const q = useQuery({
     queryKey: ["overview", range.from, range.to, refreshKey],
     queryFn: async () => {
-      const [sales, prevSales, attributed, prevAttributed, campaigns, prevCampaigns, flows, prevFlows, push, prevPush, snaps, prevSnaps] =
-        await Promise.all([
-          fetchDailySales(range),
-          fetchDailySales(prev),
-          fetchAttributed(range),
-          fetchAttributed(prev),
-          fetchCampaigns(range),
-          fetchCampaigns(prev),
-          fetchFlows(range),
-          fetchFlows(prev),
-          fetchPush(range),
-          fetchPush(prev),
-          fetchSnapshots(range),
-          fetchSnapshots(prev),
-        ]);
-      return { sales, prevSales, attributed, prevAttributed, campaigns, prevCampaigns, flows, prevFlows, push, prevPush, snaps, prevSnaps };
+      const [
+        sales,
+        prevSales,
+        attributed,
+        prevAttributed,
+        campaigns,
+        prevCampaigns,
+        flows,
+        prevFlows,
+        push,
+        prevPush,
+        snaps,
+        prevSnaps,
+      ] = await Promise.all([
+        fetchDailySales(range),
+        fetchDailySales(prev),
+        fetchAttributed(range),
+        fetchAttributed(prev),
+        fetchCampaigns(range),
+        fetchCampaigns(prev),
+        fetchFlows(range),
+        fetchFlows(prev),
+        fetchPush(range),
+        fetchPush(prev),
+        fetchSnapshots(range),
+        fetchSnapshots(prev),
+      ]);
+      return {
+        sales,
+        prevSales,
+        attributed,
+        prevAttributed,
+        campaigns,
+        prevCampaigns,
+        flows,
+        prevFlows,
+        push,
+        prevPush,
+        snaps,
+        prevSnaps,
+      };
     },
   });
 
@@ -111,7 +143,10 @@ function OverviewPage() {
     ? last.blue_members + last.silver_members + last.gold_members + last.platinum_members
     : null;
   const membersPrev = prevLast
-    ? prevLast.blue_members + prevLast.silver_members + prevLast.gold_members + prevLast.platinum_members
+    ? prevLast.blue_members +
+      prevLast.silver_members +
+      prevLast.gold_members +
+      prevLast.platinum_members
     : null;
 
   // Collapse the per-channel rows to one point per day before charting,
@@ -159,7 +194,9 @@ function OverviewPage() {
           <StatTile
             label="Klaviyo share of all revenue"
             value={shareNow === null ? "—" : pct(shareNow)}
-            delta={shareNow !== null && sharePrev !== null ? deltaPct(shareNow, sharePrev) : undefined}
+            delta={
+              shareNow !== null && sharePrev !== null ? deltaPct(shareNow, sharePrev) : undefined
+            }
             note={`${jod(klaviyoNow)} of ${jod(allNow)} across every channel`}
           />
         </div>
@@ -201,7 +238,9 @@ function OverviewPage() {
           <StatTile
             label="Loyalty members"
             value={members === null ? "—" : num(members)}
-            delta={members !== null && membersPrev !== null ? deltaPct(members, membersPrev) : undefined}
+            delta={
+              members !== null && membersPrev !== null ? deltaPct(members, membersPrev) : undefined
+            }
             note={
               members === null
                 ? "Not measured in this range — tier snapshots start 27 Aug 2026"
@@ -214,15 +253,19 @@ function OverviewPage() {
       {channels.includes("POS") ? (
         <p className="border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
           ⚠️ POS revenue above is complete, but Klaviyo can only see about 35% of POS orders — the
-          Odoo connector syncs only those with an identified customer. Don&apos;t compare the Klaviyo
-          figures against POS revenue.
+          Odoo connector syncs only those with an identified customer. Don&apos;t compare the
+          Klaviyo figures against POS revenue.
         </p>
       ) : null}
 
       <ConcentrationNotice rows={selSales} channels={channels} />
 
       <Panel title={`Daily revenue — Klaviyo attributed vs ${describeChannels(channels)}`}>
-        {linePoints.length ? <RevenueLineChart data={linePoints} /> : <EmptyState>No data in range.</EmptyState>}
+        {linePoints.length ? (
+          <RevenueLineChart data={linePoints} totalLabel={describeChannels(channels)} />
+        ) : (
+          <EmptyState>No data in range.</EmptyState>
+        )}
       </Panel>
 
       <Panel title="Messages sent by channel">

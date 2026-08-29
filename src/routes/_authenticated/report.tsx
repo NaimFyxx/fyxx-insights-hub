@@ -258,7 +258,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                   <>
                     <div className="n">—</div>
                     <div className="l">
-                      Share of online revenue <b>(no sales recorded)</b>
+                      Share of all sales <b>(no sales recorded)</b>
                     </div>
                   </>
                 ) : (
@@ -268,8 +268,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                       <small>%</small>
                     </div>
                     <div className="l">
-                      Share of online revenue{" "}
-                      <b>({num(Math.round(revenue.allChannels))} JOD total)</b>
+                      Share of all sales <b>({num(Math.round(revenue.allChannels))} JOD total)</b>
                     </div>
                   </>
                 )}
@@ -281,7 +280,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                 <div className="n">
                   {num(Math.round(revenue.allChannels))} <small>JOD</small>
                 </div>
-                <div className="l">Total online revenue, all channels</div>
+                <div className="l">Total sales, all channels</div>
               </div>
               <div className="kpi">
                 <div className="l" style={{ marginTop: 0 }}>
@@ -307,8 +306,8 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </>
           ) : (
             <>
-              Total online revenue covers every sales channel and is counted on the date each order
-              was placed.
+              Total sales covers every channel, including POS and Draft Orders, and is counted on
+              the date each order was placed. It is not an online-only figure.
             </>
           )}
         </p>

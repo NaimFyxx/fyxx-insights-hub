@@ -329,7 +329,29 @@ async function syncShopify({ from, to, dryRun, attributed }) {
   const started = Date.now();
 
   const byDay = await shopify.fetchDailySales(from, to);
-  const rows = shopify.toSalesRows(byDay, eachDay(from, to));
+  const days = eachDay(from, to);
+
+  // A day whose orders ALL came back with no source name is an API anomaly, not
+  // a channel. Writing it produces a whole-day aggregate that double-counts the
+  // day once the real per-channel rows arrive. Refuse it, say so loudly, and
+  // record it in sync_log so it is discovered here and not inside a total.
+  const anomalies = shopify.splitAnomalousDays(byDay, days);
+  const rows = shopify.toSalesRows(byDay, days);
+
+  if (anomalies.length) {
+    log.warn(`${anomalies.length} day(s) had NO source name on any order and were NOT written:`);
+    for (const a of anomalies) {
+      log.warn(`    ${a.date}  ${a.orders} orders  ${money3(a.revenue)} JOD  — Shopify returned sourceName: null for all of them`);
+    }
+    log.warn("  These days are left unwritten rather than stored as Unknown. Re-run once Shopify reports source names again.");
+    if (!dryRun) {
+      await writeSyncLog(
+        { source: "shopify_daily_sales", status: "warning", rangeStart: from, rangeEnd: to, rowsWritten: 0,
+          message: `REFUSED ${anomalies.length} day(s) with no sourceName on any order: ${anomalies.map((a) => a.date).join(", ")}` },
+        { dryRun: false },
+      );
+    }
+  }
 
   if (dryRun) {
     log.info("Shopify — would write:");

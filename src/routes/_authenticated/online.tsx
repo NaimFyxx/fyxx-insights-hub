@@ -5,8 +5,14 @@ import { useDateRange } from "@/context/date-range-context";
 import { fetchDailySales } from "@/lib/queries";
 import { jod, num, pct, deltaPct } from "@/lib/format";
 import {
-  buildSeries, noiseNote, sameRangeLastYear, spansSwitchover,
-  MOBILE_SWITCHOVER, SWITCHOVER_WARNING, concentrationOf, type Granularity,
+  buildSeries,
+  noiseNote,
+  sameRangeLastYear,
+  spansSwitchover,
+  MOBILE_SWITCHOVER,
+  SWITCHOVER_WARNING,
+  concentrationOf,
+  type Granularity,
 } from "@/lib/timeseries";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { DualAxisChart } from "@/components/charts/DualAxisChart";
@@ -56,7 +62,10 @@ function OnlineChannelsPage() {
   });
 
   const series = useMemo(() => buildSeries(data?.now ?? [], granularity), [data, granularity]);
-  const priorSeries = useMemo(() => buildSeries(data?.prior ?? [], granularity), [data, granularity]);
+  const priorSeries = useMemo(
+    () => buildSeries(data?.prior ?? [], granularity),
+    [data, granularity],
+  );
 
   if (isLoading || !data) {
     return (
@@ -68,8 +77,10 @@ function OnlineChannelsPage() {
   }
 
   const total = (pts: typeof series, ch: "app" | "web") =>
-    pts.reduce((a, p) => ({ revenue: a.revenue + p[ch].revenue, orders: a.orders + p[ch].orders }),
-      { revenue: 0, orders: 0 });
+    pts.reduce(
+      (a, p) => ({ revenue: a.revenue + p[ch].revenue, orders: a.orders + p[ch].orders }),
+      { revenue: 0, orders: 0 },
+    );
 
   const appNow = total(series, "app");
   const webNow = total(series, "web");
@@ -77,8 +88,16 @@ function OnlineChannelsPage() {
   const webPrior = total(priorSeries, "web");
   const aov = (t: { revenue: number; orders: number }) => (t.orders > 0 ? t.revenue / t.orders : 0);
 
-  const revenueData = series.map((p) => ({ bucket: p.bucket, app: p.app.revenue, web: p.web.revenue }));
-  const ordersData = series.map((p) => ({ bucket: p.bucket, app: p.app.orders, web: p.web.orders }));
+  const revenueData = series.map((p) => ({
+    bucket: p.bucket,
+    app: p.app.revenue,
+    web: p.web.revenue,
+  }));
+  const ordersData = series.map((p) => ({
+    bucket: p.bucket,
+    app: p.app.orders,
+    web: p.web.orders,
+  }));
   const shareData = series
     .filter((p) => p.webShare !== null)
     .map((p) => ({ label: p.bucket, value: Number(p.webShare) }));
@@ -129,21 +148,21 @@ function OnlineChannelsPage() {
             </button>
           ))}
         </div>
-      <div className="flex items-center gap-1">
-        {GRANULARITIES.map((g) => (
-          <button
-            key={g.key}
-            onClick={() => setGranularity(g.key)}
-            className={cn(
-              "label-xs rounded-sm border px-3 py-1.5",
-              granularity === g.key
-                ? "border-foreground bg-secondary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {g.label}
-          </button>
-        ))}
+        <div className="flex items-center gap-1">
+          {GRANULARITIES.map((g) => (
+            <button
+              key={g.key}
+              onClick={() => setGranularity(g.key)}
+              className={cn(
+                "label-xs rounded-sm border px-3 py-1.5",
+                granularity === g.key
+                  ? "border-foreground bg-secondary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {g.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -158,48 +177,84 @@ function OnlineChannelsPage() {
         return (
           <div className="border-l-2 border-foreground bg-secondary/40 px-4 py-3">
             <p className="text-sm">
-              <span className="font-medium">Website revenue is down {Math.abs(webD).toFixed(1)}%</span>{" "}
+              <span className="font-medium">
+                Website revenue is down {Math.abs(webD).toFixed(1)}%
+              </span>{" "}
               year on year while Mobile App is up {appD.toFixed(1)}%.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Website orders {webOrdD === null ? "—" : `${webOrdD > 0 ? "+" : ""}${webOrdD.toFixed(1)}%`}{" "}
-              with AOV {webAovD === null ? "—" : `${webAovD > 0 ? "+" : ""}${webAovD.toFixed(1)}%`} — fewer
-              orders at higher value, which is the signature of bulk buyers rather than broad demand.
-              Check the concentration flags below before reading it as a channel trend.
+              Website orders{" "}
+              {webOrdD === null ? "—" : `${webOrdD > 0 ? "+" : ""}${webOrdD.toFixed(1)}%`} with AOV{" "}
+              {webAovD === null ? "—" : `${webAovD > 0 ? "+" : ""}${webAovD.toFixed(1)}%`} — fewer
+              orders at higher value, which is the signature of bulk buyers rather than broad
+              demand. Check the concentration flags below before reading it as a channel trend.
             </p>
           </div>
         );
       })()}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Mobile App revenue" value={jod(appNow.revenue)}
-          delta={deltaPct(appNow.revenue, appPrior.revenue)} note="vs the same range a year earlier" />
-        <StatTile label="Website revenue" value={jod(webNow.revenue)}
-          delta={deltaPct(webNow.revenue, webPrior.revenue)} note="vs the same range a year earlier" />
-        <StatTile label="Mobile App AOV" value={jod(aov(appNow))}
-          delta={deltaPct(aov(appNow), aov(appPrior))} note={`${num(appNow.orders)} orders`} />
-        <StatTile label="Website AOV" value={jod(aov(webNow))}
-          delta={deltaPct(aov(webNow), aov(webPrior))} note={`${num(webNow.orders)} orders`} />
+        <StatTile
+          label="Mobile App revenue"
+          value={jod(appNow.revenue)}
+          delta={deltaPct(appNow.revenue, appPrior.revenue)}
+          note="vs the same range a year earlier"
+        />
+        <StatTile
+          label="Website revenue"
+          value={jod(webNow.revenue)}
+          delta={deltaPct(webNow.revenue, webPrior.revenue)}
+          note="vs the same range a year earlier"
+        />
+        <StatTile
+          label="Mobile App AOV"
+          value={jod(aov(appNow))}
+          delta={deltaPct(aov(appNow), aov(appPrior))}
+          note={`${num(appNow.orders)} orders`}
+        />
+        <StatTile
+          label="Website AOV"
+          value={jod(aov(webNow))}
+          delta={deltaPct(aov(webNow), aov(webPrior))}
+          note={`${num(webNow.orders)} orders`}
+        />
       </div>
 
       <Panel title="Revenue over time">
         {revenueData.length ? (
           <DualAxisChart
-            data={revenueData} appLabel="Mobile App" webLabel="Website"
-            appTotal={jod(appNow.revenue)} webTotal={jod(webNow.revenue)}
-            unit=" JOD" band={band}
+            data={revenueData}
+            appLabel="Mobile App"
+            webLabel="Website"
+            appTotal={jod(appNow.revenue)}
+            webTotal={jod(webNow.revenue)}
+            unit=" JOD"
+            band={band}
           />
-        ) : <EmptyState>No data in range.</EmptyState>}
+        ) : (
+          <EmptyState>No data in range.</EmptyState>
+        )}
       </Panel>
 
       {(() => {
         const flags = series
           .flatMap((p) => [
-            { ch: "Mobile App" as const, bucket: p.bucket, c: concentrationOf(data.now, p.bucket, "Mobile App", granularity) },
-            { ch: "Website" as const, bucket: p.bucket, c: concentrationOf(data.now, p.bucket, "Website", granularity) },
+            {
+              ch: "Mobile App" as const,
+              bucket: p.bucket,
+              c: concentrationOf(data.now, p.bucket, "Mobile App", granularity),
+            },
+            {
+              ch: "Website" as const,
+              bucket: p.bucket,
+              c: concentrationOf(data.now, p.bucket, "Website", granularity),
+            },
           ])
           .filter((f) => f.c !== null)
-          .filter((f) => scope === "both" || (scope === "app" ? f.ch === "Mobile App" : f.ch === "Website"));
+          .filter(
+            (f) =>
+              scope === "both" || (scope === "app" ? f.ch === "Mobile App" : f.ch === "Website"),
+          );
         if (!flags.length) return null;
         return (
           <Panel title="Concentration warnings">
@@ -217,7 +272,7 @@ function OnlineChannelsPage() {
         );
       })()}
 
-      <Panel title="Website share of online revenue">
+      <Panel title="Website share of online sales (Website and Mobile App)">
         {shareData.length ? (
           <>
             <SimpleBarChart data={shareData} valueSuffix="%" height={260} angledLabels />
@@ -226,17 +281,24 @@ function OnlineChannelsPage() {
               taking share, which two absolute lines cannot show.
             </p>
           </>
-        ) : <EmptyState>No data in range.</EmptyState>}
+        ) : (
+          <EmptyState>No data in range.</EmptyState>
+        )}
       </Panel>
 
       <Panel title="Orders over time">
         {ordersData.length ? (
           <DualAxisChart
-            data={ordersData} appLabel="Mobile App" webLabel="Website"
-            appTotal={`${num(appNow.orders)} orders`} webTotal={`${num(webNow.orders)} orders`}
+            data={ordersData}
+            appLabel="Mobile App"
+            webLabel="Website"
+            appTotal={`${num(appNow.orders)} orders`}
+            webTotal={`${num(webNow.orders)} orders`}
             band={band}
           />
-        ) : <EmptyState>No data in range.</EmptyState>}
+        ) : (
+          <EmptyState>No data in range.</EmptyState>
+        )}
       </Panel>
 
       {webNoise || appNoise ? (
@@ -248,8 +310,9 @@ function OnlineChannelsPage() {
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Margin is near identical between these two channels — {pct(24.2)} for the app and {pct(24.1)} for
-        the website across the full period — so they differ in scale, not efficiency.
+        Margin is near identical between these two channels — {pct(24.2)} for the app and{" "}
+        {pct(24.1)} for the website across the full period — so they differ in scale, not
+        efficiency.
       </p>
     </div>
   );

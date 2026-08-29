@@ -11,7 +11,10 @@ export const Route = createFileRoute("/_authenticated/loyalty")({
   head: () => ({
     meta: [
       { title: "Loyalty — Fyxx Marketing" },
-      { name: "description", content: "LoyaltyLion tier membership, redemption and points outstanding." },
+      {
+        name: "description",
+        content: "LoyaltyLion tier membership, redemption and points outstanding.",
+      },
       { name: "robots", content: "noindex" },
       { property: "og:title", content: "Loyalty — Fyxx Marketing" },
       {
@@ -87,14 +90,31 @@ function LoyaltyPage() {
   const hadPrevScan = prevLast != null && prevLast.blue_members > 0;
   const tiers = hasScanData
     ? [
-        { label: "Blue", value: last.blue_members, prev: hadPrevScan ? prevLast!.blue_members : null },
-        { label: "Silver", value: last.silver_members, prev: hadPrevScan ? prevLast!.silver_members : null },
-        { label: "Gold", value: last.gold_members, prev: hadPrevScan ? prevLast!.gold_members : null },
-        { label: "Platinum", value: last.platinum_members, prev: hadPrevScan ? prevLast!.platinum_members : null },
+        {
+          label: "Blue",
+          value: last.blue_members,
+          prev: hadPrevScan ? prevLast!.blue_members : null,
+        },
+        {
+          label: "Silver",
+          value: last.silver_members,
+          prev: hadPrevScan ? prevLast!.silver_members : null,
+        },
+        {
+          label: "Gold",
+          value: last.gold_members,
+          prev: hadPrevScan ? prevLast!.gold_members : null,
+        },
+        {
+          label: "Platinum",
+          value: last.platinum_members,
+          prev: hadPrevScan ? prevLast!.platinum_members : null,
+        },
       ]
     : [];
 
   const birthdayRewards = data.current.reduce((a, s) => a + s.birthday_rewards_issued, 0);
+  const birthdayMeasured = data.current.some((x) => x.birthday_rewards_issued > 0);
 
   // Only days we actually scanned. Plotting the points-only imported days
   // draws their zero tier counts as real values — a year-long flat line at
@@ -110,7 +130,10 @@ function LoyaltyPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Loyalty" subtitle="Points from LoyaltyLion\u2019s own accounting; tiers and redemptions from nightly scans." />
+      <PageHeader
+        title="Loyalty"
+        subtitle="Points from LoyaltyLion\u2019s own accounting; tiers and redemptions from nightly scans."
+      />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         {hasScanData ? (
@@ -154,13 +177,23 @@ function LoyaltyPage() {
           </p>
         </Panel>
         <Panel title="Birthday rewards issued">
-          {hasScanData ? (
+          {/* Gated on whether the field was ever populated, NOT on whether tier
+              scan data exists. birthday_rewards_issued is zero on every snapshot
+              because the nightly sync does not collect it, so keying off
+              hasScanData rendered a hard 0 labelled as a range total. */}
+          {birthdayMeasured ? (
             <>
               <p className="display-num text-3xl">{num(birthdayRewards)}</p>
               <p className="mt-2 text-xs text-muted-foreground">Total across the selected range</p>
             </>
           ) : (
-            <NoData what="Birthday rewards" />
+            <>
+              <p className="display-num text-3xl text-muted-foreground">—</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Not collected. The nightly sync does not pull birthday rewards, so this is
+                unmeasured rather than zero.
+              </p>
+            </>
           )}
         </Panel>
       </div>
@@ -170,8 +203,8 @@ function LoyaltyPage() {
           <>
             <TierLineChart data={chart} />
             <p className="mt-2 text-xs text-muted-foreground">
-              {chart.length} measured day{chart.length === 1 ? "" : "s"}. Tier snapshots began
-              27 Aug 2026; LoyaltyLion cannot report tiers historically.
+              {chart.length} measured day{chart.length === 1 ? "" : "s"}. Tier snapshots began 27
+              Aug 2026; LoyaltyLion cannot report tiers historically.
             </p>
           </>
         ) : (

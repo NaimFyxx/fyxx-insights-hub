@@ -639,6 +639,36 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### Cancelled orders inflate Klaviyo attribution
+
+Klaviyo's `Placed Order` event is never retracted when an order is cancelled.
+Attributed revenue computed from the metric aggregate therefore keeps counting
+cancelled orders at full value, and **no re-sync can correct it** — re-reading
+the day returns the same inflated figure. `fetchAttributedByOrder` reads events
+individually and drops orders that appear in `Cancelled Order`.
+
+Share of Klaviyo `Placed Order` value subsequently cancelled, 2026:
+
+| Month | Placed JOD | Cancelled JOD | Share |
+|---|---|---|---|
+| 2026-01 | 158,954.607 | 6,721.869 | 4.2% |
+| 2026-02 | 154,162.600 | 13,047.008 | 8.5% |
+| 2026-03 | 88,933.976 | 14,259.925 | **16.0%** |
+| 2026-04 | 170,689.184 | 14,163.065 | 8.3% |
+| 2026-05 | 179,593.105 | 11,044.138 | 6.1% |
+| 2026-06 | 194,330.466 | 14,521.940 | 7.5% |
+| 2026-07 | 180,638.429 | 10,845.793 | 6.0% |
+| 2026-08 | 199,297.309 | 27,671.196 | **13.9%** |
+
+A 6 to 8% baseline with spikes to 14 to 16%, not a steady rate. The spikes are
+what make single days impossible rather than merely high.
+
+Effect on attributed revenue, 2026 to date: **132,534 JOD before, 109,876
+after — 17.1% overstated.** August alone was 27.3% over, February 38.9%.
+
+**Zero of the attributed events in 2026 carried more than one attribution**, so
+double-counting across channels — the first hypothesis — was never happening.
+
 ### Orders that cannot be attributed to a person
 
 The Odoo integration requires a customer on every order, so staff attach a

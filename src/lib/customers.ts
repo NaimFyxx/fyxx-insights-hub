@@ -161,3 +161,109 @@ export function cohorts(all: CustomerRow[], today: string, windowDays = 90) {
     };
   });
 }
+
+const CHANNELS = ["Mobile App", "Website", "Draft Orders", "POS"] as const;
+
+/** Lifetime value and retention by the channel a customer was ACQUIRED through. */
+export function byAcquisitionChannel(all: CustomerRow[], today: string, windowDays = 90) {
+  const eligible = all.filter(
+    (c) =>
+      !c.is_house_account &&
+      c.first_order_date &&
+      c.first_order_channel &&
+      days(c.first_order_date, today) >= windowDays,
+  );
+  return CHANNELS.map((ch) => {
+    const rows = eligible.filter((c) => c.first_order_channel === ch);
+    const repeated = rows.filter(
+      (c) => c.second_order_date && days(c.first_order_date!, c.second_order_date) <= windowDays,
+    );
+    const values = rows.map((c) => Number(c.revenue_jod ?? 0)).sort((a, b) => a - b);
+    return {
+      channel: ch,
+      customers: rows.length,
+      repeatPct: rows.length ? (repeated.length / rows.length) * 100 : null,
+      avgOrders: rows.length ? rows.reduce((a, c) => a + c.orders_lifetime, 0) / rows.length : 0,
+      medianRevenue: values.length ? (values[Math.floor((values.length - 1) / 2)] ?? 0) : 0,
+    };
+  }).filter((r) => r.customers > 0);
+}
+
+/**
+ * Splits the repeat-rate change into "who we acquired" and "how well each
+ * channel held them".
+ *
+ * `predicted` holds every channel at its own all-time rate and varies only the
+ * MIX. Where actual runs below predicted, channels are retaining worse than
+ * their own history — which is the harder finding, and the one the app story
+ * tends to bury.
+ *
+ * Indicative, not exact: the all-time rate for the app is dominated by its
+ * early years, so this flatters the mix explanation in later cohorts.
+ */
+export function mixVersusDecay(all: CustomerRow[], today: string, windowDays = 90) {
+  const base = new Map(
+    byAcquisitionChannel(all, today, windowDays).map((r) => [
+      r.channel as string,
+      r.repeatPct ?? 0,
+    ]),
+  );
+  const eligible = all.filter(
+    (c) =>
+      !c.is_house_account &&
+      c.first_order_date &&
+      c.first_order_channel &&
+      days(c.first_order_date, today) >= windowDays,
+  );
+  const byYear = new Map<string, CustomerRow[]>();
+  for (const c of eligible) {
+    const y = c.first_order_date!.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y)!.push(c);
+  }
+  return [...byYear.entries()].sort().map(([year, rows]) => {
+    const repeated = rows.filter(
+      (c) => c.second_order_date && days(c.first_order_date!, c.second_order_date) <= windowDays,
+    );
+    const actual = (repeated.length / rows.length) * 100;
+    const predicted =
+      rows.reduce((a, c) => a + (base.get(c.first_order_channel!) ?? 0), 0) / rows.length;
+    const appShare =
+      (rows.filter((c) => c.first_order_channel === "Mobile App").length / rows.length) * 100;
+    return { year, customers: rows.length, actual, predicted, gap: actual - predicted, appShare };
+  });
+}
+
+/** Per-channel repeat rate by cohort — shows WHERE the decay is concentrated. */
+export function channelDecay(all: CustomerRow[], today: string, windowDays = 90) {
+  const eligible = all.filter(
+    (c) =>
+      !c.is_house_account &&
+      c.first_order_date &&
+      c.first_order_channel &&
+      days(c.first_order_date, today) >= windowDays,
+  );
+  const years = [...new Set(eligible.map((c) => c.first_order_date!.slice(0, 4)))].sort();
+  return CHANNELS.map((ch) => {
+    const rows = eligible.filter((c) => c.first_order_channel === ch);
+    const perYear = years.map((y) => {
+      const g = rows.filter((c) => c.first_order_date!.startsWith(y));
+      // Below this a single customer moves the rate by more than a point.
+      if (g.length < 40) return { year: y, pct: null, n: g.length };
+      const r = g.filter(
+        (c) => c.second_order_date && days(c.first_order_date!, c.second_order_date) <= windowDays,
+      );
+      return { year: y, pct: (r.length / g.length) * 100, n: g.length };
+    });
+    const measured = perYear.filter((p) => p.pct !== null);
+    const firstM = measured[0];
+    const lastM = measured[measured.length - 1];
+    return {
+      channel: ch,
+      perYear,
+      change: firstM && lastM && firstM !== lastM ? lastM.pct! - firstM.pct! : null,
+      from: firstM?.year ?? null,
+      to: lastM?.year ?? null,
+    };
+  });
+}

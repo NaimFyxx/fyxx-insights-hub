@@ -701,6 +701,27 @@ channel now retains worse than its own history.
 So: about a third of the decline is who we acquired, and the rest is that the
 same channels stopped holding people as well.
 
+**The decay is concentrated, not even.** Repeat within 90 days, by the channel
+a customer was acquired through:
+
+| Cohort | Mobile App | POS | Website | Draft Orders |
+|---|---|---|---|---|
+| 2021 | 51.0% | 43.3% | 40.6% | 38.8% |
+| 2023 | 43.7% | 31.0% | 35.1% | 34.7% |
+| 2026 | 36.2% | **23.1%** | 29.8% | **37.6%** |
+| change | -14.8 | **-20.2** | -16.0 | **-1.2** |
+
+POS decays worst AND grew fastest as a share of acquisition — 3.9% of new
+customers in 2020, 48.2% in 2022. Draft Orders has barely moved. If there is
+one place to look, it is POS.
+
+**The 2026 flattening is not a recovery.** App share of new customers recovered
+to 48.4%, pushing the mix-predicted rate to 39.9%, its highest since 2020. The
+actual rate came in at 33.7% — a **-6.2 point gap, the widest recorded**. The
+blended line held flat only because mix improvement offset continued
+within-channel decay. If mix recovery stalls, the line resumes falling. Do not
+read the flat section as stabilisation.
+
 **Treat the split as indicative, not exact.** The prediction uses each
 channel's all-time repeat rate, which for the app is dominated by its early
 years, so it flatters the mix explanation in later cohorts. What is solid is

@@ -82,6 +82,15 @@ worth acting on.
 - Mix shift alone predicts a fall of ~6 points of the 16-point drop. From 2023
   actual runs BELOW mix-predicted and the gap widens to -6.2, so the rest is
   every channel retaining worse than its own history
+- **Decay is CONCENTRATED, not even.** Change in 90-day repeat, 2021 to 2026:
+  POS **-20.2**, Website -16.0, Mobile App -14.8, Draft Orders **-1.2**. POS
+  decays worst and grew fastest as a share of acquisition (3.9% of new
+  customers in 2020, 48.2% in 2022). If there is one place to look, it is POS.
+- **The 2026 flattening is NOT a recovery.** App share recovered to 48.4% and
+  mix-predicted rose to 39.9%, its highest since 2020, but actual was 33.7% —
+  a -6.2 gap, the widest recorded. The line held flat only because mix gain
+  offset continued channel decay. If mix recovery stalls, it resumes falling.
+  This corrects the earlier "it stopped" framing, which was too comfortable.
 - Indicative, not exact: the prediction uses all-time channel rates
 
 **Revenue concentration** (house accounts excluded, computed revenue)

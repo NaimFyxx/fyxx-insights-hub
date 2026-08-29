@@ -4,7 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { Input } from "@/components/ui/input";
-import { fetchCustomers, summarise, cohorts } from "@/lib/customers";
+import {
+  fetchCustomers,
+  summarise,
+  cohorts,
+  byAcquisitionChannel,
+  mixVersusDecay,
+  channelDecay,
+} from "@/lib/customers";
 import { ammanToday } from "@/lib/ranges";
 import { jod, num, pct } from "@/lib/format";
 
@@ -29,6 +36,12 @@ function CustomersPage() {
     [q.data, today, windowDays],
   );
   const co = useMemo(() => (q.data ? cohorts(q.data, today, 90) : []), [q.data, today]);
+  const acq = useMemo(
+    () => (q.data ? byAcquisitionChannel(q.data, today, 90) : []),
+    [q.data, today],
+  );
+  const mix = useMemo(() => (q.data ? mixVersusDecay(q.data, today, 90) : []), [q.data, today]);
+  const decay = useMemo(() => (q.data ? channelDecay(q.data, today, 90) : []), [q.data, today]);
 
   if (q.isLoading || !s) {
     return (
@@ -47,6 +60,11 @@ function CustomersPage() {
     recent.length === 3 &&
     Math.max(...recent.map((c) => c.repeatPct!)) - Math.min(...recent.map((c) => c.repeatPct!)) < 3;
   const peak = withRate.reduce((a, c) => (c.repeatPct! > a.repeatPct! ? c : a), withRate[0]!);
+  const ranked = acq
+    .filter((r) => r.repeatPct !== null)
+    .sort((a, b) => b.repeatPct! - a.repeatPct!);
+  const best = ranked[0];
+  const worst = ranked[ranked.length - 1];
 
   return (
     <div className="space-y-8">
@@ -126,6 +144,128 @@ function CustomersPage() {
               " and has since stabilised: the last three cohorts sit within three points of each other."
             : ""}
         </p>
+      </Panel>
+
+      <Panel title="Which channel acquires the customers worth having">
+        {/* First-class, not a footnote: this is the strongest available
+            argument for where to put effort. */}
+        <Table>
+          <thead>
+            <tr>
+              <Th>Acquired via</Th>
+              <Th align="right">Customers</Th>
+              <Th align="right">Repeat within 90 days</Th>
+              <Th align="right">Lifetime orders</Th>
+              <Th align="right">Median revenue</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {acq
+              .slice()
+              .sort((a, b) => (b.repeatPct ?? 0) - (a.repeatPct ?? 0))
+              .map((r) => (
+                <tr key={r.channel}>
+                  <Td>{r.channel}</Td>
+                  <Td align="right">{num(r.customers)}</Td>
+                  <Td align="right">{r.repeatPct === null ? "—" : pct(r.repeatPct)}</Td>
+                  <Td align="right">{r.avgOrders.toFixed(1)}</Td>
+                  <Td align="right">{jod(r.medianRevenue)}</Td>
+                </tr>
+              ))}
+          </tbody>
+        </Table>
+        {best && worst && best !== worst ? (
+          <p className="mt-2 text-sm">
+            A customer acquired through <b>{best.channel}</b> repeats{" "}
+            <b>{(best.repeatPct! - worst.repeatPct!).toFixed(1)} points</b> more often than one from{" "}
+            {worst.channel}, and places{" "}
+            {(best.avgOrders / Math.max(0.1, worst.avgOrders)).toFixed(1)}× the lifetime orders.
+          </p>
+        ) : null}
+      </Panel>
+
+      <Panel title="Is it who we acquired, or how well we keep them?">
+        {/* The harder finding, given its own panel so the app story cannot
+            bury it. Where actual runs below predicted, every channel is
+            retaining worse than its own history. */}
+        <Table>
+          <thead>
+            <tr>
+              <Th>Cohort</Th>
+              <Th align="right">App share of new</Th>
+              <Th align="right">Predicted by mix alone</Th>
+              <Th align="right">Actual</Th>
+              <Th align="right">Gap</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {mix.map((m) => (
+              <tr key={m.year}>
+                <Td>{m.year}</Td>
+                <Td align="right">{pct(m.appShare)}</Td>
+                <Td align="right">{pct(m.predicted)}</Td>
+                <Td align="right">{pct(m.actual)}</Td>
+                <Td align="right">
+                  <span className={m.gap < 0 ? "text-destructive" : ""}>
+                    {m.gap >= 0 ? "+" : ""}
+                    {m.gap.toFixed(1)}
+                  </span>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Predicted holds every channel at its own all-time repeat rate and varies only the mix, so
+          it is what the blended rate would be if channels performed as they always have. A negative
+          gap means channels are retaining worse than their own history — that part cannot be fixed
+          by changing where customers come from. Indicative rather than exact: the all-time rate for
+          the app is dominated by its early years, which flatters the mix explanation in later
+          cohorts.
+        </p>
+
+        <div className="mt-6">
+          <p className="label-xs mb-2 text-muted-foreground">
+            Repeat within 90 days, by acquisition channel and cohort
+          </p>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Channel</Th>
+                {(decay[0]?.perYear ?? []).map((p) => (
+                  <Th key={p.year} align="right">
+                    {p.year}
+                  </Th>
+                ))}
+                <Th align="right">Change</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {decay.map((d) => (
+                <tr key={d.channel}>
+                  <Td>{d.channel}</Td>
+                  {d.perYear.map((p) => (
+                    <Td key={p.year} align="right">
+                      {p.pct === null ? "—" : pct(p.pct)}
+                    </Td>
+                  ))}
+                  <Td align="right">
+                    <span className={d.change !== null && d.change < -5 ? "text-destructive" : ""}>
+                      {d.change === null
+                        ? "—"
+                        : `${d.change >= 0 ? "+" : ""}${d.change.toFixed(1)}`}
+                    </span>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+          <p className="mt-2 text-xs text-muted-foreground">
+            A dash is a cohort with fewer than 40 customers in that channel, where one person moves
+            the rate by more than a point. The decay is not even: read the Change column to see
+            which channel is losing ground and which is holding.
+          </p>
+        </div>
       </Panel>
 
       <Panel title="Where customers are in their life cycle">

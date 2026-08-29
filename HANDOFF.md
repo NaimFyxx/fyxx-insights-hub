@@ -25,7 +25,11 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 - 2,400 ghost customer rows deleted. `shopify_customers` is back to 19,163 with
   zero rows lacking `customer_created_at`. `loyalty-join.mjs` is UPDATE-only and
   verified: 2,401 LoyaltyLion customers with no Shopify counterpart skipped.
-- **POS capture is now a tracked monthly metric** on `/customers`.
+- **POS capture is a tracked monthly metric** on `/customers`, framed as a
+  policy question with a price rather than a compliance failure, with the
+  27 Feb 2026 series break shown as a row in the table rather than the series
+  silently stopping.
+- **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
 ## Changed a previously reported figure
 
@@ -94,7 +98,18 @@ has sat at 3.0-4.0 for three years. Whatever changed, changed then.
 of POS orders over 250 JOD carry a customer against 24.7% of orders under 10,
 rising monotonically. Day of week barely matters (53.4% to 66.0%). 6,554
 anonymous orders worth 279,461 JOD in fourteen months. Staff ARE asking, just
-not on small baskets — which is a different fix.
+not on small baskets — which is a different fix, and a policy question with a
+price rather than a compliance failure.
+
+**Smile.io rules the platform migration OUT as the cause of the cliff.** Smile
+enrolments by half-year: 1,410 (2022 H2), 774, **826 (2023 H2)**, 738, 857, 723
+(2025 H1) — flat straight through the window where POS capture fell 12.0 to 5.2
+to 3.2. Staff kept enrolling people at a steady rate while they stopped
+attaching customers to POS orders in Shopify. The two are **decoupled**, which
+points at how POS orders reach Shopify — the Odoo connector or till config —
+rather than at staff engagement. Suggestive not conclusive: a Smile enrolment
+could come through a web widget rather than the till. **A connector or till
+change in H2 2023 is the thing to look for.**
 
 The metric stops at 27 Feb 2026: after that only identified POS orders sync, so
 the denominator changes meaning and 2026 H2 reads 12.1, an artefact.
@@ -103,6 +118,23 @@ the denominator changes meaning and 2026 H2 reads 12.1, an artefact.
 Workable list 2,884 never opted in, NOT the 1,362 who opted out. Priority 85
 customers, 324,901 JOD. **SMS: 5,427 buyers reachable only by SMS**,
 2,391,700 JOD, against 572 subscribers.
+
+## Smile.io export — read, not imported
+
+`/Users/fyxx/Downloads/Project_Smile.io Old Loyalty Program Back Up Data`.
+Inspected 29 Aug 2026, deliberately not imported, no `data_coverage` entry.
+
+| Question asked of it | Answer |
+|---|---|
+| Fills the 2019-2023 loyalty hole? | **No.** Points transactions cover 2025-07-22 to 2025-08-20 — one month, not five years |
+| Enrolment history over a longer window? | Marginal. Dates run to 2020-10-13, but **98.7% of Smile customers (14,620 of 14,814) are already in LoyaltyLion**, and joining needs EMAIL, which this project deliberately does not store |
+| The 2023 H2 cliff? | **Yes, decisively** — see above. Needed reading, not importing |
+| Carries a Shopify customer id? | **No.** Email is the only key |
+
+Also learned: Smile ran until 2025-08-20 while LoyaltyLion activities begin
+2023-02-21, so the two **overlapped for over two years** rather than being a
+clean cutover. Nothing spanning the migration is comparable — different
+programme, tiers and point values.
 
 ## Traps worth knowing
 
@@ -134,19 +166,27 @@ customers, 324,901 JOD. **SMS: 5,427 buyers reachable only by SMS**,
 
 ## Next
 
-1. **Finish the customer section** — carry the "flat because mix gain offset
-   decay" framing into the cohort panel so it cannot be misread, and surface
-   enrolment as a retention dimension. Everything else on the page is built.
-2. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
+1. **Finish the customer section** — two items left. Carry the "flat because
+   mix gain offset decay" framing into the cohort panel so it cannot be
+   misread, and surface enrolment as a retention dimension. The headlines,
+   acquisition channel, mix-versus-decay, POS capture, life cycle,
+   concentration and reach panels are all built.
+2. **Enrolment before/after test** — approved, `enrolled_at` confirmed present
+   on every enrolled customer. Compare a customer's order rate before and after
+   their own enrolment. **Label it exactly**: enrolment usually happens AT a
+   purchase, so the "after" window starts at a moment of demonstrated
+   engagement and biases toward improvement. Closer than cross-sectional, never
+   presented as causal.
+3. **Capability sweep** of Shopify, Klaviyo and LoyaltyLion — documented
    surface, then one real probe per untried endpoint, timeboxed, into the
    README with the date. **Include `/v2/orders` on LoyaltyLion**: never used,
    carries `cancellation_status`, `total_refunded` and
    `metadata.shopify_source_name`, so it is a third independent view of every
    order and would let Shopify be cross-checked against something other than
    itself.
-3. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
+4. **Identity table** — `customer_identity` joining Shopify, Klaviyo and
    LoyaltyLion ids, with `matched_how`; surface the 20 Klaviyo profiles that
    map to several Shopify customers as a merge-detection list
-4. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
+5. **Retroactive-change fixes, still unbuilt**: `updated_at`-driven Shopify
    repair, and the Klaviyo trailing-90-day campaign re-fetch (one API call)
 

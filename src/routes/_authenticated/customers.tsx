@@ -281,8 +281,9 @@ function CustomersPage() {
       </Panel>
 
       <Panel title="New customers captured per 100 POS orders">
-        {/* A staff-behaviour metric. Tracked monthly so a conversation with the
-            shop team can be measured rather than asked about. */}
+        {/* Framed as a policy question with a price, not a compliance failure.
+            Staff ARE asking — on 83.5% of orders over 250 JOD — and skipping
+            small baskets, which is rational triage under time pressure. */}
         {capture.length ? (
           <>
             <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -292,21 +293,27 @@ function CustomersPage() {
                 note={`${num(capture.at(-1)!.newCustomers)} new from ${num(capture.at(-1)!.posOrders)} POS orders`}
               />
               <StatTile
-                label="Best month on record"
+                label="Before the drop"
                 value={Math.max(...capture.map((c) => c.per100)).toFixed(1)}
-                note={capture.reduce((a, c) => (c.per100 > a.per100 ? c : a)).month}
+                note={`peak, ${capture.reduce((a, c) => (c.per100 > a.per100 ? c : a)).month}`}
               />
               <StatTile
-                label="Anonymous POS orders"
-                value={pct(
-                  100 -
-                    (capture.at(-1)!.per100 /
-                      Math.max(0.1, Math.max(...capture.map((c) => c.per100)))) *
-                      100,
-                )}
-                note="of the best month's capture rate, lost"
+                label="Anonymous POS revenue"
+                value={jod(279461)}
+                note="14 months to Feb 2026, 6,554 orders with nobody attached"
               />
             </div>
+
+            <p className="mb-4 text-sm">
+              Capture did not drift, it fell in one half-year:{" "}
+              <b>12.0 per 100 orders in 2023 H1, 5.2 in H2, 3.2 by 2024</b>, and it has sat between
+              3.0 and 4.0 ever since. And it tracks basket size — <b>83.5%</b> of POS orders over
+              250 JOD carry a customer against <b>24.7%</b> under 10 JOD, rising steadily through
+              every band. Staff are asking on orders where it feels worth the time. That makes this
+              a question about where the threshold should sit, with a price attached, rather than a
+              compliance problem.
+            </p>
+
             <Table>
               <thead>
                 <tr>
@@ -325,18 +332,27 @@ function CustomersPage() {
                     <Td align="right">{c.per100.toFixed(1)}</Td>
                   </tr>
                 ))}
+                {/* The break is SHOWN, not silently truncated. Cutting the
+                    series off without saying why invites the next person to
+                    "fix" it by extending the range, which reinstates the
+                    12.1 artefact. */}
+                <tr>
+                  <td colSpan={4} className="py-3">
+                    <span className="text-xs text-muted-foreground">
+                      ── series ends {POS_CAPTURE_COMPARABLE_UNTIL}: from this date only POS orders
+                      with an identified customer sync at all, so the denominator becomes
+                      &ldquo;identified POS orders&rdquo; and the ratio stops meaning the same
+                      thing. Extending it reads 12.1, which is the definition change and not a
+                      recovery. ──
+                    </span>
+                  </td>
+                </tr>
               </tbody>
             </Table>
           </>
         ) : (
           <EmptyState>No POS orders in range.</EmptyState>
         )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          Stops at 27 February 2026. From that date only POS orders with an identified customer sync
-          at all, so the denominator changes meaning and later months would imply a recovery that is
-          an artefact. Capture tracks basket size: 83.5% of orders over 250 JOD carry a customer
-          against 24.7% of orders under 10, so this is a triage habit rather than an absence.
-        </p>
       </Panel>
 
       <Panel title="Where customers are in their life cycle">

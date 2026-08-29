@@ -727,6 +727,39 @@ channel's all-time repeat rate, which for the app is dominated by its early
 years, so it flatters the mix explanation in later cohorts. What is solid is
 the direction and the ordering, not the precise six points.
 
+### Smile.io export: read once, not imported, and why
+
+`/Users/fyxx/Downloads/Project_Smile.io Old Loyalty Program Back Up Data`,
+inspected 29 August 2026 and deliberately NOT imported.
+
+| File | Rows | Verdict |
+|---|---|---|
+| list_of_customers | 14,815 | the only valuable one — carries "Became member at" |
+| list_of_top_earning_customers | 10,611 | balances only, no dates |
+| list_of_points_transactions | 1,917 | **covers 2025-07-22 to 2025-08-20 only** |
+| customers_who_can_redeem | 3,933 | subset of the above |
+| discounts, redemptions, referrals, influenced orders | 3-94 | negligible |
+
+Why it was not imported, against the four questions asked of it:
+
+1. **It does not fill the 2019-2023 loyalty hole.** The points transactions
+   cover ONE MONTH, not five years. The export is a recent snapshot, not a
+   history.
+2. **Enrolment history over a longer window is real but hard to use.** Membership
+   dates run 2020-10-13 to 2025-08-20, genuinely earlier than LoyaltyLion's.
+   But **98.7% of Smile customers (14,620 of 14,814) are already in
+   LoyaltyLion**, so the population is not new, and joining needs EMAIL — which
+   this project deliberately does not store.
+3. **It answered the 2023 H2 cliff question, which was the point.** See above.
+   That answer needed reading the file, not importing it.
+4. **No Shopify customer id.** Email is the only key. Not a column exists
+   linking to Shopify.
+
+Anything spanning the migration is not comparable: different programme,
+different tiers, different point values. Smile ran until 2025-08-20 and
+LoyaltyLion activities begin 2023-02-21, so the two overlapped for over two
+years rather than being a clean cutover.
+
 ### LoyaltyLion pagination: use the body, never the Link header
 
 The response body carries `cursor.next`. The **Link header lists
@@ -769,6 +802,15 @@ Day of week barely matters: 53.4% (Saturday) to 66.0% (Monday). Staff ask on
 large baskets and skip on small ones. Median identified order is 52 JOD against
 30 JOD anonymous, and 6,554 anonymous orders worth 279,461 JOD passed through
 in fourteen months with nobody attached to them.
+
+**Smile.io rules the platform migration OUT as the cause.** Smile enrolments
+by half-year: 1,410 (2022 H2), 774, **826 (2023 H2)**, 738, 857, 723 (2025 H1).
+Flat right through the window where POS capture fell 12.0 to 5.2 to 3.2. Staff
+kept enrolling people in the loyalty programme at a steady rate while they
+stopped attaching customers to POS orders in Shopify. The two are decoupled,
+which points at a change in how POS orders reach Shopify rather than a general
+collapse in staff engagement. Suggestive rather than conclusive: a Smile
+enrolment could happen through a web widget rather than at the till.
 
 **The metric stops at 27 February 2026.** From that date only POS orders with
 an identified customer sync at all, so the denominator becomes "identified POS

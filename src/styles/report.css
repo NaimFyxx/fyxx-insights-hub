@@ -1,0 +1,477 @@
+/*
+ * Print stylesheet for the monthly executive report.
+ * Adapted from docs/report-template/fyxx-monthly-executive-report-template-v1.html,
+ * with every rule scoped under .rp so nothing leaks into the dashboard.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Baskervville:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap");
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+.rp {
+  /* The template's reset covered .page itself. Scoping it to `.rp *` would
+     exclude the page box, so its 14.5mm of padding would be added outside the
+     297mm min-height and every page would run 311mm. */
+  box-sizing: border-box;
+
+  --black: #000000;
+  --ink: #111111;
+  --grey: #6b6b6b;
+  --line: #dddddd;
+  --pink: #f0b09e;
+  --pink-soft: #f5d5cf;
+  --white: #ffffff;
+
+  /* A4 width, but the height grows. A clipped table is exactly the kind of
+     silent truncation this report exists to avoid, so a long month runs onto a
+     second printed page rather than losing rows off the bottom edge. */
+  width: 210mm;
+  min-height: 297mm;
+  margin: 12mm auto;
+  background: var(--white);
+  padding: 8mm 13mm 6.5mm 13mm;
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.12);
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.rp * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.rp .head {
+  border-bottom: 1.5px solid var(--black);
+  padding-bottom: 2.5mm;
+}
+.rp .headtop {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.rp .headgrid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  margin-top: 1.5mm;
+}
+.rp .wordmark {
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 20pt;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+.rp .wordmark span {
+  color: var(--pink);
+}
+.rp .eyebrow {
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  font-size: 6.5pt;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+.rp .head .eyebrow {
+  white-space: nowrap;
+}
+.rp .month {
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 26pt;
+  line-height: 1;
+}
+.rp .meta {
+  text-align: right;
+  font-size: 7.5pt;
+  color: var(--grey);
+  line-height: 1.5;
+}
+.rp .meta b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rp .sec {
+  display: flex;
+  align-items: baseline;
+  gap: 2.5mm;
+  margin-bottom: 1.3mm;
+}
+.rp .sec .eyebrow {
+  color: var(--black);
+}
+.rp .sec::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--pink);
+  transform: translateY(-1.5px);
+}
+
+.rp .highlight {
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 11pt;
+  line-height: 1.36;
+  padding-left: 4mm;
+  border-left: 2.5px solid var(--pink);
+}
+
+.rp .reach {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.rp .kpi {
+  padding: 2mm 0 2mm 3mm;
+  border-left: 1px solid var(--line);
+}
+.rp .kpi:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.rp .kpi .n {
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 19pt;
+  line-height: 1;
+  letter-spacing: -0.3px;
+}
+.rp .kpi .n small {
+  font-size: 10pt;
+  color: var(--grey);
+  letter-spacing: 0;
+  margin-left: 1px;
+}
+.rp .kpi .l {
+  font-size: 7pt;
+  color: var(--grey);
+  margin-top: 1.4mm;
+}
+.rp .kpi .l b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rp table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.4pt;
+  table-layout: fixed;
+}
+.rp th {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 5.8pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--grey);
+  text-align: right;
+  padding: 0 0 1.2mm 0;
+  border-bottom: 1px solid var(--line);
+  white-space: normal;
+  vertical-align: bottom;
+  line-height: 1.25;
+}
+.rp td {
+  padding: 0.85mm 0;
+  border-bottom: 1px solid #eeeeee;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rp th:first-child {
+  text-align: left;
+  padding-right: 3mm;
+}
+/* Names wrap rather than truncate. An ellipsis would silently rewrite a
+   campaign or flow name, and these have to be verbatim to be recognisable. */
+.rp td:first-child {
+  text-align: left;
+  padding-right: 3mm;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+.rp table.w30 th:first-child {
+  width: 27%;
+}
+.rp table.w40 th:first-child {
+  width: 50%;
+}
+.rp table.w46 th:first-child {
+  width: 58%;
+}
+.rp th:not(:first-child),
+.rp td:not(:first-child) {
+  padding-left: 2.5mm;
+}
+.rp td.name {
+  font-weight: 500;
+}
+.rp td.sub,
+.rp span.sub {
+  color: var(--grey);
+  font-weight: 400;
+  font-size: 6.6pt;
+}
+.rp tr.total td {
+  border-top: 1px solid var(--black);
+  border-bottom: 0;
+  font-weight: 600;
+  padding-top: 1.6mm;
+}
+.rp tr.total td:first-child {
+  font-family: "Syne", sans-serif;
+  font-size: 6pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.rp .cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7mm;
+}
+.rp .cols > section {
+  min-width: 0;
+}
+.rp .cols-32 {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.rp .tiers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2mm;
+  margin-bottom: 1.6mm;
+}
+.rp .tier {
+  border-top: 2px solid var(--line);
+  padding-top: 1.6mm;
+}
+.rp .tier.gold {
+  border-top-color: var(--pink);
+}
+.rp .tier .t {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 5.8pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+.rp .tier .n {
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 15pt;
+  line-height: 1.15;
+}
+.rp .tier .d {
+  font-size: 6.6pt;
+  color: var(--grey);
+}
+.rp .tier .d.up {
+  color: var(--ink);
+}
+.rp .facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2mm;
+}
+.rp .fact {
+  border-top: 1px solid var(--line);
+  padding-top: 1.4mm;
+}
+.rp .fact .n {
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 12.5pt;
+  line-height: 1.1;
+}
+.rp .fact .n small {
+  font-size: 7.5pt;
+  color: var(--grey);
+}
+.rp .fact .l {
+  font-size: 6.6pt;
+  color: var(--grey);
+  margin-top: 0.6mm;
+}
+
+.rp .acts {
+  list-style: none;
+  font-size: 7.4pt;
+}
+.rp .acts li {
+  display: grid;
+  grid-template-columns: 5mm 1fr auto;
+  align-items: center;
+  gap: 1.5mm;
+  padding: 0.9mm 0;
+  border-bottom: 1px solid #eeeeee;
+}
+.rp .acts .date {
+  color: var(--grey);
+  font-size: 6.8pt;
+  font-variant-numeric: tabular-nums;
+}
+.rp .mark {
+  width: 3.4mm;
+  height: 3.4mm;
+  border-radius: 50%;
+  border: 1.2px solid var(--black);
+  display: inline-block;
+  position: relative;
+}
+.rp .mark.done {
+  background: var(--black);
+}
+.rp .mark.done::after {
+  content: "";
+  position: absolute;
+  left: 1.05mm;
+  top: 0.45mm;
+  width: 0.9mm;
+  height: 1.7mm;
+  border: solid var(--pink);
+  border-width: 0 1.1px 1.1px 0;
+  transform: rotate(45deg);
+}
+.rp .status {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 5.6pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.rp .status.no {
+  color: var(--grey);
+}
+
+.rp .next {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5mm;
+}
+.rp .next.stack {
+  grid-template-columns: 1fr;
+  gap: 1.6mm;
+}
+.rp .next.stack div {
+  padding-top: 1.2mm;
+}
+.rp .next.stack div b {
+  display: inline;
+  font-size: 9.5pt;
+  margin-right: 1.5mm;
+}
+.rp .next div {
+  font-size: 8pt;
+  line-height: 1.45;
+  padding-top: 1.8mm;
+  border-top: 2px solid var(--pink);
+}
+.rp .next div b {
+  display: block;
+  font-family: "Baskervville", Georgia, serif;
+  font-size: 10.5pt;
+  font-weight: 400;
+  margin-bottom: 0.8mm;
+}
+
+.rp .foot {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  font-size: 6.4pt;
+  color: var(--grey);
+  border-top: 1px solid var(--line);
+  padding-top: 1.4mm;
+}
+.rp .badge {
+  background: var(--pink-soft);
+  color: var(--ink);
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 5.8pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 0.6mm 2mm;
+  border-radius: 2px;
+}
+
+/* A section that cannot be shown honestly prints its reason in place of the
+   figures. Deliberately plain: it should read as a statement, not an error. */
+.rp .unavail {
+  font-size: 7.2pt;
+  line-height: 1.45;
+  color: var(--grey);
+  border-left: 2.5px solid var(--line);
+  padding-left: 3mm;
+}
+.rp .caption {
+  font-size: 6.6pt;
+  color: var(--grey);
+  margin-top: 1.6mm;
+  line-height: 1.4;
+}
+.rp .notices {
+  border-left: 2.5px solid var(--pink);
+  padding-left: 3mm;
+  font-size: 7pt;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.rp .notices p + p {
+  margin-top: 1mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  /* The report renders inside the dashboard shell, so hide everything and
+     reveal only the page itself. Works regardless of how the layout nests. */
+  body * {
+    visibility: hidden !important;
+  }
+  .rp,
+  .rp * {
+    visibility: visible !important;
+  }
+  .rp {
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* A month with every section populated runs past one page. It paginates
+     rather than clipping, so keep the breaks clean: never split a table row,
+     never strand a heading, and repeat table headers on the second page. */
+  .rp section,
+  .rp .cols,
+  .rp tr,
+  .rp .fact,
+  .rp .tier,
+  .rp .acts li {
+    break-inside: avoid;
+  }
+  .rp .sec {
+    break-after: avoid;
+  }
+  .rp thead {
+    display: table-header-group;
+  }
+}

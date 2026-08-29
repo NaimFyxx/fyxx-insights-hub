@@ -639,6 +639,43 @@ migration file's checksum, and it is not known whether Lovable's tooling
 re-applies migrations by checksum or by version. If it ever re-seeds, the
 dashboard says so rather than it being discovered inside a total.
 
+### Orders that cannot be attributed to a person
+
+The Odoo integration requires a customer on every order, so staff attach a
+placeholder, **"Shopify Draft (No Customer)"** (customer `9857059324151`), when
+there is no real one. Measured by `scripts/diagnose/placeholder.mjs` over
+2025-01-01 to 2026-08-29:
+
+| Channel | Orders | Placeholder | No customer | Neither identifiable |
+|---|---|---|---|---|
+| Draft Orders | 10,932 | 164 | 249 | **3.8%** |
+| POS | 17,613 | 0 | 7,052 | **40.0%** |
+| Mobile App | 18,654 | 0 | 0 | 0.0% |
+| Website | 3,900 | 0 | 0 | 0.0% |
+
+Two results worth keeping, both the opposite of what was assumed:
+
+- **The placeholder is a small minority of drafts, not most of them.** It first
+  appears in January 2026, rises around the changeover, and runs at 2 to 6.4%
+  of drafts a month. Draft orders are spread across 1,664 distinct customers
+  and no single one exceeds 2.6%. Combined with genuinely absent customers, at
+  most 6.7% of drafts in any month cannot be attributed.
+- **POS is the real gap.** 28.3% of POS orders since the changeover carry no
+  customer at all, against 41.3% before it. Note this sits awkwardly against
+  the understanding that the Odoo connector only syncs POS orders with a
+  customer attached; either it syncs some without, or the customer exists in
+  Odoo and does not reach Shopify. Unresolved, and it means any "identifiable
+  retail" percentage derived from POS order counts is overstated.
+
+**It did not contaminate the influence work.** `klaviyo_order_influence` joins
+clicks to orders by Klaviyo *profile*, so the fear was that one placeholder
+profile would make a single click appear to precede hundreds of draft orders.
+It did not happen: only **5** of 10,825 draft influence rows belong to the
+placeholder and all five have no prior click. The draft click-influence rate is
+**20.4% including it and 20.4% excluding it**. The mechanism is that the
+placeholder customer has **no email address**, and Klaviyo profiles are keyed on
+email or phone, so 159 of its 164 orders never reached Klaviyo at all.
+
 ### Cancel-and-re-place moves revenue between channels, but not much
 
 Since the Odoo changeover, an app or website order needing an edit is cancelled

@@ -12,7 +12,7 @@ import {
 import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
 import { PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
-import { describeChannels } from "@/lib/channels";
+import { attributionLimitNote, SUB_CHANNELS, describeChannels } from "@/lib/channels";
 import { ChannelBar } from "@/components/layout/ChannelBar";
 import { ConcentrationNotice } from "@/components/fyxx/ConcentrationNotice";
 import { RevenueLineChart } from "@/components/charts/RevenueLineChart";
@@ -200,12 +200,19 @@ function OverviewPage() {
             note={`${jod(klaviyoNow)} of ${jod(allNow)} across every channel`}
           />
         </div>
+        {/* The share tile divides by every channel, so it inherits the channels
+            that cannot be credited to anyone. Stated here rather than in the
+            tile note, which is too short to carry it. */}
+        <p className="mt-3 text-xs text-muted-foreground">{attributionLimitNote(SUB_CHANNELS)}</p>
       </section>
 
       <section>
         <p className="label-xs mb-3 text-muted-foreground">
           Shopify — follows the channel toggles: {describeChannels(channels)}
         </p>
+        {attributionLimitNote(channels) ? (
+          <p className="mb-3 text-xs text-muted-foreground">{attributionLimitNote(channels)}</p>
+        ) : null}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <StatTile
             label="Revenue"

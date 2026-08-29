@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { buildReport, saveNarrative, type Availability, type ReportData } from "@/lib/report";
 import { DATA_TODAY, iso, type DateRange } from "@/lib/ranges";
 import { num, pct, jod } from "@/lib/format";
+import { attributionLimitNote, SUB_CHANNELS } from "@/lib/channels";
 import "@/styles/report.css";
 
 export const Route = createFileRoute("/_authenticated/report")({
@@ -307,7 +308,8 @@ export function ReportPage1({ data }: { data: ReportData }) {
           ) : (
             <>
               Total sales covers every channel, including POS and Draft Orders, and is counted on
-              the date each order was placed. It is not an online-only figure.
+              the date each order was placed. It is not an online-only figure.{" "}
+              {attributionLimitNote(SUB_CHANNELS)}
             </>
           )}
         </p>

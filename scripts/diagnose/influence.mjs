@@ -26,6 +26,34 @@ const argOf = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1]
 const FROM = argOf("--from", "2025-01-01");
 const TO = argOf("--to", "2026-08-28");
 const WINDOW_H = 72;
+const PROMO_ONLY = args.includes("--promotional-only");
+
+/**
+ * Flows excluded from the promotional-only test, with the reason.
+ *
+ * The rule: a flow is EXCLUDED if it fires BECAUSE an order happened. Those
+ * emails cannot have caused the purchase, and they mechanically stuff the
+ * "after" window — which is exactly what makes the naive placebo unusable.
+ *
+ * The exclusion choice is doing the analytical work here, so it is listed
+ * rather than buried in a regex.
+ */
+const POST_PURCHASE_FLOWS = {
+  Tni7xk: "ll-points-earned — points are awarded BY a purchase",
+  VVvmv3: "Post-Purchase Followup - Returning Customers",
+  VdwGaG: "Judge.me Review Request — sent after delivery",
+  SXdDwZ: "Next Best Product Cross Sell — triggered post-purchase",
+  TNqEua: "Feedback: 3rd Order - Send Coupon / Reminder",
+  WQhpbx: "Feedback: 3rd Order - Send Survey",
+  RJhxV4: "Fyxx Cup 2026 - Post Purchase",
+  YcEuLc: "Talabat + Careem 2026 - Post Purchase",
+  RQJgfu: "order-confirmation-pos — transactional",
+  Wsxp7d: "ll-tier-upgrade — tier rises as a result of spend",
+  WzANV6: "ll-tier-downgrade — consequence of spend history",
+  T6Wjhu: "ll-reward-claimed — follows a redemption",
+  TfXWXA: "ll-referral-complete — follows a referred purchase",
+  Re3wie: "ll-customer-enrolled — enrolment commonly follows a first order",
+};
 
 const pct = (a, b) => (b > 0 ? (100 * a) / b : 0);
 const n0 = (v) => Math.round(v).toLocaleString("en-US");
@@ -41,8 +69,33 @@ async function main() {
   };
 
   log.info(`pulling ${FROM} … ${TO} (clicks padded ±7 days for the placebo side)`);
-  const clicks = await klaviyo.pullRawEvents(clickMetric, `${pad(FROM, -7)}T00:00:00`, `${pad(TO, 8)}T00:00:00`,
-    (e) => ({ p: e.relationships?.profile?.data?.id, t: Date.parse(e.attributes?.datetime) }), "clicks");
+  const rawClicks = await klaviyo.pullRawEvents(clickMetric, `${pad(FROM, -7)}T00:00:00`, `${pad(TO, 8)}T00:00:00`,
+    (e) => ({
+      p: e.relationships?.profile?.data?.id,
+      t: Date.parse(e.attributes?.datetime),
+      flow: e.attributes?.event_properties?.$flow ?? null,
+    }), "clicks");
+
+  const excludedCounts = new Map();
+  const clicks = rawClicks.filter((c) => {
+    if (!PROMO_ONLY) return true;
+    if (c.flow && POST_PURCHASE_FLOWS[c.flow]) {
+      excludedCounts.set(c.flow, (excludedCounts.get(c.flow) ?? 0) + 1);
+      return false;
+    }
+    return true;
+  });
+
+  if (PROMO_ONLY) {
+    console.log(`\n${"=".repeat(74)}\nEXCLUDED FLOWS — clicks that fire BECAUSE an order happened\n${"=".repeat(74)}`);
+    let tot = 0;
+    for (const [id, n] of [...excludedCounts].sort((a, b) => b[1] - a[1])) {
+      tot += n;
+      console.log(`  ${String(n).padStart(5)}  ${id}  ${POST_PURCHASE_FLOWS[id]}`);
+    }
+    console.log(`  ${String(tot).padStart(5)}  TOTAL excluded of ${rawClicks.length} clicks (${(100 * tot / rawClicks.length).toFixed(1)}%)`);
+    console.log(`  ${String(clicks.length).padStart(5)}  promotional clicks retained (campaigns + promotional flows)`);
+  }
   const orders = await klaviyo.pullRawEvents(orderMetric, `${FROM}T00:00:00`, `${pad(TO, 1)}T00:00:00`,
     (e) => ({
       p: e.relationships?.profile?.data?.id,
@@ -52,7 +105,7 @@ async function main() {
     }), "orders");
 
   const byProfile = new Map();
-  for (const c of clicks) {
+  for (const c of rawClicks) {
     if (!c.p || !Number.isFinite(c.t)) continue;
     (byProfile.get(c.p) ?? byProfile.set(c.p, []).get(c.p)).push(c.t);
   }
@@ -81,22 +134,73 @@ async function main() {
 
   const totalV = rows.reduce((a, r) => a + r.v, 0);
   const inWin = (h) => h !== null && h <= WINDOW_H;
+  const H_ = H;
 
-  /* -------------------------------------------------- 1. placebo ------- */
+  /* ---------------------------------------- 1. placebo, both ways ------- */
+  // Computed on ONE pull: all clicks, and promotional clicks only. The
+  // comparison between them is the actual diagnostic — see below.
+  const AMBIGUOUS = ["SXdDwZ", "Re3wie"];  // classification not confirmed
+
+  const measure = (clickSet) => {
+    const map = new Map();
+    for (const c of clickSet) {
+      if (!c.p || !Number.isFinite(c.t)) continue;
+      const a = map.get(c.p) ?? [];
+      a.push(c.t);
+      map.set(c.p, a);
+    }
+    for (const a of map.values()) a.sort((x, y) => x - y);
+    let bN = 0, bV = 0, aN = 0, aV = 0;
+    for (const o of rows) {
+      const ca = map.get(o.p) ?? [];
+      let before = null, after = null;
+      for (const t of ca) {
+        if (t <= o.t) before = t;
+        else { after = t; break; }
+      }
+      if (before !== null && (o.t - before) / H <= WINDOW_H) { bN++; bV += o.v; }
+      if (after !== null && (after - o.t) / H <= WINDOW_H) { aN++; aV += o.v; }
+    }
+    return { bN, bV, aN, aV };
+  };
+
+  const isPostPurchase = (c) => c.flow && POST_PURCHASE_FLOWS[c.flow];
+  const all = measure(rawClicks);
+  const promo = measure(rawClicks.filter((c) => !isPostPurchase(c)));
+  // Sensitivity: the two flows whose classification is not confirmed.
+  const promoStrict = measure(rawClicks.filter((c) => !isPostPurchase(c) && !AMBIGUOUS.includes(c.flow)));
+  const promoLoose = measure(rawClicks.filter((c) => !isPostPurchase(c) || AMBIGUOUS.includes(c.flow)));
+
+  const line = (label, m) =>
+    `  ${label.padEnd(30)} before ${n0(m.bV).padStart(8)} JOD (${pct(m.bV, totalV).toFixed(1)}%)   after ${n0(m.aV).padStart(8)} JOD (${pct(m.aV, totalV).toFixed(1)}%)   ratio ${m.aV > 0 ? (m.bV / m.aV).toFixed(2) : "n/a"}x`;
+
+  console.log(`\n${"=".repeat(96)}\n1. PLACEBO, BOTH WAYS (${WINDOW_H}h) — orders ${n0(rows.length)}, revenue ${n0(totalV)} JOD\n${"=".repeat(96)}`);
+  console.log(line("all clicks", all));
+  console.log(line("promotional only", promo));
+  console.log(line("  strict (ambiguous excluded)", promoStrict));
+  console.log(line("  loose (ambiguous kept)", promoLoose));
+
+  /* ------------------------------- THE SHRINKAGE CHECK ------------------ */
+  const shrinkB = all.bV > 0 ? (1 - promo.bV / all.bV) * 100 : 0;
+  const shrinkA = all.aV > 0 ? (1 - promo.aV / all.aV) * 100 : 0;
+  console.log(`\n  Removing post-purchase flows shrank:`);
+  console.log(`    BEFORE by ${shrinkB.toFixed(1)}%`);
+  console.log(`    AFTER  by ${shrinkA.toFixed(1)}%`);
+  console.log(
+    shrinkA > shrinkB * 1.5
+      ? "    READ: after shrank far more — consistent with post-purchase contamination."
+      : "    READ: both shrank similarly — the exclusions did NOT fix a contamination problem.",
+  );
+  console.log(
+    promo.bV > promo.aV
+      ? `\n  On promotional clicks alone, BEFORE exceeds AFTER (${(promo.bV / promo.aV).toFixed(2)}x). Effect survives this test.`
+      : `\n  On promotional clicks alone, BEFORE still trails AFTER (${promo.aV > 0 ? (promo.bV / promo.aV).toFixed(2) : "n/a"}x). NO EFFECT.`,
+  );
+  console.log("\n  NOTE: these exclusions were chosen AFTER seeing the naive placebo fail.");
+  console.log("  A post-hoc filter that rescues a result deserves scepticism; state it with any positive.");
+
   const beforeR = rows.filter((r) => inWin(r.hBefore));
-  const afterR = rows.filter((r) => inWin(r.hAfter));
   const bV = beforeR.reduce((a, r) => a + r.v, 0);
-  const aV = afterR.reduce((a, r) => a + r.v, 0);
-  console.log(`\n${"=".repeat(74)}\n1. PLACEBO TEST — clicks BEFORE vs AFTER the order (${WINDOW_H}h)\n${"=".repeat(74)}`);
-  console.log(`  orders ${n0(rows.length)}, revenue ${n0(totalV)} JOD`);
-  console.log(`  click BEFORE order : ${String(beforeR.length).padStart(6)} orders  ${n0(bV).padStart(9)} JOD  ${pct(bV, totalV).toFixed(1)}%`);
-  console.log(`  click AFTER  order : ${String(afterR.length).padStart(6)} orders  ${n0(aV).padStart(9)} JOD  ${pct(aV, totalV).toFixed(1)}%  <- coincidence baseline`);
-  const lift = pct(bV, totalV) - pct(aV, totalV);
-  console.log(`  difference         : ${lift.toFixed(1)} percentage points`);
-  console.log(`  ratio before/after : ${aV > 0 ? (bV / aV).toFixed(2) : "n/a"}x`);
-  console.log(lift > 3
-    ? "  READ: before clearly exceeds the coincidence baseline — the effect looks real."
-    : "  READ: before is close to the baseline — most of it may be people who would have ordered anyway.");
 
   /* ------------------------------------------------ 2. stability ------- */
   console.log(`\n${"=".repeat(74)}\n2. STABILITY — influenced share of revenue, by month\n${"=".repeat(74)}`);

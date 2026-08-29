@@ -549,3 +549,31 @@ export function toSalesRows(byDay, days) {
   }
   return rows;
 }
+
+/** Order id, channel and value only — for the Klaviyo coverage comparison. */
+export async function pullOrderIdentity(from, to) {
+  const q = `created_at:>='${from}T00:00:00+03:00' created_at:<='${to}T23:59:59+03:00'`;
+  const out = [];
+  let cursor = null, pages = 0;
+  do {
+    const data = await gql(
+      `query($q:String!,$cursor:String){ orders(first:250, after:$cursor, query:$q, sortKey:CREATED_AT){
+        pageInfo{hasNextPage endCursor}
+        nodes{ legacyResourceId cancelledAt sourceName currentTotalPriceSet{shopMoney{amount}} } } }`,
+      { q, cursor }, `coverage orders page ${pages + 1}`,
+    );
+    const conn = data.orders;
+    for (const o of conn.nodes ?? []) {
+      if (o.cancelledAt) continue;
+      out.push({
+        id: String(o.legacyResourceId),
+        sub_channel: classifySource(o.sourceName).sub_channel,
+        amount: Number(o.currentTotalPriceSet?.shopMoney?.amount ?? 0),
+      });
+    }
+    cursor = conn.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : null;
+    pages++;
+    if (pages % 20 === 0) log.info(`  ${pages} pages, ${out.length} orders`);
+  } while (cursor && pages < 4000);
+  return out;
+}

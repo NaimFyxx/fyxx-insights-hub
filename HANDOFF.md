@@ -132,6 +132,53 @@ Shopify admin, Klaviyo and LoyaltyLion directly. Requirement worth preserving:
 That is as useful as the ones that can. The point is not bug-hunting; it is
 Naim rebuilding first-hand confidence rather than taking figures on trust.
 
+## Acquisition channel vs order channel — feasibility, answered
+
+The distinction: the channel toggles filter by ORDER channel (where an order
+came from). Acquisition channel is where the CUSTOMER first came from. An
+app-acquired customer who now phones orders in shows as Draft Orders revenue —
+marketing acquired them, the dashboard credits the sales team.
+
+**Acquisition channel IS reliable, including pre-2025.** Two independent
+checks:
+
+- **No channel is claimed before it existed.** Earliest acquisition date
+  matches the earliest order on that channel EXACTLY, four times over: Mobile
+  App 2019-12-02, POS 2019-12-03, Website 2019-12-25, Draft Orders 2020-01-27.
+  A derivation that guessed or defaulted would not line up four for four.
+- **The sweep ran AFTER the SOURCE_MAP corrections**, not before. The app-id
+  fix is commit `46b5443` at 18:13 on 29 Aug; the 2019 sweep is `4d4da23` at
+  19:15, an hour later. So it used both Mobile App ids, `checkout_next`,
+  `580111` and `1830279` — the mapping errors that produced the +831.8%
+  Mobile App figure were already fixed. Populated for 100% of buyers, no NULL
+  and no "Unknown".
+
+**All three asks are feasible, and all three need the same one sweep.**
+`shopify_customers` stores only `first_order_channel`; there is no order-level
+table, so nothing can currently be cut by acquisition channel OVER TIME.
+Shopify holds the data — we have simply never stored it. Better: the existing
+`scripts/diagnose/customer-history.mjs` ALREADY derives per-order channel per
+day (`channelByDay`, line 57) and throws it away, keeping only the first. The
+migration analysis is being computed and discarded on every run.
+
+**Proposed: a `shopify_orders` table** — order_id, shopify_customer_id,
+ordered_at, sub_channel, revenue_jod. ~154,000 rows. Acquisition-channel
+revenue then becomes a view joining `first_order_channel`, and cancellations
+net at read time against `cancelled_orders` the way attribution already does.
+
+**The ceiling, which must be on the panel: 84.4% of revenue.** An order with no
+customer attached can never carry an acquisition channel, and 16,462 orders
+(10.7%) and 997,898 JOD (9.5%) have none — the POS and draft-order placeholder
+problem, already measured. House accounts hold a further 635,901 JOD. So
+8,825,239 of 10,459,038 JOD is assignable. The remainder is not a rounding
+error and cannot be closed.
+
+**One framing caution for Zeid.** Crediting a customer's whole lifetime revenue
+to their acquisition channel is a strong claim: someone acquired at POS in 2020
+who has bought online ever since would count entirely as POS. It answers
+"revenue from customers marketing brought in", which is the question asked, but
+it is not "revenue marketing caused". Label it as the former.
+
 ## House-account contamination — measured, and confined
 
 Naim's concern: house activity sitting inside a real customer's Klaviyo profile

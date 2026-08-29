@@ -1,10 +1,12 @@
-# Handoff — 29 August 2026
+# Handoff — 30 August 2026
 
 State for someone picking this up cold. Rewritten every turn. No transcripts.
 
-**Nothing is blocking.** The customer section EXISTS at `/customers` and is
-being extended; it is not being built from scratch. Remaining work on it is
-listed under Next.
+**One thing is waiting on Naim**, and it gates the rest: the fix list in
+`FILTERS.md`. See "Waiting on a decision" below. Everything else is unblocked.
+
+The customer section EXISTS at `/customers` and is being extended; it is not
+being built from scratch.
 
 ---
 
@@ -107,6 +109,55 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
   silently stopping.
 - **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
+## Waiting on a decision
+
+**The filter fix list.** A correctness pass over every page and figure is
+written up in `FILTERS.md` — which range filter each uses, which channel
+filter, and whether it should. Nothing has been CHANGED in the frontend yet,
+deliberately: Naim asked to see broken separated from by-design before code
+moved, because the complaint was "I can't tell which is which".
+
+Proposed, awaiting a yes or a narrower yes:
+
+- **A1–A3** — mechanical: real clock instead of the frozen one, `refreshKey`
+  into four query keys, Export page following the range.
+- **D1–D3** — error states, so a failed query stops rendering as a finding.
+- **C** — captions on the pages that correctly ignore the date range, saying so.
+
+**The verification pack is gated behind this** — an August 2026 spreadsheet,
+one sheet per section (Shopify revenue and orders by channel by day, campaigns,
+flows, push, loyalty snapshot, customer counts), totallable in Excel against
+Shopify admin, Klaviyo and LoyaltyLion directly. Requirement worth preserving:
+**where a figure cannot be checked against a source, the sheet must say so.**
+That is as useful as the ones that can. The point is not bug-hunting; it is
+Naim rebuilding first-hand confidence rather than taking figures on trust.
+
+## The filter audit — what it found
+
+Full detail and line references in `FILTERS.md`. The three that matter:
+
+- **`DATA_TODAY` is frozen at 2026-08-31** (`src/lib/ranges.ts:19`), Lovable
+  seed residue whose comment still says "the seeded dataset covers June–August
+  2026". Every date preset derives from it. Harmless today by luck. **From
+  1 September "This month" silently means August and "Last month" means July,
+  permanently**, and the Report page's `max` will refuse September outright.
+  `ammanToday()` ten lines below reads the real clock, so they already
+  disagree.
+- **Refresh is inert on four queries** — `customers`, `pos-capture-sales`,
+  `activations`, `report` omit `refreshKey` from the query key. Hard to spot
+  because `staleTime` is 0, so navigating away and back does refetch.
+- **Only the Report page checks `isError`** — one grep hit in the codebase.
+  `campaigns.tsx:32` does `data ?? []` with an unguarded chart panel, so a
+  FAILED query renders **"No campaigns in range."**, a confident factual claim
+  produced by an error. Flows and Push share it; guarded pages show "Loading…"
+  forever instead. Live trigger: clearing a custom date input sends
+  `date >= ''` to PostgREST, which rejects it — verified, not inferred.
+
+Two clean results, worth as much as the faults: **no figure responds to a
+filter it should ignore**, because the channel bar is rendered only by the page
+that reads it; and **`sub_channel` holds exactly four values with no nulls**, so
+the toggles are exhaustive and all four selected does equal the total.
+
 ## Changed a previously reported figure
 
 - **The 2026 "stabilisation" is NOT a recovery.** App share of new customers
@@ -122,6 +173,13 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 - Standing: attribution August 37,615 → 28,260 (share 22.0% → 16.5%); Mobile
   App influence 35.8% → 19.2%; Mobile App YoY +831.8% → +23.8%; birthday
   rewards 0 → 131 in August; pending points 8.34% → 1.59%.
+- **30 August: no figure changed.** The filter audit read code and found no
+  stored or displayed number to be wrong today. `DATA_TODAY` will make range
+  figures wrong from 1 September, which is a fault not yet expressed.
+- **Identity conflicts, house-account share 7.8% → 39.4%.** The first number
+  counted conflicts; the second weights them by orders (588 of 1,494), which is
+  the denominator that matters. Conflicts are very unequal in size and house
+  accounts carry the large ones. Counting understated it fivefold.
 
 ## The customer picture
 
@@ -286,15 +344,18 @@ programme, tiers and point values.
 
 ## Next
 
-1. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
+1. **The filter fixes, then the verification pack** — both described under
+   "Waiting on a decision". These come first: everything else assumes the
+   dashboard can be trusted, and right now Naim does not trust it.
+2. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
    Klaviyo trailing-90-day campaign re-fetch (one API call). Decided: poll now,
    webhooks later.
-2. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
+3. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
    source. It carries `cancellation_status`, `total_refunded` and
    `metadata.shopify_source_name`, so it is a third view of every order that is
    not Shopify. Compare against what we hold and report where they disagree.
    Agreement everywhere is itself a useful result.
-3. **Critical review of the whole dashboard and report** — once the queue is
+4. **Critical review of the whole dashboard and report** — once the queue is
    empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
    what exists because it was built rather than because it would be used.
    **Include a three-way split of every number: MEASURED, INFERRED, and NEVER

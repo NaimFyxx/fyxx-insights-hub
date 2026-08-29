@@ -698,6 +698,39 @@ Both count **approved only**. Pending is a separate 137,218 (1.59%) that drains
 into approved rather than accumulating. The question is closed; do not reopen it
 without an export to compare against.
 
+### The LoyaltyLion v2 Admin API surface, established rather than inferred
+
+Probed against the live account on 29 August 2026, after four scattered 404s
+had been treated as evidence that endpoints did not exist.
+
+| Endpoint | Status | We use it |
+|---|---|---|
+| `/v2/sites` | 200 | no |
+| `/v2/customers` | 200 | **yes** — tiers, points balances |
+| `/v2/activities` | 200 | **yes** — birthday rewards, rule completions |
+| `/v2/transactions` | 200 | **yes** — redemptions |
+| `/v2/orders` | 200 | **NO — and it should be** |
+| `/v2/webhooks` | 200 (empty) | no |
+| `/v2/rewards`, `/v2/rules`, `/v2/tiers` | 404 | — |
+| `/v2/customers/{id}` and any nested path | 404 | — |
+| `/v2/whoami`, `/v2/unsubscribes` | 404 | — |
+
+Two things this settled that inference had got wrong:
+
+- **Claimed rewards are genuinely not exposed.** Not just `/v2/rewards`: the
+  per-customer nested path 404s too. The docs list "List Available Rewards"
+  under the *Headless* API, not the Admin one. The CSV import for rewards is
+  therefore justified rather than lazy — established, not assumed.
+- **`/v2/orders` exists and has never been used.** It carries
+  `merchant_id` (the Shopify order id), `merchant_number`, `total`,
+  `total_tax`, `total_shipping`, `total_discounts`, `total_paid`,
+  `total_refunded`, `payment_status`, `fulfillment_status`, `refund_status`,
+  **`cancellation_status`**, and `metadata.shopify_source_name`.
+
+That last one is a THIRD independent view of every order, carrying both
+cancellation state and channel. It could cross-check Shopify's figures without
+a Shopify sweep, and it holds `total_refunded`, which we have never had.
+
 ### Coverage is DERIVED, not declared — and that is the whole point
 
 `data_coverage` computes each source's real window with `min()`/`max()` over

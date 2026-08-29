@@ -48,10 +48,9 @@ do {
     const cust = o.customer?.id ? String(o.customer.id).split("/").pop() : null;
     if (!cust) { noCustomer++; continue; }
     const day = ammanDay(o.createdAt);
-    const v = byCustomer.get(cust) ?? { first: day, last: day, orders: 0, revenue: 0, firstChannel: null };
-    if (day < v.first) { v.first = day; v.firstChannel = classifySource(o.sourceName).sub_channel; }
+    const v = byCustomer.get(cust) ?? { days: [], orders: 0, revenue: 0, firstChannel: null };
+    v.days.push(day);
     if (!v.firstChannel) v.firstChannel = classifySource(o.sourceName).sub_channel;
-    if (day > v.last) v.last = day;
     v.orders++; v.revenue += Number(o.currentTotalPriceSet?.shopMoney?.amount ?? 0);
     byCustomer.set(cust, v);
   }
@@ -61,6 +60,14 @@ do {
 } while (cursor && pages < 8000);
 
 log.ok(`${scanned} orders scanned, ${cancelled} cancelled, ${noCustomer} with no customer`);
+// Sort each customer's order days once, so first/second/last are exact rather
+// than inferred from a running comparison.
+for (const v of byCustomer.values()) {
+  v.days.sort();
+  v.first = v.days[0];
+  v.second = v.days.length > 1 ? v.days[1] : null;
+  v.last = v.days[v.days.length - 1];
+}
 log.ok(`${byCustomer.size} customers with at least one order`);
 
 const firstYears = new Map();
@@ -81,11 +88,12 @@ if (WRITE) {
   const rows = [...byCustomer].map(([id, v]) => ({
     shopify_customer_id: id,
     first_order_date: v.first,
+    second_order_date: v.second,
     last_order_date: v.last,
     revenue_jod: Math.round(v.revenue * 1000) / 1000,
   }));
   const w = await upsert("shopify_customers", rows, "shopify_customer_id", { dryRun: false });
-  log.ok(`wrote ${w} customer row(s) with first/last order and computed revenue`);
+  log.ok(`wrote ${w} customer row(s) with first/second/last order and computed revenue`);
 } else {
   log.info("read-only; pass --write to fill first_order_date, last_order_date and revenue_jod");
 }

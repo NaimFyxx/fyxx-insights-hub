@@ -116,6 +116,20 @@ function LoyaltyPage() {
   const birthdayRewards = data.current.reduce((a, s) => a + s.birthday_rewards_issued, 0);
   const birthdayMeasured = data.current.some((x) => x.birthday_rewards_issued > 0);
 
+  // Liability trend across the selected range. Only snapshots that actually
+  // carry a balance count — a zero row is an unmeasured day, not a day the
+  // programme owed nothing.
+  const withPoints = data.current.filter((x) => Number(x.points_outstanding) > 0);
+  const firstWithPoints = withPoints[0];
+  const lastWithPoints = withPoints[withPoints.length - 1];
+  const liabilityFrom =
+    withPoints.length > 1 && firstWithPoints
+      ? pointsToJod(Number(firstWithPoints.points_outstanding))
+      : null;
+  const liabilityNow = lastWithPoints ? pointsToJod(Number(lastWithPoints.points_outstanding)) : 0;
+  const liabilityDelta = liabilityFrom === null ? 0 : liabilityNow - liabilityFrom;
+  const liabilityPct = liabilityFrom ? (liabilityDelta / liabilityFrom) * 100 : null;
+
   // Only days we actually scanned. Plotting the points-only imported days
   // draws their zero tier counts as real values — a year-long flat line at
   // zero followed by a vertical spike, which reads as explosive growth rather
@@ -167,13 +181,31 @@ function LoyaltyPage() {
             <NoData what="Redemption rate" />
           )}
         </Panel>
-        <Panel title="Points outstanding">
-          <p className="display-num text-3xl">{num(Number(last.points_outstanding))}</p>
+        <Panel title="Points liability">
+          {/* The JOD figure leads, because that is what the balance IS: money
+              owed. The points count is the unit it is denominated in. The
+              growth matters more than the level — it has roughly tracked from
+              53,000 to 88,000 JOD across the imported year. */}
+          <p className="display-num text-3xl">
+            {jod(pointsToJod(Number(last.points_outstanding)))}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {num(Number(last.points_outstanding))} points at 100 points = 1 JOD
+          </p>
+          {liabilityFrom !== null ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {liabilityDelta >= 0 ? "Up" : "Down"} {jod(Math.abs(liabilityDelta))} from{" "}
+              {jod(liabilityFrom)} at the start of this range
+              {liabilityPct !== null
+                ? ` (${liabilityPct >= 0 ? "+" : ""}${liabilityPct.toFixed(1)}%)`
+                : ""}
+              .
+            </p>
+          ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
-            {jod(pointsToJod(Number(last.points_outstanding)))} at 100 points = 1 JOD.{" "}
             {last.points_source === "ll_export"
               ? "LoyaltyLion's own end-of-day figure."
-              : "Summed from customer balances; LoyaltyLion's own close may differ by ~2%."}
+              : "Summed from customer balances. Reconciled against LoyaltyLion's own export on 29 Aug 2026 to +0.00% — 8,620,578 against their 8,620,816. Both count approved points only; pending is a separate 1.59%."}
           </p>
         </Panel>
         <Panel title="Birthday rewards issued">

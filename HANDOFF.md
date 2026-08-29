@@ -41,8 +41,8 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 - LoyaltyLion history **imported**: 38,748 activities, 60,680 transactions,
   2,211 rewards = 101,639 rows. Every row carries a `source` tag
-  (`ll_export_20260829`); `ll_import_coverage` reports what each table spans so
-  no reader has to remember a figure is imported rather than live.
+  (`ll_export_20260829`); coverage is reported by `data_coverage` (below) so no
+  reader has to remember a figure is imported rather than live.
 
 - `1830279` → **Draft Orders**, verified: app lookup returns "Shopify Web"
   (`shopify_web`, Shopify) and all 92 orders carry `app = "Draft Orders"`.
@@ -134,8 +134,9 @@ State for someone picking this up cold. Rewritten every turn. No transcripts.
 
 ## Applied this turn
 
-`ll_activities`, `ll_transactions`, `ll_rewards`, plus the
-`ll_import_coverage` view. RLS matches every other table.
+`ll_activities`, `ll_transactions`, `ll_rewards`, plus the `data_coverage`
+view, which replaced the narrower `ll_import_coverage`. RLS matches every
+other table.
 
 The importer caught a fault worth recording: LoyaltyLion writes timestamp
 offsets as `+00`, which `Date.parse` REJECTS (it wants `+00:00`). Unhandled,

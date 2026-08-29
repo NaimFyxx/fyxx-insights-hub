@@ -698,7 +698,30 @@ Both count **approved only**. Pending is a separate 137,218 (1.59%) that drains
 into approved rather than accumulating. The question is closed; do not reopen it
 without an export to compare against.
 
-### Three start dates, none of which is the start of the business
+### Coverage is DERIVED, not declared — and that is the whole point
+
+`data_coverage` computes each source's real window with `min()`/`max()` over
+the rows. It would have been easier to write the dates into a constant.
+
+The reason not to: **the constant said five distinct start dates. The view found
+thirteen.** Every one of the other eight would have surfaced the same way the
+first five did — as a wrong number somebody questioned months later, traced
+back one at a time. A declared list is only as good as the last time someone
+remembered to update it, and this project has already shipped four channel
+errors that all came from a written-down fact drifting from a measured one.
+
+A derived view also cannot go stale as sources are backfilled. The reach
+backfill moves its own start date every night; `klaviyo_attributed_orders` moved
+when the netting was rebuilt. Neither needed anyone to notice.
+
+The rule generalises: **if a fact about the data can be computed from the data,
+compute it.** A constant is for things the data cannot know — the POS
+definition change, the mobile app switchover, the Ramadan effect on March.
+
+### Coverage windows, none of which is the start of the business
+
+Thirteen sources, thirteen windows. Query `data_coverage` for the live list
+rather than trusting this table, which is a snapshot taken 29 August 2026.
 
 | Source | Earliest data |
 |---|---|

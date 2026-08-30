@@ -29,9 +29,27 @@ being built from scratch.
   from comparing two aggregates before order-level data existed; measured at
   25,197 of 153,827 live orders. The REVENUE half of that claim was right and
   is unchanged at 9.5%, as is the 84.4% assignable ceiling built on it.
-- **30 August: no figure changed.** The filter audit read code and found no
-  stored or displayed number to be wrong today. `DATA_TODAY` will make range
-  figures wrong from 1 September, which is a fault not yet expressed.
+- **EVERY revenue figure on the dashboard moved: all-time 10,461,794 →
+  9,825,893 JOD, −635,901 (6.1%).** `fetchDailySales` now reads
+  `shopify_daily_sales_net`, which excludes the 73 house and staff accounts the
+  store tags `CUSTOMER_INTERNAL` or `CUSTOMER TYPE_Employee`. This is the
+  largest single change to displayed figures so far, and it is REVERSIBLE in
+  one line — see "The three August totals, reconciled".
+- **August total revenue 176,440.643 → 179,196.321 → 178,034.421.** Three
+  numbers, one month, all explicable: the first was `shopify_daily_sales`
+  before the nightly sync caught up on 29–30 August; the second is every
+  non-cancelled order; the third is the same minus 55 house-account orders
+  worth 1,161.900, and is what the dashboard now shows everywhere.
+- **August revenue was overstated by 1,339.400 JOD (1.55%) until the drift
+  repair ran.** Ten orders cancelled after we stored them, two silent revenue
+  edits, three orders never stored. Now 0.000.
+- **The rise in online-acquired share is ~9 points, not ~17.** Raw share runs
+  44.1% (Dec 2025) to 61.0% (Aug 2026), but the denominator changed in April
+  when POS orders began carrying customers. Like-for-like it is 50.9% → 60.2%.
+  The 61.0% is correct for August; the COMPARISON was not.
+- **The filter audit (30 Aug) changed no stored figure.** It read code and found
+  nothing displayed to be wrong that day. `DATA_TODAY` would have made every
+  range figure wrong from 1 September; fixed before it expressed itself.
 - **Identity conflicts, house-account share 7.8% → 39.4%.** The first number
   counted conflicts; the second weights them by orders (588 of 1,494), which is
   the denominator that matters. Conflicts are very unequal in size and house

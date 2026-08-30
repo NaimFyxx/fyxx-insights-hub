@@ -13,6 +13,7 @@ import {
   type Activation,
 } from "@/lib/queries";
 import { POS_DEFINITION_CHANGED } from "@/lib/channels";
+import { fetchAcquisition, headline } from "@/lib/acquisition";
 import { settledOnly, rangeIncludesToday, type DateRange } from "@/lib/ranges";
 import { fetchCoverage, coverageGap } from "@/lib/coverage";
 
@@ -311,6 +312,21 @@ export type ReportData = {
     /** True when the range runs into the day still in progress. */
     shareIsPartial: boolean;
   };
+  /**
+   * Revenue from customers marketing ACQUIRED, wherever they now buy.
+   *
+   * A different claim from attributed revenue, and a stronger one: it needs no
+   * attribution modelling at all, only the channel each customer first arrived
+   * through. Kept separate from `revenue` so the two are never added.
+   */
+  acquisition: {
+    availability: Availability;
+    onlineAcquired: number;
+    total: number;
+    sharePct: number | null;
+    /** Share of only the revenue that CAN carry an acquisition channel. */
+    coveragePct: number | null;
+  };
   notices: string[];
 };
 
@@ -395,6 +411,9 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
         "Birthday rewards were not collected for this period. Collection was fixed on 29 August 2026; earlier snapshots hold no figure.",
       );
 
+  const acqRows = await fetchAcquisition(range);
+  const acqHead = headline(acqRows);
+
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
 
@@ -463,6 +482,21 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
       allChannels,
       sharePct: salesSettled > 0 ? (klaviyoSettled / salesSettled) * 100 : null,
       shareIsPartial,
+    },
+    acquisition: {
+      // Withheld rather than guessed if the order sweep has not reached this
+      // period. A blank month is honest; a month computed from partial orders
+      // would understate the share without saying so.
+      availability:
+        acqRows.length === 0
+          ? no(
+              "Revenue by acquisition channel is not available for this period. It needs order-level history, which is loaded from September 2019 onward.",
+            )
+          : ok,
+      onlineAcquired: acqHead.onlineAcquiredRevenue,
+      total: acqHead.totalRevenue,
+      sharePct: acqHead.pct,
+      coveragePct: acqHead.unattributablePct === null ? null : 100 - acqHead.unattributablePct,
     },
     notices,
   };

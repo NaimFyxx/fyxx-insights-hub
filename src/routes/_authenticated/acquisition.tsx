@@ -13,6 +13,10 @@ import {
   migration,
   isUnattributable,
   coverageNote,
+  trend,
+  trendSummary,
+  BASIS_BREAK_MONTH,
+  BASIS_BREAK_NOTE,
   ACQUISITION_COVERAGE,
 } from "@/lib/acquisition";
 import { SUB_CHANNELS } from "@/lib/channels";
@@ -58,6 +62,8 @@ function AcquisitionPage() {
     [filtered, active],
   );
   const ordSeries = useMemo(() => byMonthOrderChannel(rows, SUB_CHANNELS), [rows]);
+  const tr = useMemo(() => trend(rows), [rows]);
+  const trSum = useMemo(() => trendSummary(tr), [tr]);
 
   if (isError) {
     return (
@@ -156,6 +162,89 @@ function AcquisitionPage() {
           through each, and that is correct rather than a fault.
         </p>
       </div>
+
+      <Panel title="The trend — share of revenue from online-acquired customers">
+        {tr.length < 2 ? (
+          <EmptyState>
+            One month is a number, not a trend. Widen the date range to see the series.
+          </EmptyState>
+        ) : (
+          <>
+            {/* The basis break is stated ABOVE the table, not under it. A reader
+                who takes the raw column across April 2026 reaches a wrong
+                conclusion, and a caption below would arrive too late. */}
+            <p className="mb-4 border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
+              ⚠️ <b>The basis changes in {BASIS_BREAK_MONTH}.</b> {BASIS_BREAK_NOTE}
+            </p>
+
+            {trSum.changePoints !== null ? (
+              <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
+                <StatTile
+                  label={`Before ${BASIS_BREAK_MONTH}, like-for-like`}
+                  value={pct(trSum.before!)}
+                  note={`average across ${trSum.monthsBefore} months`}
+                />
+                <StatTile
+                  label={`Since ${BASIS_BREAK_MONTH}, like-for-like`}
+                  value={pct(trSum.after!)}
+                  note={`average across ${trSum.monthsAfter} months`}
+                />
+                <StatTile
+                  label="Change"
+                  value={`${trSum.changePoints >= 0 ? "+" : ""}${trSum.changePoints.toFixed(1)} pts`}
+                  note="On the comparable basis, so the measurement change is excluded"
+                />
+              </div>
+            ) : null}
+
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Month</Th>
+                  <Th align="right">Share of ALL revenue</Th>
+                  <Th align="right">Like-for-like share</Th>
+                  <Th align="right">Coverage</Th>
+                  <Th align="right">Revenue</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {tr.map((p, i) => {
+                  const isBreak = p.month === BASIS_BREAK_MONTH && i > 0;
+                  return (
+                    <tr key={p.month} className={isBreak ? "border-t-2 border-foreground" : ""}>
+                      <Td>
+                        {p.month}
+                        {isBreak ? (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            ← basis changes here
+                          </span>
+                        ) : null}
+                      </Td>
+                      <Td align="right">
+                        <span className="text-muted-foreground">
+                          {p.rawShare === null ? "—" : pct(p.rawShare)}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <b>{p.comparableShare === null ? "—" : pct(p.comparableShare)}</b>
+                      </Td>
+                      <Td align="right">{p.coverage === null ? "—" : pct(p.coverage)}</Td>
+                      <Td align="right">{jod(p.revenue)}</Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+            <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
+              The <b>like-for-like</b> column is the one to read across time: it excludes revenue
+              that can never carry an acquisition channel from both halves of the fraction, so it
+              means the same thing in every month. The share-of-all-revenue column is the honest
+              figure for any SINGLE month and is what the headline tile shows, but it is not
+              comparable across {BASIS_BREAK_MONTH}.
+            </p>
+          </>
+        )}
+      </Panel>
 
       <Panel title="Revenue by ACQUISITION channel, by month">
         {acqSeries.length ? (

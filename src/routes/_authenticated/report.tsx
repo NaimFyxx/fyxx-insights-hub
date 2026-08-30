@@ -153,6 +153,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
     loyalty,
     activations,
     revenue,
+    acquisition,
     narrative,
     notices,
   } = data;
@@ -297,6 +298,66 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </>
           )}
         </div>
+
+        {/* Revenue from customers marketing ACQUIRED. Deliberately its own
+            block, below attributed revenue and never added to it: the two
+            answer different questions and summing them would double-count
+            every order that is both. */}
+        {acquisition.availability.available ? (
+          <>
+            <h3 style={{ marginTop: "6mm" }}>Revenue from customers marketing brought in</h3>
+            <div className="kpis">
+              <div className="kpi">
+                <div className="n">
+                  {acquisition.sharePct === null ? "—" : pct(acquisition.sharePct)}
+                </div>
+                <div className="l">Of all sales this month</div>
+              </div>
+              <div className="kpi">
+                <div className="n">
+                  {num(Math.round(acquisition.onlineAcquired))} <small>JOD</small>
+                </div>
+                <div className="l">
+                  From customers first acquired through the app or the website
+                </div>
+              </div>
+              <div className="kpi">
+                <div className="n">
+                  {acquisition.coveragePct === null ? "—" : pct(acquisition.coveragePct)}
+                </div>
+                <div className="l">Of sales could be traced to an acquisition channel</div>
+              </div>
+            </div>
+            <p className="caption">
+              This counts revenue from <b>customers marketing brought in</b>, wherever they now
+              buy — including orders they later placed by phone or in store. It is not a claim
+              that marketing caused those sales: a customer first acquired in store in 2020 who
+              has bought online ever since counts as in-store here. It needs no attribution
+              modelling, only the channel each customer first arrived through, which is why it is
+              reported separately from the attributed-revenue figure above and must never be added
+              to it.{" "}
+              {acquisition.coveragePct !== null && acquisition.coveragePct < 99.5 ? (
+                <>
+                  The remaining {pct(100 - acquisition.coveragePct)} is orders with no customer
+                  attached, mostly in store, which can never carry an acquisition channel — so the
+                  figure above is a floor rather than a total.
+                </>
+              ) : (
+                <>
+                  Nearly every order this month carried an identified customer, so little revenue
+                  is left untraceable. Earlier periods have lower coverage and are not directly
+                  comparable.
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <>
+            <h3 style={{ marginTop: "6mm" }}>Revenue from customers marketing brought in</h3>
+            <p className="caption">{acquisition.availability.reason}</p>
+          </>
+        )}
+
         <p className="caption">
           {reach.availability.available ? (
             <>

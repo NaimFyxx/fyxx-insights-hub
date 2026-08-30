@@ -1,6 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDateRange } from "@/context/date-range-context";
+import {
+  fetchAcquisition,
+  headline,
+  coverageNote,
+  trend,
+  trendSummary,
+  BASIS_BREAK_MONTH,
+} from "@/lib/acquisition";
 import {
   fetchAttributed,
   fetchCampaigns,
@@ -36,6 +44,20 @@ const sum = (rows: number[]) => rows.reduce((a, b) => a + b, 0);
 function OverviewPage() {
   const { range, refreshKey, channels } = useDateRange();
   const prev = previousRange(range);
+
+  // Acquisition sits in its OWN query. It is monthly-bucketed and the trend
+  // needs a trailing year regardless of the selected range, so folding it into
+  // the main query would either refetch a year on every range change or tie
+  // the trend to a range it does not use.
+  const acq = useQuery({
+    queryKey: ["overview-acquisition", range.from, range.to, refreshKey],
+    queryFn: () => fetchAcquisition(range),
+  });
+  const acqTrend = useQuery({
+    queryKey: ["overview-acquisition-trend", refreshKey],
+    queryFn: () =>
+      fetchAcquisition({ from: `${Number(range.to.slice(0, 4)) - 1}-${range.to.slice(5, 7)}-01`, to: range.to }),
+  });
 
   const q = useQuery({
     queryKey: ["overview", range.from, range.to, refreshKey],
@@ -193,6 +215,57 @@ function OverviewPage() {
       <PageHeader title="Overview" subtitle="Selected range compared with the previous period." />
 
       <ChannelBar />
+
+      {/* The headline for the whole dashboard, so it sits above everything and
+          before the channel-split figures. Detail lives on /acquisition. */}
+      {acq.data ? (() => {
+        const h = headline(acq.data);
+        const t = acqTrend.data ? trend(acqTrend.data) : [];
+        const s = t.length > 1 ? trendSummary(t) : null;
+        return (
+          <section className="border border-foreground px-5 py-4">
+            <p className="label-xs mb-3 text-foreground">
+              Revenue from customers marketing brought in — wherever they now buy
+            </p>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <StatTile
+                label="Share of revenue in range"
+                value={h.pct === null ? "—" : pct(h.pct)}
+                note={`${jod(h.onlineAcquiredRevenue)} of ${jod(h.totalRevenue)} — acquired via Website or Mobile App`}
+              />
+              <StatTile
+                label={s ? `Like-for-like, before ${BASIS_BREAK_MONTH}` : "Like-for-like"}
+                value={s && s.before !== null ? pct(s.before) : "—"}
+                note={s ? `average across ${s.monthsBefore} months` : "widen the range for a trend"}
+              />
+              <StatTile
+                label={s ? `Like-for-like, since ${BASIS_BREAK_MONTH}` : "Coverage in range"}
+                value={
+                  s && s.after !== null
+                    ? pct(s.after)
+                    : h.unattributablePct === null
+                      ? "—"
+                      : pct(100 - h.unattributablePct)
+                }
+                note={
+                  s && s.changePoints !== null
+                    ? `${s.changePoints >= 0 ? "+" : ""}${s.changePoints.toFixed(1)} pts, measurement change excluded`
+                    : "share of revenue that can carry an acquisition channel"
+                }
+              />
+            </div>
+            <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
+              This is <b>revenue from customers marketing brought in</b>, not revenue marketing
+              caused — a customer acquired at POS in 2020 who has bought online ever since counts
+              entirely as POS. {coverageNote(h)}{" "}
+              <Link to="/acquisition" className="underline">
+                Full detail, including the migration to phone and in-store ordering
+              </Link>
+              .
+            </p>
+          </section>
+        );
+      })() : null}
 
       <section>
         <p className="label-xs mb-3 text-muted-foreground">

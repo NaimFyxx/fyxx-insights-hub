@@ -109,7 +109,39 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
   silently stopping.
 - **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
+## READ THIS FIRST — the 61% needs a caveat it did not have
+
+**61.0% is correct for August 2026 and safe to say. Comparing it to last
+year's ~45% is NOT.** Found while building the trend Naim asked for.
+
+The Odoo connector began requiring a customer on every POS order after
+27 February 2026. POS orders carrying no customer ran 42-50% through late 2025,
+spiked to 87.3% in March 2026, and have been ~0% since April. Unattributable
+revenue therefore left the denominator almost entirely, and the raw share
+jumped with it.
+
+| | Dec 2025 | Aug 2026 | Apparent rise |
+|---|---|---|---|
+| Share of ALL revenue (raw) | 44.1% | 61.0% | +16.9 pts |
+| Like-for-like share | 49.6% | 61.1% | **+11.5 pts** |
+
+**Roughly a third of the apparent rise is the denominator changing, not the
+business.** On a trailing year: like-for-like averages **50.9% across the 8
+months before the break and 60.2% across the 5 months since — +9.2 points.**
+
+That is still a real rise and still the argument Naim wants. It is just
+9 points, not 17. The trend panel leads with the break notice, prints both
+columns with the like-for-like one bold, and rules a line across the table at
+2026-04.
+
 ## Done this turn
+
+**The 61% now appears in three places, as asked.** Overview (headline block
+above the channel figures, linking to the detail), `/acquisition` (full trend),
+and the monthly report — same wording in all three, with the coverage figure
+for the period stated alongside. The report block is deliberately separate from
+attributed revenue and captioned never to be added to it, since an order can be
+both.
 
 **Acquisition channel — all three items built, at `/acquisition`.**
 

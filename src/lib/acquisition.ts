@@ -224,3 +224,64 @@ export function migration(rows: AcqRow[]) {
     };
   }).filter((m) => m.laterOrders > 0);
 }
+
+/**
+ * The month the measurement basis changed, NOT a change in the business.
+ *
+ * The Odoo connector began requiring a customer on every POS order after
+ * 27 February 2026. POS orders carrying no customer ran 42-50% through late
+ * 2025, spiked to 87.3% in March 2026, and have been ~0% since April. So
+ * unattributable revenue left the denominator almost entirely.
+ *
+ * That inflates the RAW share across this boundary: December 2025 reads 44.1%
+ * and August 2026 reads 61.0%, but roughly a third of that 17-point gap is the
+ * denominator changing rather than more revenue coming from online-acquired
+ * customers. On a like-for-like basis it is 49.6% to 61.1%.
+ */
+export const BASIS_BREAK_MONTH = "2026-04";
+export const BASIS_BREAK_NOTE =
+  "The Odoo connector began requiring a customer on every POS order after 27 February 2026, " +
+  "so unattributable revenue almost vanished from the denominator. Compare the like-for-like " +
+  "column across this line, never the raw one.";
+
+/**
+ * Share of revenue from online-acquired customers, per month, on BOTH bases.
+ *
+ * `comparableShare` excludes unattributable revenue from the denominator, so it
+ * means the same thing either side of the basis break. `rawShare` is the share
+ * of ALL revenue and is the honest figure for any single month, but it cannot
+ * be compared across the break. Both are returned because showing either alone
+ * would mislead: raw alone invents a jump, comparable alone hides the floor.
+ */
+export function trend(rows: AcqRow[]) {
+  const months = [...new Set(rows.map((r) => r.month))].sort();
+  return months.map((month) => {
+    const inMonth = rows.filter((r) => r.month === month);
+    const total = sumRev(inMonth);
+    const online = sumRev(inMonth.filter((r) => isOnlineAcquired(r.acquisition_channel)));
+    const attributable = sumRev(inMonth.filter((r) => !isUnattributable(r.acquisition_channel)));
+    return {
+      month: month.slice(0, 7),
+      revenue: total,
+      onlineRevenue: online,
+      rawShare: total > 0 ? (online / total) * 100 : null,
+      comparableShare: attributable > 0 ? (online / attributable) * 100 : null,
+      coverage: total > 0 ? (attributable / total) * 100 : null,
+      afterBreak: month.slice(0, 7) >= BASIS_BREAK_MONTH,
+    };
+  });
+}
+
+/** Mean of the comparable series either side of the break, for a fair summary. */
+export function trendSummary(t: ReturnType<typeof trend>) {
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  const before = avg(t.filter((p) => !p.afterBreak && p.comparableShare !== null).map((p) => p.comparableShare!));
+  const after = avg(t.filter((p) => p.afterBreak && p.comparableShare !== null).map((p) => p.comparableShare!));
+  return {
+    before,
+    after,
+    changePoints: before !== null && after !== null ? after - before : null,
+    monthsBefore: t.filter((p) => !p.afterBreak).length,
+    monthsAfter: t.filter((p) => p.afterBreak).length,
+  };
+}

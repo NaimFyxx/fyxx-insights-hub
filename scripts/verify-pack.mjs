@@ -154,10 +154,25 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
     "shopify_daily_sales",
     `select=date,sub_channel,orders,total_online_revenue_jod&date=gte.${FROM}&date=lte.${TO}&order=date.asc,sub_channel.asc`,
   );
+  // Deliberately the RAW stored table, not the net view the dashboard reads.
+  // This sheet exists to be compared against Shopify admin, and Shopify admin
+  // includes house and staff accounts. Matching the source is what makes it
+  // checkable; the gap to the dashboard is stated instead of removed.
+  const houseRows = await selectAll(
+    "shopify_orders",
+    `select=revenue_jod,shopify_customer_id&cancelled_at=is.null&ordered_on=gte.${FROM}&ordered_on=lte.${TO}`,
+  );
+  const houseIds = new Set(
+    (await selectAll("shopify_customers", "select=shopify_customer_id&is_house_account=is.true"))
+      .map((c) => c.shopify_customer_id),
+  );
+  const houseOrders = houseRows.filter((o) => houseIds.has(o.shopify_customer_id));
+  const houseRev = houseOrders.reduce((a, o) => a + num(o.revenue_jod), 0);
+
   sheet("Sales by day", {
     source: "shopify_daily_sales — one row per day per channel, written by the nightly Shopify sweep",
-    check: "Shopify admin > Analytics > Reports > Sales over time, grouped by channel. Set the date range to this month.",
-    cannot: null,
+    check: "Shopify admin > Analytics > Reports > Sales over time, grouped by channel. Set the date range to this month. This sheet should match Shopify admin exactly.",
+    cannot: `The DASHBOARD total, which is lower. The dashboard excludes house and staff accounts (tagged CUSTOMER_INTERNAL or CUSTOMER TYPE_Employee) because every customer-level figure does; this sheet includes them so it still matches Shopify admin. For this month that is ${houseOrders.length} orders worth ${Math.round(houseRev * 1000) / 1000} JOD. Subtract that from the total below to reach the dashboard figure.`,
   }, [
     { header: "Date", key: "date" },
     { header: "Channel", key: "sub_channel" },

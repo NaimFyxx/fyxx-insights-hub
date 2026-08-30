@@ -116,13 +116,36 @@ export async function fetchAllRows<T>(
 }
 
 /**
- * One row per (date, source_name) since the channel split, so callers must
- * aggregate rather than assuming one row per day.
+ * One row per (date, sub_channel), so callers must aggregate rather than
+ * assuming one row per day.
+ *
+ * Reads the DERIVED view, not the stored daily table. Three things follow,
+ * all deliberate:
+ *
+ *   House and staff accounts are EXCLUDED, as they already are from every
+ *   customer-level figure. The stored table has no customer dimension and so
+ *   could not exclude them, which is exactly why the Overview and the
+ *   acquisition page disagreed by 1,161.900 JOD for August 2026.
+ *
+ *   It is never stale. The stored table is only as fresh as the last nightly
+ *   sync, so the current and previous day read low until it runs.
+ *
+ *   Cancellations net at read time, so an order cancelled today corrects a
+ *   figure from three years ago instead of leaving a total that only drifts up.
+ *
+ * This moved all-time revenue from 10,461,794 to 9,825,893 JOD — a drop of
+ * 635,901 across 73 accounts the store itself tags CUSTOMER_INTERNAL or
+ * CUSTOMER TYPE_Employee. To revert, change the table name back; nothing else
+ * depends on which of the two is read.
  */
-export const fetchDailySales = (r: DateRange) =>
-  fetchAllRows<DailySales>((from, to) =>
+type DailySalesRaw = {
+  [K in keyof DailySales]: DailySales[K] | null;
+};
+
+export const fetchDailySales = async (r: DateRange): Promise<DailySales[]> => {
+  const rows = await fetchAllRows<DailySalesRaw>((from, to) =>
     supabase
-      .from("shopify_daily_sales")
+      .from("shopify_daily_sales_net")
       .select(
         "date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values",
       )
@@ -131,6 +154,20 @@ export const fetchDailySales = (r: DateRange) =>
       .order("date")
       .range(from, to),
   );
+  // Postgres cannot prove a view's columns are non-null, so the generated types
+  // widen all of them. Narrow here rather than asserting upstream.
+  return rows
+    .filter((x) => x.date !== null && x.sub_channel !== null)
+    .map((x) => ({
+      date: x.date as string,
+      total_online_revenue_jod: Number(x.total_online_revenue_jod ?? 0),
+      orders: Number(x.orders ?? 0),
+      source_name: x.source_name ?? "",
+      sub_channel: x.sub_channel as string,
+      channel: x.channel ?? "",
+      top_order_values: x.top_order_values ?? [],
+    }));
+};
 
 /**
  * Klaviyo-attributed revenue, ORDER-date basis, whole account.

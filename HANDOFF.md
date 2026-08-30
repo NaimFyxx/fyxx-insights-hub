@@ -133,7 +133,32 @@ has resolved itself.
 `src/lib/acquisition.ts` appears under the coverage note on `/acquisition` and
 in the report caption.
 
-**`shopify_daily_sales_net` is built and NOT yet wired up.** A view over
+**RESOLVED — the dashboard now reads `shopify_daily_sales_net` everywhere.**
+Naim asked twice which total to use everywhere, so this was decided rather than
+deferred a third time. The Overview and the acquisition page now both divide by
+**178,034.421** for August and the 61.0% recomputes off that same denominator.
+
+**What moved: all-time revenue 10,461,794 → 9,825,893 JOD, −635,901 (6.1%).**
+That is 73 accounts the store itself tags `CUSTOMER_INTERNAL` (57 customers,
+597,676) or `CUSTOMER TYPE_Employee` (20 customers, 70,760). Every revenue
+figure on the dashboard moves down by the house-account share of its period.
+
+**Reverting is one line** — change the table name back in `fetchDailySales`
+(`src/lib/queries.ts`); nothing else depends on which of the two is read. The
+open judgement is whether venue tables and "By The Glass" are sales or internal
+transfers. "Free of Charge Goods" plainly is not. If some are genuine sales the
+narrower fix is to split the `CUSTOMER_INTERNAL` tag, not to revert wholesale.
+
+**Nine days drop out of the series**, all between 2020 and 2022, each one a day
+where every order was cancelled or a house account — 679.75 JOD across six
+years. Checked before switching rather than discovered afterwards.
+
+**The verification pack deliberately still reads the RAW table**, because its
+job is to be compared against Shopify admin and Shopify admin includes these
+accounts. The Sales sheet now states the gap and names the figure to subtract
+to reach the dashboard number.
+
+**Superseded note:** A view over
 `shopify_orders` that excludes house accounts, nets cancellations at read time
 and is never stale. It ties to the acquisition denominator exactly. Switching
 the dashboard to it would make every revenue figure consistent and fix trailing

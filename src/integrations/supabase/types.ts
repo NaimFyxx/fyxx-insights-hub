@@ -659,6 +659,18 @@ export type Database = {
         };
         Relationships: [];
       };
+      shopify_daily_sales_net: {
+        Row: {
+          channel: string | null;
+          date: string | null;
+          orders: number | null;
+          source_name: string | null;
+          sub_channel: string | null;
+          top_order_values: number[] | null;
+          total_online_revenue_jod: number | null;
+        };
+        Relationships: [];
+      };
       revenue_by_acquisition: {
         Row: {
           acquisition_channel: string | null;

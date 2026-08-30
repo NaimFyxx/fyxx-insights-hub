@@ -27,6 +27,52 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## Internal accounts in marketing lists — measured, NOT material
+
+Naim's question, from the "Free of Charge Goods FOC is SUBSCRIBED" finding:
+are reach, member and tier counts inflated by accounts that are not people?
+Yes, but barely. Measured 30 August 2026:
+
+| | Internal | Of | Share |
+|---|---|---|---|
+| Email subscribers | 12 | 11,162 | **0.107%** |
+| SMS subscribers | **0** | 572 | 0% |
+| LoyaltyLion members | 20 | 11,891 | **0.17%** |
+| Outstanding points | 11,847 | 8,630,831 | **0.137%** |
+
+Nothing moves by more than about one part in six hundred. **Not adjusted for**
+— an adjustment smaller than the rounding on the tile would add machinery
+without changing a displayed number. Listed instead, so they can be cleaned at
+source, which fixes it permanently.
+
+Two things worth knowing beyond the totals:
+
+- **Four VENUE TABLES are enrolled in the loyalty programme** — Communal Table,
+  Table 3, Table 8, Terrace 1. They hold no points so nothing is distorted, but
+  enrolment is evidently not gated against non-people.
+- **Yousef Mazahreh holds 4,096 points**, a third of the internal total, and is
+  the same staff account at the centre of the worst identity conflict.
+
+Full list of all 20 on `/excluded`, with ids, Klaviyo consent state, tier and
+points, ordered so the 12 to unsubscribe are obvious.
+
+## The two ambiguous accounts — resolved
+
+Naim confirmed: **Hashim El akabi (11,614 JOD) IS a real customer** and is now
+exempt; **Ahmad Ayman (11,636 JOD) is not** and stays excluded. The tag pattern
+— `CUSTOMER_INTERNAL` on a person's name with no employee tag — flagged the
+right pair and could not tell them apart. Flagging rather than deciding was
+therefore the correct call, and would have been wrong 50% of the time either
+way.
+
+**All-time revenue is now 9,844,063** (70 excluded accounts, 616,391 excluded).
+The two pages still agree: August reads 177,193.521 on both.
+
+**Fixed while doing this:** `/excluded` hardcoded the all-time figure, and it
+was stale one exemption later. It is now derived from the same view the
+Overview reads — a literal that drifts is precisely the failure this page
+exists to prevent.
+
 ## DECIDED — internal accounts are excluded
 
 Naim's call, 30 August 2026, after seeing the breakdown: exclude all of them.

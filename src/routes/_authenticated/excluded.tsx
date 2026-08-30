@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { useDateRange } from "@/context/date-range-context";
-import { buildExclusionView, MISTAGGED_EXEMPTIONS, POSSIBLE_MISTAGS } from "@/lib/excluded";
+import { buildExclusionView, MISTAGGED_EXEMPTIONS, INTERNAL_IN_MARKETING } from "@/lib/excluded";
 import { jod, num, pct } from "@/lib/format";
 import { ammanToday } from "@/lib/ranges";
 
@@ -91,15 +91,17 @@ function ExcludedPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
             <p className="label-xs text-muted-foreground">Gross, as Shopify counts it</p>
-            <p className="display-num text-2xl">{jod(9_832_449 + data.lifetime.excluded)}</p>
+            <p className="display-num text-2xl">
+              {jod(data.allTime.included + data.allTime.excluded)}
+            </p>
           </div>
           <div>
             <p className="label-xs text-muted-foreground">Excluded</p>
-            <p className="display-num text-2xl">{jod(data.lifetime.excluded)}</p>
+            <p className="display-num text-2xl">{jod(data.allTime.excluded)}</p>
           </div>
           <div>
             <p className="label-xs text-muted-foreground">What the dashboard shows</p>
-            <p className="display-num text-2xl">{jod(9_832_449)}</p>
+            <p className="display-num text-2xl">{jod(data.allTime.included)}</p>
           </div>
         </div>
         <p className="mt-4 max-w-3xl text-xs text-muted-foreground">
@@ -162,39 +164,88 @@ function ExcludedPage() {
         <ul className="text-sm">
           {MISTAGGED_EXEMPTIONS.map((m) => (
             <li key={m.id} className="text-muted-foreground">
-              <span className="text-foreground">{m.name}</span> — {m.id}
+              <span className="text-foreground">{m.name}</span> — {m.id} — {m.why}
             </li>
           ))}
         </ul>
       </Panel>
 
-      <Panel title="Worth a second look">
-        <p className="mb-3 max-w-3xl text-sm text-muted-foreground">
-          Every account that is clearly staff carries <code>CUSTOMER TYPE_Employee</code> or{" "}
-          <code>INTERNAL_EMPLOYEE</code>. <code>CUSTOMER_INTERNAL</code> on its own is otherwise
-          used for venue tables, write-offs and events — never for a person. These two are the only
-          exceptions. They remain <b>excluded</b>; this is a flag, not a change.
+      <Panel title="Internal accounts sitting in marketing lists">
+        <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+          Excluding these accounts from revenue does not remove them from Klaviyo or
+          LoyaltyLion. Measured on {INTERNAL_IN_MARKETING.measuredOn}, the inflation is real
+          but small — no figure moves by more than about one part in six hundred, so nothing
+          here is adjusted for. Cleaning them at source fixes it permanently.
         </p>
+        <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-3">
+          <StatTile
+            label="Email subscribers that are internal"
+            value={num(INTERNAL_IN_MARKETING.emailSubscribed)}
+            note={`of ${num(INTERNAL_IN_MARKETING.emailSubscribedOutOf)} — ${pct(
+              (INTERNAL_IN_MARKETING.emailSubscribed / INTERNAL_IN_MARKETING.emailSubscribedOutOf) * 100,
+            )}. No SMS subscribers are internal.`}
+          />
+          <StatTile
+            label="Loyalty members that are internal"
+            value={num(INTERNAL_IN_MARKETING.loyaltyEnrolled)}
+            note={`of ${num(INTERNAL_IN_MARKETING.loyaltyEnrolledOutOf)} — ${pct(
+              (INTERNAL_IN_MARKETING.loyaltyEnrolled / INTERNAL_IN_MARKETING.loyaltyEnrolledOutOf) * 100,
+            )}`}
+          />
+          <StatTile
+            label="Points held by internal accounts"
+            value={num(INTERNAL_IN_MARKETING.points)}
+            note={`of ${num(INTERNAL_IN_MARKETING.pointsOutOf)} outstanding — ${pct(
+              (INTERNAL_IN_MARKETING.points / INTERNAL_IN_MARKETING.pointsOutOf) * 100,
+            )} of the liability`}
+          />
+        </div>
         <Table>
           <thead>
             <tr>
               <Th>Account</Th>
               <Th>Id</Th>
-              <Th align="right">Lifetime revenue</Th>
-              <Th align="right">Last order</Th>
+              <Th>Klaviyo email</Th>
+              <Th>Tier</Th>
+              <Th align="right">Points</Th>
             </tr>
           </thead>
           <tbody>
-            {POSSIBLE_MISTAGS.map((m) => (
-              <tr key={m.id}>
-                <Td>{m.name}</Td>
-                <Td>{m.id}</Td>
-                <Td align="right">{jod(m.revenue)}</Td>
-                <Td align="right">{m.lastOrder}</Td>
+            {INTERNAL_IN_MARKETING.accounts.map((a) => (
+              <tr key={a.id}>
+                <Td>{a.name}</Td>
+                <Td>{a.id}</Td>
+                <Td>
+                  {a.email === "SUBSCRIBED" ? (
+                    <b>SUBSCRIBED</b>
+                  ) : (
+                    <span className="text-muted-foreground">{a.email ?? "no email"}</span>
+                  )}
+                </Td>
+                <Td>{a.tier ?? "—"}</Td>
+                <Td align="right">{num(a.points)}</Td>
               </tr>
             ))}
           </tbody>
         </Table>
+        <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
+          Four of these are <b>venue tables</b> — Communal Table, Table 3, Table 8 and Terrace 1
+          are enrolled in a loyalty programme. They hold no points, so nothing is distorted, but
+          it shows enrolment is not gated against non-people.{" "}
+          <b>Yousef Mazahreh alone holds 4,096 points</b>, a third of the internal total, and is
+          the same staff account at the centre of the worst identity conflict.
+        </p>
+      </Panel>
+
+      <Panel title="How the two ambiguous accounts were resolved">
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Two person-named accounts carried <code>CUSTOMER_INTERNAL</code> without an employee
+          tag, which is the pattern used for venue tables and write-offs rather than for people.
+          Both were flagged rather than decided. Naim confirmed on 30 August 2026 that{" "}
+          <b>Hashim El akabi (11,614 JOD) is a real customer</b> — now exempt and counted as
+          ordinary revenue — and that <b>Ahmad Ayman (11,636 JOD) is not</b>, so he remains
+          excluded. The tag pattern flagged the right pair; it could not tell them apart.
+        </p>
       </Panel>
 
       <Panel title={`Every excluded account (${num(data.rows.length)})`}>

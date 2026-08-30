@@ -38,23 +38,62 @@ export type ExcludedOrderAgg = {
  * their absence from the list unexplained.
  */
 export const MISTAGGED_EXEMPTIONS = [
-  { id: "9310102290679", name: "Talabat" },
-  { id: "9421262094583", name: "Careem" },
+  { id: "9310102290679", name: "Talabat", why: "third-party delivery, not an internal account" },
+  { id: "9421262094583", name: "Careem", why: "third-party delivery, not an internal account" },
+  { id: "6368239517943", name: "Hashim El akabi", why: "a real customer, confirmed 30 Aug 2026" },
 ] as const;
 
 /**
- * Person-named accounts carrying CUSTOMER_INTERNAL but NOT an employee tag.
+ * Internal accounts sitting in marketing lists.
  *
- * Every account that is clearly staff carries `CUSTOMER TYPE_Employee` or
- * `INTERNAL_EMPLOYEE`. `CUSTOMER_INTERNAL` alone is otherwise used for venue
- * tables, write-offs and events — never for a person. These two are the only
- * exceptions, which is why they are worth a second look rather than a silent
- * exclusion. Flagged, NOT exempted: they stay excluded until someone confirms.
+ * "Free of Charge Goods FOC" turned out to be SUBSCRIBED and loyalty-enrolled,
+ * which raised a fair question: are reach, member and tier counts inflated by
+ * accounts that are not people?
+ *
+ * MEASURED, 30 August 2026 — the answer is yes, but barely:
+ *   12 of 11,162 email subscribers are internal   (0.107%)
+ *   20 of 11,891 loyalty members are internal     (0.17%)
+ *   11,847 of 8,630,831 outstanding points        (0.137%)
+ *   0 SMS subscribers are internal
+ *
+ * So no figure moves by more than about one part in six hundred. Recorded
+ * rather than corrected: an adjustment smaller than the rounding on the tile
+ * would add machinery without changing a displayed number. The accounts are
+ * listed so they can be cleaned at source, which fixes it permanently.
  */
-export const POSSIBLE_MISTAGS = [
-  { id: "6368239517943", name: "Hashim El akabi", revenue: 11614, lastOrder: "2026-04-25" },
-  { id: "7348048232695", name: "Ahmad Ayman", revenue: 11636, lastOrder: "2024-07-26" },
-] as const;
+export const INTERNAL_IN_MARKETING = {
+  measuredOn: "2026-08-30",
+  emailSubscribed: 12,
+  emailSubscribedOutOf: 11162,
+  loyaltyEnrolled: 20,
+  loyaltyEnrolledOutOf: 11891,
+  smsSubscribed: 0,
+  points: 11847,
+  pointsOutOf: 8630831,
+  /** Enrolled in LoyaltyLion AND subscribed in Klaviyo, worst first by points. */
+  accounts: [
+    { name: "Yousef Mazahreh", id: "5320661500057", email: "SUBSCRIBED", points: 4096, tier: null },
+    { name: "Mousa Sweiss", id: "9208254726391", email: "SUBSCRIBED", points: 3162, tier: "Gold" },
+    { name: "Tareq Shnoudi", id: "6398668505335", email: "UNSUBSCRIBED", points: 2203, tier: null },
+    { name: "Essa Khair", id: "6792053620983", email: "SUBSCRIBED", points: 927, tier: null },
+    { name: "Ahmad Ayman", id: "7348048232695", email: "NOT_SUBSCRIBED", points: 400, tier: "Blue" },
+    { name: "Jad Hassan", id: "6392569561335", email: "SUBSCRIBED", points: 400, tier: null },
+    { name: "Mahmoud Al Sammar", id: "7345461068023", email: "SUBSCRIBED", points: 213, tier: null },
+    { name: "Hanna Jubran", id: "6389642756343", email: "SUBSCRIBED", points: 157, tier: null },
+    { name: "Rakan Ammari", id: "6688378454263", email: "SUBSCRIBED", points: 134, tier: "Blue" },
+    { name: "Saif Abu Sultan Sarhan", id: "6478413332727", email: "SUBSCRIBED", points: 75, tier: "Gold" },
+    { name: "Shafiq Ghattas", id: "5028813242521", email: "SUBSCRIBED", points: 70, tier: null },
+    { name: "Louies Safar", id: "6956165791991", email: "SUBSCRIBED", points: 10, tier: null },
+    { name: "Fadel Sammour", id: "6391910072567", email: "SUBSCRIBED", points: 0, tier: "Blue" },
+    { name: "Free of Charge Goods FOC", id: "4554713989273", email: "SUBSCRIBED", points: 0, tier: null },
+    { name: "Essa Gacaman", id: "6371814768887", email: "NOT_SUBSCRIBED", points: 0, tier: null },
+    { name: "Retail FOC", id: "6250535878903", email: "UNSUBSCRIBED", points: 0, tier: null },
+    { name: "Communal Table", id: "7580976742647", email: "NOT_SUBSCRIBED", points: 0, tier: null },
+    { name: "Table 3", id: "6368272220407", email: null, points: 0, tier: null },
+    { name: "Table 8", id: "6368263799031", email: null, points: 0, tier: null },
+    { name: "Terrace 1", id: "7000311103735", email: null, points: 0, tier: null },
+  ],
+} as const;
 
 export const fetchExcludedAccounts = async (): Promise<ExcludedAccount[]> => {
   // A view's columns are all nullable to the type generator; narrow here, the
@@ -158,10 +197,13 @@ export async function fetchIncludedTotal(r: DateRange) {
 export async function buildExclusionView(r: DateRange) {
   const accounts = await fetchExcludedAccounts();
   const ids = new Set(accounts.map((a) => a.shopify_customer_id));
-  const [inRange, lifetime, included] = await Promise.all([
+  const [inRange, lifetime, included, includedAllTime] = await Promise.all([
     fetchExcludedOrders(r, ids),
     fetchExcludedLifetime(ids),
     fetchIncludedTotal(r),
+    // Derived, never hardcoded. A literal all-time figure was already stale one
+    // exemption later, which is the exact failure this page exists to prevent.
+    fetchIncludedTotal({ from: "2019-01-01", to: "2099-12-31" }),
   ]);
 
   const rows = accounts
@@ -215,5 +257,6 @@ export async function buildExclusionView(r: DateRange) {
       includedOrders: included.orders,
     },
     lifetime: { excluded: excludedLifetime },
+    allTime: { excluded: excludedLifetime, included: includedAllTime.revenue },
   };
 }

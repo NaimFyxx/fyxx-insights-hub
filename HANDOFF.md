@@ -111,6 +111,35 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
 
 ## Done this turn
 
+**Acquisition channel — all three items built, at `/acquisition`.**
+
+Backed by `revenue_by_acquisition`, a VIEW over `shopify_orders` so
+cancellations net at read time. 1,669 rows; reconciles to the underlying orders
+exactly (9,825,893 JOD both ways). House accounts excluded; orders with no
+customer KEPT and labelled.
+
+- **The headline, as one number.** August 2026: **61.0% of revenue came from
+  customers acquired online** — 108,591 of 178,034 JOD. All-time it is 51.1%.
+  The tile is worded "revenue from customers marketing brought in", NOT
+  "revenue marketing caused", and the page says why the second claim is
+  indefensible.
+- **Revenue by acquisition channel by month, beside revenue by order channel**,
+  same months and same revenue cut both ways, so the divergence is visible
+  rather than described.
+- **The migration panel shows orders and revenue side by side**, with the ratio
+  stated: Mobile App 22.1% of later orders offline against **34.7% of later
+  revenue, 1.6x**; Website 23.5% against **35.0%, 1.5x**. Verified against SQL.
+- **A separate acquisition-channel filter**, local to the page, dashed border,
+  captioned that it is not the Overview's order-channel control and that the
+  two giving different totals for the same range is correct.
+
+**Coverage is computed live, not printed as a constant.** It varies from 83.7%
+(2024) to 99.8% (2020), so the fixed 84.4% Naim asked for would have misstated
+most ranges — in August 2026 the real figure is 99.8%, because POS orders now
+carry a customer. The panel states the in-range figure, then gives 84.4% as
+all-time context and names the spread. Same instruction, honoured in the form
+that does not create a new wrong number.
+
 **Filter fixes — all applied, build clean.**
 
 - **A1 first, as asked, because it had a deadline.** `DATA_TODAY` is gone.

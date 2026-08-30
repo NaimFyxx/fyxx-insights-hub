@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthenticatedAcquisitionRouteImport } from './routes/_authenticated/acquisition'
 import { Route as AuthenticatedActivationsRouteImport } from './routes/_authenticated/activations'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated/customers'
@@ -38,6 +39,12 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAcquisitionRoute =
+  AuthenticatedAcquisitionRouteImport.update({
+    id: '/acquisition',
+    path: '/acquisition',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedActivationsRoute =
   AuthenticatedActivationsRouteImport.update({
     id: '/activations',
@@ -98,6 +105,7 @@ const AuthenticatedReportRoute = AuthenticatedReportRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/acquisition': typeof AuthenticatedAcquisitionRoute
   '/activations': typeof AuthenticatedActivationsRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/customers': typeof AuthenticatedCustomersRoute
@@ -113,6 +121,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/acquisition': typeof AuthenticatedAcquisitionRoute
   '/activations': typeof AuthenticatedActivationsRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/customers': typeof AuthenticatedCustomersRoute
@@ -130,6 +139,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/acquisition': typeof AuthenticatedAcquisitionRoute
   '/_authenticated/activations': typeof AuthenticatedActivationsRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
   '/_authenticated/customers': typeof AuthenticatedCustomersRoute
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/acquisition'
     | '/activations'
     | '/campaigns'
     | '/customers'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/acquisition'
     | '/activations'
     | '/campaigns'
     | '/customers'
@@ -178,6 +190,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/acquisition'
     | '/_authenticated/activations'
     | '/_authenticated/campaigns'
     | '/_authenticated/customers'
@@ -219,6 +232,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/acquisition': {
+      id: '/_authenticated/acquisition'
+      path: '/acquisition'
+      fullPath: '/acquisition'
+      preLoaderRoute: typeof AuthenticatedAcquisitionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/activations': {
       id: '/_authenticated/activations'
@@ -301,6 +321,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAcquisitionRoute: typeof AuthenticatedAcquisitionRoute
   AuthenticatedActivationsRoute: typeof AuthenticatedActivationsRoute
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRoute
   AuthenticatedCustomersRoute: typeof AuthenticatedCustomersRoute
@@ -315,6 +336,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAcquisitionRoute: AuthenticatedAcquisitionRoute,
   AuthenticatedActivationsRoute: AuthenticatedActivationsRoute,
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRoute,
   AuthenticatedCustomersRoute: AuthenticatedCustomersRoute,

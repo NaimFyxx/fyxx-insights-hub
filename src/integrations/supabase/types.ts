@@ -659,6 +659,17 @@ export type Database = {
         };
         Relationships: [];
       };
+      revenue_by_acquisition: {
+        Row: {
+          acquisition_channel: string | null;
+          is_first_order: boolean | null;
+          month: string | null;
+          order_channel: string | null;
+          orders: number | null;
+          revenue_jod: number | null;
+        };
+        Relationships: [];
+      };
       klaviyo_order_influence_net: {
         Row: {
           created_at: string | null;

@@ -8,6 +8,7 @@ const NAV = [
   { to: "/flows", label: "Flows" },
   { to: "/push", label: "Push" },
   { to: "/customers", label: "Customers" },
+  { to: "/acquisition", label: "Acquisition channel" },
   { to: "/loyalty", label: "Loyalty" },
   { to: "/activations", label: "Activations" },
   { to: "/export", label: "Export report" },

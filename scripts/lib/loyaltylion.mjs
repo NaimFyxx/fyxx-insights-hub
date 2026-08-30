@@ -72,7 +72,7 @@ export async function assertFilterHonoured(path, filterQuery, key = "customers")
 }
 
 /** Walks a cursor-paginated collection to the end. */
-async function* paginate(path, key, label) {
+export async function* paginate(path, key, label) {
   let cursor = null;
   let page = 0;
   do {

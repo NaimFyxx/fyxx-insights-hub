@@ -27,6 +27,71 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## Orphaned loyalty sign-ups — swept, detailed, and the cause established
+
+`scripts/diagnose/orphan-loyalty.mjs`. Swept **11,925 enrolled LoyaltyLion
+members** against Shopify rather than checking only the accounts we suspected.
+
+### 1. It is FOUR, not three
+
+| Account | Email captured | Enrolled | Their spend that day |
+|---|---|---|---|
+| Table 3 | `amani.semaan@gmail.com` | 2025-09-06 | **376.750 JOD**, 4 orders |
+| Terrace 1 | `thaee@thejamfam.com` | 2025-11-27 | **185.250 JOD**, 2 orders |
+| Communal Table | `dinksewtaye@yahoo.com` | 2026-01-12 | **130.000 JOD**, 2 orders |
+| Table 8 | `emilija.georgieva@eda.admin.ch` | 2026-02-04 | **102.750 JOD**, 2 orders |
+
+Communal Table was missed first time because Shopify records it as HAVING an
+email — so the "no email in Shopify" test passed it. The address is a personal
+Yahoo account on a venue table, which is the same fault.
+
+**All four are BLOCKED in LoyaltyLion with 0 points.** Order ids for each are in
+the query in this file's git history. **794.750 JOD of spend across four
+customers who signed up and earned nothing.**
+
+The other 16 internal members flagged are staff using their OWN addresses
+(`y.mazahreh@myfyxx.com`) or company addresses (`info@myfyxx.com` on Retail
+FOC) — not orphaned customers, no action needed beyond the cleanup already
+planned.
+
+### 2. The cause is settled: the ORDER creates the enrolment
+
+Enrolment fires **within seconds of an order at that till**:
+
+| Account | Last order before enrolment | Enrolled at | Gap |
+|---|---|---|---|
+| Communal Table | 15:44:20 | 15:44:25.527 | **5s** |
+| Table 3 | 20:46:37 | 20:46:43.320 | **6s** |
+| Terrace 1 | 20:35:31 | 20:35:37.732 | **6s** |
+| Table 8 | 19:57:31 | 19:57:48.145 | **17s** |
+
+Four for four, at second resolution. This is not a nightly sync or a bulk
+import; it is the checkout itself.
+
+**And the address did not come from Shopify.** Three of the four have
+`has_email = false` on their Shopify customer record while LoyaltyLion holds a
+full address. LoyaltyLion cannot have read it from a Shopify field that is
+empty, so it was supplied at the point of sale.
+
+Together those two facts mean: **the till collects an email at checkout and
+LoyaltyLion enrols whatever customer record the order carries.** Since
+27 February 2026 the Odoo connector puts a customer on every POS order, so
+there is now always a record for it to attach to.
+
+**Likelier fix is at the till, not LoyaltyLion.** LoyaltyLion is behaving
+consistently — enrol the customer on the order. The fault is that the order
+carries a shared table account instead of the person. What would settle it
+beyond doubt: LoyaltyLion's audit log for those four ids showing the enrolment
+source, and whether the POS integration has an "enrol on order" setting.
+
+### 3. Two numbers worth watching, neither the same problem
+
+- **18 members hold an email LoyaltyLion has and Shopify does not; 15 are
+  ACTIVE and on real customer accounts.** That is the same till capture working
+  CORRECTLY — a person giving their address against their own record.
+- **813 enrolled members have no Shopify customer row at all.** Unexplained,
+  possibly related to the open 4% population gap. Not investigated.
+
 ## How venue tables enrolled in LoyaltyLion — and what it revealed
 
 Naim asked how Table 3 got into a loyalty programme, since whatever route let

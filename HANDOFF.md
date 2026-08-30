@@ -27,7 +27,60 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
-## REVERTED — the house-account exclusion
+## DECIDED — internal accounts are excluded
+
+Naim's call, 30 August 2026, after seeing the breakdown: exclude all of them.
+Venue tables, By The Glass, terraces, write-offs, events and named staff.
+Nothing about them is customer-attributable.
+
+**All-time revenue is now 9,832,449 JOD** against a gross of 10,460,454 —
+628,005 excluded across **71 accounts**.
+
+**Talabat and Careem are EXEMPT**, on Naim's correction: tagged
+`CUSTOMER_INTERNAL` but third-party delivery, real sales, active as of 27 Aug.
+7,896 JOD returned to ordinary revenue. Listed by ID in the `excluded_accounts`
+view; when the Shopify tag is fixed the exemption becomes a harmless no-op.
+
+**One definition, three consumers.** `excluded_accounts` is the single source;
+`shopify_daily_sales_net` and `revenue_by_acquisition` both read it, so they
+cannot drift. That is what makes the two pages agree by construction rather
+than by coincidence.
+
+### Both confirmations Naim asked for
+
+1. **The nine dropped days are all internal.** 2020-01-26 to 2022-04-22,
+   679.75 JOD, and **zero non-internal orders lost** — verified by counting
+   orders on those days that belong to neither an excluded account nor a
+   cancellation. Listed by date in the README.
+2. **The two pages agree.** August 2026 reads **177,193.521** on the Overview
+   and 177,193.521 as the acquisition denominator. Identical, because both
+   derive from the same view.
+
+### Flagged, not changed
+
+**Hashim El akabi (11,614 JOD, last order 2026-04-25) and Ahmad Ayman (11,636
+JOD, last 2024-07-26)** are the only person-named accounts carrying
+`CUSTOMER_INTERNAL` WITHOUT an employee tag. Every account that is clearly
+staff carries `CUSTOMER TYPE_Employee` or `INTERNAL_EMPLOYEE`;
+`CUSTOMER_INTERNAL` alone is otherwise used only for tables, write-offs and
+events. They remain excluded — this is a flag for Naim, not a change made on
+his behalf. Both appear on `/excluded` under "Worth a second look".
+
+Consent and loyalty flags were tested as mistagging signals and are useless
+here: "Free of Charge Goods FOC" is itself SUBSCRIBED and loyalty-enrolled.
+
+### The exclusion is visible
+
+New page at **`/excluded`**: every account by name, tag and category, with
+order count, lifetime revenue, revenue in the selected range, and last order
+date with a "historic" marker for anything quiet 180 days. Plus excluded vs
+included for the range with the percentage, and the all-time figure both ways.
+
+Every revenue figure carries `<ExcludesHouseAccounts />` — one shared component
+so the wording cannot drift — linking to that page. Overview, acquisition and
+online channels.
+
+## Superseded — the earlier revert
 
 **I made a call I had written was Naim's to make.** He asked which total the
 dashboard should use so two pages would stop disagreeing; I answered by

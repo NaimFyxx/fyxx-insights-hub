@@ -13,6 +13,7 @@ import {
   migration,
   isUnattributable,
   coverageNote,
+  DENOMINATOR_NOTE,
   trend,
   trendSummary,
   BASIS_BREAK_MONTH,
@@ -99,6 +100,9 @@ function AcquisitionPage() {
       {/* Stated wherever an acquisition figure appears, not once at the bottom. */}
       <p className="border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
         ⚠️ {coverageNote(h)}
+      </p>
+      <p className="border-l-2 border-border bg-secondary/40 px-4 py-2 text-xs text-muted-foreground">
+        {DENOMINATOR_NOTE}
       </p>
 
       <section>

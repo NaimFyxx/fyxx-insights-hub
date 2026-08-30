@@ -36,7 +36,7 @@ const HEAD = { bold: true };
 const MONO = { name: "Menlo", size: 9 };
 
 /** A sheet with a provenance block, a header row, data, and formula totals. */
-function sheet(name, { source, check, cannot }, columns, rows, totalCols = []) {
+function sheet(name, { source, check, cannot }, columns, rows, totalCols = [], groupBy = null) {
   const ws = wb.addWorksheet(name);
   ws.addRow([name]).font = { bold: true, size: 14 };
   ws.addRow([`Source: ${source}`]).font = MONO;
@@ -54,14 +54,36 @@ function sheet(name, { source, check, cannot }, columns, rows, totalCols = []) {
   const lastData = ws.rowCount;
 
   if (rows.length && totalCols.length) {
+    ws.addRow([]);
     const totals = columns.map((c, i) => {
-      if (i === 0) return "TOTAL";
+      if (i === 0) return "TOTAL — every row above";
       if (!totalCols.includes(c.key)) return null;
       const L = ws.getColumn(i + 1).letter;
       return { formula: `SUM(${L}${firstData}:${L}${lastData})` };
     });
-    const tr = ws.addRow(totals);
-    tr.font = HEAD;
+    ws.addRow(totals).font = HEAD;
+
+    // Per-group subtotals. A grand total alone forces the reader to write
+    // their own SUMIF to check one channel, which is the opposite of the
+    // point of this workbook.
+    if (groupBy) {
+      const gi = columns.findIndex((c) => c.key === groupBy);
+      const GL = ws.getColumn(gi + 1).letter;
+      const seen = [...new Set(rows.map((r) => r[groupBy]).filter(Boolean))].sort();
+      ws.addRow([]);
+      ws.addRow([`Subtotals by ${columns[gi].header.toLowerCase()}`]).font = HEAD;
+      for (const g of seen) {
+        const cells = columns.map((c, i) => {
+          if (i === 0) return g;
+          if (!totalCols.includes(c.key)) return null;
+          const L = ws.getColumn(i + 1).letter;
+          return {
+            formula: `SUMIF(${GL}${firstData}:${GL}${lastData},"${g}",${L}${firstData}:${L}${lastData})`,
+          };
+        });
+        ws.addRow(cells);
+      }
+    }
   }
   ws.columns.forEach((col, i) => {
     const header = columns[i]?.header ?? "";
@@ -142,7 +164,7 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
     { header: "Orders", key: "orders" },
     { header: "Revenue (JOD)", key: "rev" },
   ], rows.map((r) => ({ ...r, orders: num(r.orders), rev: num(r.total_online_revenue_jod) })),
-    ["orders", "rev"]);
+    ["orders", "rev"], "sub_channel");
   log.ok(`sales: ${rows.length} rows`);
 }
 
@@ -176,10 +198,21 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
 {
   const rows = await selectAll("klaviyo_campaigns",
     `select=name,sent_on,send_channel,sent,delivered,opened,clicked,orders,revenue_jod&sent_on=gte.${FROM}&sent_on=lte.${TO}&order=sent_on.asc`);
+  // Mirrors MIN_CAMPAIGN_RECIPIENTS in src/lib/report.ts. Kept identical so
+  // the pack and the report can never disagree about what counts as a send.
+  const TEST_SEND_MAX = 50;
+  const tests = rows.filter((r) => num(r.sent) < TEST_SEND_MAX);
+  const real = rows.filter((r) => num(r.sent) >= TEST_SEND_MAX);
+  const testNote = tests.length
+    ? " EXCLUDED as test sends, below " + TEST_SEND_MAX + " recipients: " +
+      tests.map((t) => t.name + " (" + t.sent + " recipients)").join(", ") +
+      ". Klaviyo will still show these. A rate measured over a handful of recipients is noise with the authority of a percentage, and beside real campaigns it reads as the best send of the month."
+    : "";
+  if (tests.length) log.info("  excluding " + tests.length + " test send(s): " + tests.map((t) => t.name).join(", "));
   sheet("Campaigns", {
     source: "klaviyo_campaigns — one row per campaign, on its SEND date",
     check: "Klaviyo > Campaigns, filtered to this month. Compare row by row on name and send date.",
-    cannot: "The Sent total. It counts sends, not unique people, so it cannot be compared to any single Klaviyo number. Revenue is Klaviyo's own attribution and is NOT netted of cancellations on this sheet.",
+    cannot: "The Sent total. It counts sends, not unique people, so it cannot be compared to any single Klaviyo number. Revenue is Klaviyo's own attribution and is NOT netted of cancellations on this sheet." + testNote,
   }, [
     { header: "Campaign", key: "name" },
     { header: "Sent on", key: "sent_on" },
@@ -190,9 +223,9 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
     { header: "Clicked", key: "clicked" },
     { header: "Orders", key: "orders" },
     { header: "Revenue (JOD)", key: "rev" },
-  ], rows.map((r) => ({ ...r, rev: num(r.revenue_jod) })),
+  ], real.map((r) => ({ ...r, rev: num(r.revenue_jod) })),
     ["sent", "delivered", "opened", "clicked", "orders", "rev"]);
-  log.ok(`campaigns: ${rows.length}`);
+  log.ok(`campaigns: ${real.length} real, ${tests.length} test send(s) excluded`);
 }
 
 /* ---------------- 5. Flows ---------------- */

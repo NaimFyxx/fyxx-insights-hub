@@ -291,7 +291,12 @@ export type ReportData = {
   range: DateRange;
   narrative: Narrative;
   reach: ReachSection;
-  campaigns: { availability: Availability; rows: Campaign[] };
+  campaigns: {
+    availability: Availability;
+    rows: Campaign[];
+    /** Sends below MIN_CAMPAIGN_RECIPIENTS, excluded from rows but named. */
+    excludedTests: Campaign[];
+  };
   flows: { availability: Availability; rollup: ReturnType<typeof rollUpFlows> };
   push: { availability: Availability; rollup: ReturnType<typeof rollUpPush> };
   loyalty: {
@@ -329,6 +334,26 @@ export type ReportData = {
   };
   notices: string[];
 };
+
+/**
+ * A send below this is a test, not a campaign.
+ *
+ * "Careem & Talabat 50% OFF Final" went to 3 recipients and sat among eight
+ * real campaigns showing 100% open and 33% click. Rates from a handful of
+ * recipients are noise with the authority of a percentage, and next to genuine
+ * campaigns they read as the best-performing send of the month.
+ *
+ * Excluded sends are COUNTED and named rather than silently dropped, because a
+ * campaign vanishing without explanation is its own kind of wrong.
+ */
+export const MIN_CAMPAIGN_RECIPIENTS = 50;
+
+export function splitTestSends(rows: Campaign[]) {
+  return {
+    real: rows.filter((c) => c.sent >= MIN_CAMPAIGN_RECIPIENTS),
+    tests: rows.filter((c) => c.sent < MIN_CAMPAIGN_RECIPIENTS),
+  };
+}
 
 export async function buildReport(range: DateRange): Promise<ReportData> {
   const [
@@ -442,13 +467,14 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     campaigns: {
       availability:
         (coverageGap(coverage, "klaviyo_campaigns", range, "Campaign reporting") ??
-        (campaigns.length ? null : "No campaigns were sent in this period."))
+        (splitTestSends(campaigns).real.length ? null : "No campaigns were sent in this period."))
           ? no(
               coverageGap(coverage, "klaviyo_campaigns", range, "Campaign reporting") ??
                 "No campaigns were sent in this period.",
             )
           : ok,
-      rows: campaigns,
+      rows: splitTestSends(campaigns).real,
+      excludedTests: splitTestSends(campaigns).tests,
     },
     flows: { availability: flowsAvailability, rollup: rollUpFlows(flows) },
     push: {

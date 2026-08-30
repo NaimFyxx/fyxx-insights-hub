@@ -109,6 +109,40 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
   silently stopping.
 - **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
+## The three August totals, reconciled
+
+Naim found three figures in circulation. All three are now explained, and one
+has resolved itself.
+
+| Figure | August revenue | Orders | What it is |
+|---|---|---|---|
+| Verification pack, as generated 30 Aug | 176,440.643 | 2,188 | `shopify_daily_sales` BEFORE the nightly sync caught up |
+| `shopify_orders`, and `shopify_daily_sales` now | **179,196.321** | 2,225 | Every non-cancelled order, house accounts included |
+| Acquisition page denominator | **178,034.421** | 2,170 | The same, **house accounts excluded** |
+
+- **The first is gone.** The nightly sync has since run; `shopify_daily_sales`
+  now reads 179,196.321, identical to the order table. It was staleness, and it
+  corrected itself. A regenerated pack shows the new figure.
+- **The third is house accounts: exactly 55 orders worth 1,161.900 JOD.**
+  179,196.321 − 1,161.900 = 178,034.421, and 2,225 − 55 = 2,170. Not an error
+  in either. The acquisition view joins orders to customers so it CAN exclude
+  staff and venue-table accounts, as every customer-level figure already does.
+  `shopify_daily_sales` has no customer dimension and cannot.
+
+**Stated on the page now, not left to be rediscovered** — `DENOMINATOR_NOTE` in
+`src/lib/acquisition.ts` appears under the coverage note on `/acquisition` and
+in the report caption.
+
+**`shopify_daily_sales_net` is built and NOT yet wired up.** A view over
+`shopify_orders` that excludes house accounts, nets cancellations at read time
+and is never stale. It ties to the acquisition denominator exactly. Switching
+the dashboard to it would make every revenue figure consistent and fix trailing
+-day staleness in one move — **but it moves all-time revenue from 10,461,794 to
+9,825,893, a drop of 635,901 JOD (6.1%)**, because house accounts leave every
+historical figure. That is Naim's call, not a change to make quietly. The
+question is whether venue tables and "By The Glass" are sales or internal
+transfers; "Free of Charge Goods" clearly is not.
+
 ## READ THIS FIRST — the 61% needs a caveat it did not have
 
 **61.0% is correct for August 2026 and safe to say. Comparing it to last

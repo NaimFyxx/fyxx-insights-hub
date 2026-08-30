@@ -79,6 +79,24 @@ export function coverageNote(h: ReturnType<typeof headline>): string {
 }
 
 /**
+ * Why this page's total differs from the Overview's, stated wherever the total
+ * appears.
+ *
+ * The denominator here EXCLUDES house and staff accounts, because it is built
+ * from orders joined to customers. The Overview reads shopify_daily_sales,
+ * which has no customer dimension and therefore cannot exclude them. For
+ * August 2026 that is 55 orders worth 1,161.900 JOD: 179,196.321 against
+ * 178,034.421. Neither is wrong; they answer slightly different questions, and
+ * an unexplained gap between two totals for the same month is worse than
+ * either.
+ */
+export const DENOMINATOR_NOTE =
+  "This total excludes house and staff accounts, as every customer-level figure on this " +
+  "dashboard does. The Overview's revenue tiles read the daily sales table, which has no " +
+  "customer attached and so cannot exclude them — for August 2026 that is 55 orders worth " +
+  "1,162 JOD, or 179,196 there against 178,034 here. The gap is house accounts, nothing else.";
+
+/**
  * Postgres cannot prove a view's columns are non-null, so the generated types
  * widen every one of them. Fetch the nullable shape and narrow here, the same
  * way fetchAttributed does, rather than lying to the type system upstream.

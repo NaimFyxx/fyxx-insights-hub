@@ -6,7 +6,13 @@ import { PageHeader } from "@/components/fyxx/primitives";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { buildReport, saveNarrative, type Availability, type ReportData } from "@/lib/report";
+import {
+  buildReport,
+  saveNarrative,
+  MIN_CAMPAIGN_RECIPIENTS,
+  type Availability,
+  type ReportData,
+} from "@/lib/report";
 import { ammanNow, iso, type DateRange } from "@/lib/ranges";
 import { useDateRange } from "@/context/date-range-context";
 import { num, pct, jod } from "@/lib/format";
@@ -335,7 +341,8 @@ export function ReportPage1({ data }: { data: ReportData }) {
               has bought online ever since counts as in-store here. It needs no attribution
               modelling, only the channel each customer first arrived through, which is why it is
               reported separately from the attributed-revenue figure above and must never be added
-              to it.{" "}
+              to it. The total it divides by excludes staff and house accounts, so it is slightly
+              below the all-channels sales figure shown earlier.{" "}
               {acquisition.coveragePct !== null && acquisition.coveragePct < 99.5 ? (
                 <>
                   The remaining {pct(100 - acquisition.coveragePct)} is orders with no customer
@@ -443,8 +450,23 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </tbody>
           </table>
           <p className="caption">
-            Open and click rates are Klaviyo's own, measured against messages delivered rather than
-            sent.
+            Open and click rates are Klaviyo&rsquo;s own, measured against messages delivered
+            rather than sent.
+            {campaigns.excludedTests.length ? (
+              <>
+                {" "}
+                {campaigns.excludedTests.length === 1
+                  ? "One send is"
+                  : num(campaigns.excludedTests.length) + " sends are"}{" "}
+                excluded as {campaigns.excludedTests.length === 1 ? "a test" : "tests"}, below{" "}
+                {MIN_CAMPAIGN_RECIPIENTS} recipients:{" "}
+                {campaigns.excludedTests
+                  .map((c) => c.name + " (" + num(c.sent) + ")")
+                  .join(", ")}
+                . A rate measured over a handful of recipients is noise wearing the authority of a
+                percentage, and beside real campaigns it reads as the best send of the month.
+              </>
+            ) : null}
           </p>
         </Guard>
       </section>

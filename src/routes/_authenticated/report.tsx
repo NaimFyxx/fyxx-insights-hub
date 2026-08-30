@@ -312,12 +312,42 @@ export function ReportPage1({ data }: { data: ReportData }) {
         {acquisition.availability.available ? (
           <>
             <h3 style={{ marginTop: "6mm" }}>Revenue from customers marketing brought in</h3>
+
+            {/* Zeid's first question about a figure that appears to have risen
+                17 points will be why. It leads the section rather than
+                footnoting it, because a caveat read after the number has
+                already been challenged is worth nothing. */}
+            {acquisition.comparable.spansBasisChange &&
+            acquisition.comparable.thisPeriodPct !== null &&
+            acquisition.comparable.yearAgoPct !== null ? (
+              <p className="caption" style={{ marginBottom: "3mm" }}>
+                <b>Read the like-for-like comparison, not the raw one.</b> Against the same month
+                last year this figure appears to rise from{" "}
+                {pct(acquisition.comparable.yearAgoRawPct!)} to {pct(acquisition.sharePct!)}, but
+                roughly a third of that is a change in measurement rather than in the business:
+                after 27 February 2026 the till began recording a customer on every in-store
+                order, so sales that previously could not be traced to anyone now can. Comparing
+                only the traceable portion at both ends, the real movement is{" "}
+                <b>
+                  {pct(acquisition.comparable.yearAgoPct)} to{" "}
+                  {pct(acquisition.comparable.thisPeriodPct)}
+                </b>
+                . That is the number to rely on.
+              </p>
+            ) : null}
+
             <div className="kpis">
               <div className="kpi">
                 <div className="n">
                   {acquisition.sharePct === null ? "—" : pct(acquisition.sharePct)}
                 </div>
-                <div className="l">Of all sales this month</div>
+                <div className="l">
+                  Of all sales this month
+                  {acquisition.comparable.thisPeriodPct !== null &&
+                  acquisition.comparable.spansBasisChange
+                    ? ` — like-for-like ${pct(acquisition.comparable.thisPeriodPct)}`
+                    : ""}
+                </div>
               </div>
               <div className="kpi">
                 <div className="n">

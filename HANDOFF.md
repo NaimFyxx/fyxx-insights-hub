@@ -10,6 +10,23 @@ being built from scratch.
 
 ---
 
+## The report now carries the like-for-like caveat
+
+For August 2026 against August 2025 the report prints, ABOVE the tiles rather
+than under them:
+
+| | Aug 2025 | Aug 2026 | Movement |
+|---|---|---|---|
+| Raw share of all sales | 49.5% | 60.9% | +11.4 pts |
+| **Like-for-like** | **53.8%** | **61.0%** | **+7.2 pts** |
+| Coverage | 92.0% | 99.8% | |
+
+The caveat renders only when the comparison actually spans 27 February 2026
+(`spansBasisChange`), so it does not clutter a period where it does not apply.
+It is written for a reader who has seen none of this: "the till began recording
+a customer on every in-store order", not "the Odoo connector requires a
+customer". The headline tile carries the like-for-like figure inline too.
+
 ## REVERTED — the house-account exclusion
 
 **I made a call I had written was Naim's to make.** He asked which total the
@@ -51,6 +68,11 @@ re-derive from `shopify_customers` where `is_house_account`.
 
 ## Changed a previously reported figure
 
+- **The August headline is 60.9%, not 61.0%.** The drift repair removed the ten
+  cancelled orders and two refunds, so the denominator fell to 176,695.021 and
+  online-acquired revenue to 107,613.336. The figure quoted all through
+  yesterday was computed before the repair ran. It is a rounding-scale change,
+  but it is the number going to Zeid, so it is recorded rather than glossed.
 - **The 2026 "stabilisation" is NOT a recovery.** App share of new customers
   recovered to 48.4%, pushing mix-predicted repeat to 39.9%, its highest since
   2020 — actual was 33.7%, a **-6.2 gap, the widest recorded**. The line held

@@ -13,7 +13,7 @@ import {
   type Activation,
 } from "@/lib/queries";
 import { POS_DEFINITION_CHANGED } from "@/lib/channels";
-import { fetchAcquisition, headline } from "@/lib/acquisition";
+import { fetchAcquisition, headline, BASIS_BREAK_MONTH } from "@/lib/acquisition";
 import { settledOnly, rangeIncludesToday, type DateRange } from "@/lib/ranges";
 import { fetchCoverage, coverageGap } from "@/lib/coverage";
 
@@ -331,6 +331,23 @@ export type ReportData = {
     sharePct: number | null;
     /** Share of only the revenue that CAN carry an acquisition channel. */
     coveragePct: number | null;
+    /**
+     * The same share on the LIKE-FOR-LIKE basis, and the year-ago comparison.
+     *
+     * Zeid's first question about a figure that rose from 44% to 61% will be
+     * why. Roughly a third of that is the denominator changing: the Odoo
+     * connector began requiring a customer on every POS order after 27 Feb
+     * 2026, so revenue that could not carry an acquisition channel almost
+     * vanished. Reporting the raw jump without this invites a challenge the
+     * number cannot survive, and the honest rise is still substantial.
+     */
+    comparable: {
+      thisPeriodPct: number | null;
+      yearAgoPct: number | null;
+      yearAgoRawPct: number | null;
+      /** True when the comparison spans the 27 Feb 2026 basis change. */
+      spansBasisChange: boolean;
+    };
   };
   notices: string[];
 };
@@ -439,6 +456,15 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
   const acqRows = await fetchAcquisition(range);
   const acqHead = headline(acqRows);
 
+  // The same month a year earlier, for the comparison Zeid will make anyway.
+  // Fetched on the LIKE-FOR-LIKE basis so the two ends mean the same thing.
+  const yearAgo: DateRange = {
+    from: `${Number(range.from.slice(0, 4)) - 1}${range.from.slice(4)}`,
+    to: `${Number(range.to.slice(0, 4)) - 1}${range.to.slice(4)}`,
+  };
+  const acqYearAgoRows = await fetchAcquisition(yearAgo);
+  const acqYearAgoHead = acqYearAgoRows.length ? headline(acqYearAgoRows) : null;
+
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
 
@@ -523,6 +549,15 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
       total: acqHead.totalRevenue,
       sharePct: acqHead.pct,
       coveragePct: acqHead.unattributablePct === null ? null : 100 - acqHead.unattributablePct,
+      comparable: {
+        thisPeriodPct: acqHead.pctOfAttributable,
+        yearAgoPct: acqYearAgoHead ? acqYearAgoHead.pctOfAttributable : null,
+        yearAgoRawPct: acqYearAgoHead ? acqYearAgoHead.pct : null,
+        // The comparison is unsafe exactly when one side predates the change
+        // and the other does not.
+        spansBasisChange:
+          range.to >= `${BASIS_BREAK_MONTH}-01` && yearAgo.to < `${BASIS_BREAK_MONTH}-01`,
+      },
     },
     notices,
   };

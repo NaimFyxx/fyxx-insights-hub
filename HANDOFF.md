@@ -27,6 +27,80 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## How venue tables enrolled in LoyaltyLion — and what it revealed
+
+Naim asked how Table 3 got into a loyalty programme, since whatever route let
+it in will let the next one in. Answered from LoyaltyLion's own records, not
+inferred from ours.
+
+**Each venue-table account holds a REAL CUSTOMER'S EMAIL in LoyaltyLion that
+Shopify does not have.**
+
+| Account | Email held in LoyaltyLion | Enrolled | State |
+|---|---|---|---|
+| Table 3 | `amani.semaan@gmail.com` | 2025-09-06 | guest, **blocked**, 0 points |
+| Terrace 1 | `thaee@thejamfam.com` | 2025-11-27 | guest, **blocked**, 0 points |
+| Table 8 | `emilija.georgieva@eda.admin.ch` | 2026-02-04 | guest, **blocked**, 0 points |
+
+All three enrolled **on a day that account placed POS orders**, and our
+`shopify_customers` row says `has_email = false` for each — so the address did
+not come from Shopify. The mechanism is a customer giving their email at the
+till while the sale is rung against a shared table account. LoyaltyLion then
+enrols the TABLE as a guest member under that person's address.
+
+**This is a customer-facing problem, not just data hygiene.** A real customer
+who handed over their email at the till had their loyalty attached to "Table 8"
+and earned nothing. Three known cases; there may be more where the customer had
+no Shopify record to compare against.
+
+**It is contained, for now.** LoyaltyLion has these accounts `blocked`, which is
+why all three hold zero points. Blocking is the safety net that stopped this
+mattering — not the tagging, and not anything on our side.
+
+**It will keep happening.** Enrolment is partly order-triggered: 662 of 1,516
+enrolments since September 2025 landed on a day the customer ordered, 332 of
+them POS. And since 27 February 2026 the Odoo connector requires a customer on
+every POS order, so every till sale now has an account attached to enrol.
+
+Not provable from our data alone: whether LoyaltyLion's POS integration changed
+in mid-2025, which would explain why accounts trading since 2022 only enrolled
+from September 2025. That needs LoyaltyLion's own configuration history.
+
+## Yousef Mazahreh — everything the account touches
+
+One account, four separate problems. Naim asked for it in one place rather than
+fixing it in pieces.
+
+| System | What it holds |
+|---|---|
+| Shopify | `5320661500057`, 1,151 live orders, **28,027 JOD**, 2021-04-07 to 2026-08-24, across **all four channels** |
+| | Tagged `CUSTOMER_INTERNAL` + `CUSTOMER TYPE_Employee` + `INTERNAL_EMPLOYEE` |
+| LoyaltyLion | `561296048`, email `y.mazahreh@myfyxx.com`, **4,096 points approved, 0 spent**, enrolled 2023-02-21, **blocked** |
+| Klaviyo | Profile `01GSE2S2VR4ZG9ZQ7QVY75Q4DH`, **SUBSCRIBED** |
+| Identity | **Absent from `customer_identity`** — quarantined, because its profile is conflicted |
+| Conflicts | In the worst conflict: **5 Shopify customers, 171 orders** on one Klaviyo profile |
+
+**Its share of each problem:**
+- **4.5%** of all excluded revenue (28,027 of 616,391)
+- **34.6%** of all internal loyalty points (4,096 of 11,847)
+- Shares a Klaviyo profile with **Omar Khamash (436 real orders, 17,673 JOD)**
+  and three restaurant companies
+
+**Three of the four are already contained.** Revenue is excluded. The points
+are blocked in LoyaltyLion, so the 4,096 cannot be redeemed and the liability
+is nominal. The identity table quarantines the profile rather than guessing.
+
+**One is not: the Klaviyo profile.** It is SUBSCRIBED and carries the merged
+order history of a staff member, a major real customer and three companies. Any
+segment built on purchase behaviour sees that blend. This cannot be fixed from
+here — the merge lives in Klaviyo.
+
+**A staff account trading on all four channels for five years is worth a
+second question.** 1,151 orders and 28,027 JOD is large for staff purchasing.
+Whether that is genuine staff buying, orders placed on behalf of customers, or
+a till account used as a catch-all is a question about how the business
+operates, not one the data can settle.
+
 ## Internal accounts in marketing lists — measured, NOT material
 
 Naim's question, from the "Free of Charge Goods FOC is SUBSCRIBED" finding:

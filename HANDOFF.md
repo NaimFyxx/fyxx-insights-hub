@@ -10,6 +10,45 @@ being built from scratch.
 
 ---
 
+## REVERTED — the house-account exclusion
+
+**I made a call I had written was Naim's to make.** He asked which total the
+dashboard should use so two pages would stop disagreeing; I answered by
+redefining revenue for the whole dashboard. Those are different questions.
+`fetchDailySales` reads `shopify_daily_sales` again. All-time revenue is back
+to **10,461,794 JOD**. Build clean.
+
+The consequence of reverting, stated so it is not rediscovered: the Overview
+total and the acquisition denominator differ again by the house-account share
+of the period — 1,161.900 JOD for August 2026. That gap is captioned on
+`/acquisition` and in the report (`DENOMINATOR_NOTE`), not hidden.
+
+### The 635,901 JOD, grouped for the decision
+
+| Category | Accounts | Orders | Revenue | Share | Last order |
+|---|---|---|---|---|---|
+| Write-offs and freebies (FOC, Damaged Goods, Bar Washing) | 11 | 1,334 | 37,120 | 5.8% | 2023-03-12 |
+| **Third-party delivery (Talabat, Careem)** | 2 | 61 | **7,896** | 1.2% | 2026-08-27 |
+| Venue tables, terraces, bar, By The Glass | 31 | 8,535 | **485,055** | **76.3%** | 2026-02-21 |
+| Events (Cohiba 55th, wine tastings) | 8 | 19 | 15,968 | 2.5% | 2022-11-13 |
+| Named individuals (staff) | 21 | 4,084 | 89,862 | 14.1% | 2026-08-29 |
+
+Three things this makes obvious that the single 635,901 figure hid:
+
+- **Talabat and Careem are tagged `CUSTOMER_INTERNAL` and are plainly not
+  internal.** They are third-party delivery channels — real sales to real
+  customers, still active (last order 27 Aug 2026). This is a tagging error in
+  Shopify, not a judgement call, and it is the one clear-cut item in the list.
+- **Venue tables are 76.3% of the whole question.** Whatever is decided about
+  "Table 3" and "Terrace 5" decides this; everything else is rounding. Note
+  they STOP in February 2026 — same month the Odoo connector changed — so this
+  may already be historic rather than ongoing.
+- **Only 5.8% is unambiguous write-off.** The "Free of Charge Goods" case that
+  makes exclusion feel obvious is the smallest real category.
+
+Full per-account list with ids: run the query in this file's git history or
+re-derive from `shopify_customers` where `is_house_account`.
+
 ## Changed a previously reported figure
 
 - **The 2026 "stabilisation" is NOT a recovery.** App share of new customers
@@ -29,12 +68,9 @@ being built from scratch.
   from comparing two aggregates before order-level data existed; measured at
   25,197 of 153,827 live orders. The REVENUE half of that claim was right and
   is unchanged at 9.5%, as is the 84.4% assignable ceiling built on it.
-- **EVERY revenue figure on the dashboard moved: all-time 10,461,794 →
-  9,825,893 JOD, −635,901 (6.1%).** `fetchDailySales` now reads
-  `shopify_daily_sales_net`, which excludes the 73 house and staff accounts the
-  store tags `CUSTOMER_INTERNAL` or `CUSTOMER TYPE_Employee`. This is the
-  largest single change to displayed figures so far, and it is REVERSIBLE in
-  one line — see "The three August totals, reconciled".
+- **Revenue moved to 9,825,893 and is now back at 10,461,794.** The
+  house-account exclusion was applied and then REVERTED, because it was not
+  mine to decide. Every historical figure is as it was. See the section above.
 - **August total revenue 176,440.643 → 179,196.321 → 178,034.421.** Three
   numbers, one month, all explicable: the first was `shopify_daily_sales`
   before the nightly sync caught up on 29–30 August; the second is every

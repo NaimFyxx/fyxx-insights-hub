@@ -119,24 +119,20 @@ export async function fetchAllRows<T>(
  * One row per (date, sub_channel), so callers must aggregate rather than
  * assuming one row per day.
  *
- * Reads the DERIVED view, not the stored daily table. Three things follow,
- * all deliberate:
+ * Reads the STORED table, which INCLUDES house and staff accounts.
  *
- *   House and staff accounts are EXCLUDED, as they already are from every
- *   customer-level figure. The stored table has no customer dimension and so
- *   could not exclude them, which is exactly why the Overview and the
- *   acquisition page disagreed by 1,161.900 JOD for August 2026.
+ * `shopify_daily_sales_net` exists and would exclude them, would never be
+ * stale, and would net cancellations at read time. It was briefly wired up
+ * here and has been reverted, because switching it changes what "revenue"
+ * means — all-time 10,461,794 → 9,825,893 JOD, −635,901 across 73 accounts —
+ * and that is a business decision about whether venue tables and "By The
+ * Glass" are sales or internal transfers. It is Naim's to make, not one to
+ * arrive at as a side effect of fixing a page inconsistency.
  *
- *   It is never stale. The stored table is only as fresh as the last nightly
- *   sync, so the current and previous day read low until it runs.
- *
- *   Cancellations net at read time, so an order cancelled today corrects a
- *   figure from three years ago instead of leaving a total that only drifts up.
- *
- * This moved all-time revenue from 10,461,794 to 9,825,893 JOD — a drop of
- * 635,901 across 73 accounts the store itself tags CUSTOMER_INTERNAL or
- * CUSTOMER TYPE_Employee. To revert, change the table name back; nothing else
- * depends on which of the two is read.
+ * The known cost of staying here: the Overview total and the acquisition
+ * denominator differ by the house-account share of the period (1,161.900 JOD
+ * for August 2026). That gap is STATED on the acquisition page and in the
+ * report rather than hidden — see DENOMINATOR_NOTE in src/lib/acquisition.ts.
  */
 type DailySalesRaw = {
   [K in keyof DailySales]: DailySales[K] | null;
@@ -145,7 +141,7 @@ type DailySalesRaw = {
 export const fetchDailySales = async (r: DateRange): Promise<DailySales[]> => {
   const rows = await fetchAllRows<DailySalesRaw>((from, to) =>
     supabase
-      .from("shopify_daily_sales_net")
+      .from("shopify_daily_sales")
       .select(
         "date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values",
       )

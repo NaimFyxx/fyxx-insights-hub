@@ -1,4 +1,4 @@
-# Handoff — 30 August 2026 (later)
+# Handoff — 30 August 2026
 
 State for someone picking this up cold. Rewritten every turn. No transcripts.
 
@@ -9,6 +9,58 @@ The customer section EXISTS at `/customers` and is being extended; it is not
 being built from scratch.
 
 ---
+
+## Changed a previously reported figure
+
+- **The 2026 "stabilisation" is NOT a recovery.** App share of new customers
+  recovered to 48.4%, pushing mix-predicted repeat to 39.9%, its highest since
+  2020 — actual was 33.7%, a **-6.2 gap, the widest recorded**. The line held
+  flat only because mix gain offset continued within-channel decay. If mix
+  recovery stalls it resumes falling.
+- **Retention decline is real but smaller than the raw table showed.** Age-
+  normalised 90-day repeat: 55.8% (2019) to 33.7% (2026). The raw "ever
+  repeated" column runs 86.5% to 39.4% and reads as collapse.
+- **One-and-never-returned 42.7% → 37.9%**, after the sweep revealed 74.3% of
+  buyers first bought before 2025.
+- Standing: attribution August 37,615 → 28,260 (share 22.0% → 16.5%); Mobile
+  App influence 35.8% → 19.2%; Mobile App YoY +831.8% → +23.8%; birthday
+  rewards 0 → 131 in August; pending points 8.34% → 1.59%.
+- **"10.7% of orders have no customer" was wrong — it is 16.4%.** Estimated
+  from comparing two aggregates before order-level data existed; measured at
+  25,197 of 153,827 live orders. The REVENUE half of that claim was right and
+  is unchanged at 9.5%, as is the 84.4% assignable ceiling built on it.
+- **30 August: no figure changed.** The filter audit read code and found no
+  stored or displayed number to be wrong today. `DATA_TODAY` will make range
+  figures wrong from 1 September, which is a fault not yet expressed.
+- **Identity conflicts, house-account share 7.8% → 39.4%.** The first number
+  counted conflicts; the second weights them by orders (588 of 1,494), which is
+  the denominator that matters. Conflicts are very unequal in size and house
+  accounts carry the large ones. Counting understated it fivefold.
+
+## The 61% needs a caveat it did not have
+
+**61.0% is correct for August 2026 and safe to say. Comparing it to last
+year's ~45% is NOT.** Found while building the trend Naim asked for.
+
+The Odoo connector began requiring a customer on every POS order after
+27 February 2026. POS orders carrying no customer ran 42-50% through late 2025,
+spiked to 87.3% in March 2026, and have been ~0% since April. Unattributable
+revenue therefore left the denominator almost entirely, and the raw share
+jumped with it.
+
+| | Dec 2025 | Aug 2026 | Apparent rise |
+|---|---|---|---|
+| Share of ALL revenue (raw) | 44.1% | 61.0% | +16.9 pts |
+| Like-for-like share | 49.6% | 61.1% | **+11.5 pts** |
+
+**Roughly a third of the apparent rise is the denominator changing, not the
+business.** On a trailing year: like-for-like averages **50.9% across the 8
+months before the break and 60.2% across the 5 months since — +9.2 points.**
+
+That is still a real rise and still the argument Naim wants. It is just
+9 points, not 17. The trend panel leads with the break notice, prints both
+columns with the like-for-like one bold, and rules a line across the table at
+2026-04.
 
 ## Where things stand
 
@@ -22,92 +74,42 @@ LoyaltyLion history is imported (101,639 rows). Klaviyo attribution is netted
 of cancellations at read time. 19,163 customers carry first, second and last
 order dates, computed revenue, acquisition channel and loyalty enrolment.
 
-## Resolved
+## Next
 
-- **Identity table built.** 18,929 rows. 18,864 carry a LoyaltyLion id (99.7%),
-  6,649 a Klaviyo profile (35.1%), 6,584 both.
-  - **64 conflicts** over 20 months, tracked in `identity_snapshots` so the
-    RATE becomes visible. **The worst spans 5 Shopify customers and 171
-    orders**, mixing an employee (Yousef Mazahreh, 1,220 lifetime orders, house
-    account), a major real customer (Omar Khamash, 436 orders, 17,673 JOD) and
-    three companies with no email address. Those are not one person.
+1. **The filter fixes, then the verification pack** — both described under
+   "Waiting on a decision". These come first: everything else assumes the
+   dashboard can be trusted, and right now Naim does not trust it.
+2. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
+   Klaviyo trailing-90-day campaign re-fetch (one API call). Decided: poll now,
+   webhooks later.
+3. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
+   source. It carries `cancellation_status`, `total_refunded` and
+   `metadata.shopify_source_name`, so it is a third view of every order that is
+   not Shopify. Compare against what we hold and report where they disagree.
+   Agreement everywhere is itself a useful result.
+4. **Critical review of the whole dashboard and report** — once the queue is
+   empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
+   what exists because it was built rather than because it would be used.
+   **Include a three-way split of every number: MEASURED, INFERRED, and NEVER
+   CHALLENGED.** Two believed hypotheses have now been tested and both were
+   artefacts — the draft-order marketing-influence story and the enrolment
+   retention gap. Untested numbers deserve the same scepticism, and the third
+   category is where the next wrong belief is sitting.
 
-    **House accounts are 7.8% of conflicts but 39.4% of conflicted orders**
-    (588 of 1,494). Counting conflicts understates them fivefold, because
-    conflicts are wildly unequal in size and house accounts carry the large
-    ones. Four of the top five involve a house account and one is two house
-    accounts merged into each other. Separately, **26 of 64 (41%)** involve a
-    customer with **no email** — the case where Klaviyo has to fall back to
-    another identifier.
+## Open questions
 
-    Neither is a diagnosis. Top five with ids, for checking in Shopify:
-
-    | Klaviyo profile | Orders | Shopify customers |
-    |---|---|---|
-    | `01GSE2S2VR4ZG9ZQ7QVY75Q4DH` | 171 | 5320661500057 Yousef Mazahreh (1,220, **house**) · 6607593505015 Omar Muhammad Khamash (436) · 9381827117303 شركة جمع للمطاعم العالمة (6, no email) · 9121758085367 Jireas Sahawneh (4, no email) · 9079041917175 شركة الكميه للمطاعم السياحيه (4, no email) |
-    | `01J925FFSAAT36B9T86RCASXX9` | 148 | 8312268947703 Jireas Haddad (151) · 9208254726391 Mousa Sweiss (64, **house**) · 9079041917175 شركة الكميه (4, no email) |
-    | `01GSE3EEV7DWXF2TJPB8Y6ZPZB` | 146 | 6371814768887 Essa Gacaman (218, **house**) · 4535572037785 Caroline Zawaideh (6) |
-    | `01GSE3G85T6GJREFK148WMN86N` | 107 | 5028813242521 Shafiq Ghattas (253, **house**) · 6371814768887 Essa Gacaman (218, **house**) |
-    | `01GSE3H7RNQGKV5GAKZCKTB7KN` | 74 | 2826198843488 Fadi Afram (203) · 3663652094105 Mercedes Alonso (45) |
-
-    `9079041917175` appears in three separate conflicts. The last row is the
-    one with no house account and no missing email, so it is the cleanest
-    candidate for a genuine mis-merge.
-  - **The population split, on the Shopify side where six years exist** (19,090
-    real customers):
-
-    | | Customers | Note |
-    |---|---|---|
-    | never bought | **6,505** | 34% — on file, never ordered |
-    | lapsed before 2025 | **6,392** | 33% — **1,478,104 JOD lifetime**, 5,333 have an email, **2,878 already subscribed** |
-    | bought since 2025 | 6,193 | 32% |
-
-    The lapsed group is the actionable one: 2,878 of them are subscribed right
-    now, so they can be contacted today without asking anyone to opt in.
-
-    **The 9,892 Klaviyo figure CANNOT be split this way.** The Klaviyo link runs
-    through 2025+ orders, so a pre-2025-only buyer has no order to route
-    through. Splitting it needs an email join, which this project does not
-    store. The Shopify split above is the answerable version and covers a
-    different population — 19,090 customers against 17,358 Klaviyo contacts.
-  - Klaviyo linkage is 35.1% because the edge runs through orders and only
-    reaches people who have bought. That is the design, not a shortfall.
-
-- **Push clicks: closed question.** Report no longer says "under
-  investigation". Klaviyo emits opens and bounces for push and no click event,
-  so opens are the only push signal available to anyone.
-- **Webhooks and bulk operations decided**, both recorded in the README with
-  the reasoning rather than just the outcome.
-
-- **API capability sweep done**, recorded in the README with the date. Three
-  findings that change what is next:
-  - **Push clicks do not exist.** Klaviyo has `Opened Push` and `Bounced Push`
-    and NO push-click metric. The report says the zero is "under
-    investigation"; it should say Klaviyo does not emit the event.
-  - **Shopify webhooks are the right fix for retroactive changes**, better than
-    polling `updated_at`. `ORDERS_CANCELLED` fires however old the order. 225
-    topics, none registered, token has the scopes. Blocked on having nothing
-    listening — a Supabase Edge Function would be the home.
-  - **Shopify bulk operations** would replace the 11-minute sweeps with one
-    job, but starting one is a mutation and `assertReadOnly` blocks all
-    mutations by standing instruction. Needs a decision, not an assumption.
-
-- **Enrolment before/after test done** — result inverts the cross-sectional
-  finding. See the enrolment section above.
-
-- **Customer section COMPLETE.** The cohort panel now states that the flat
-  section is two opposing forces cancelling, not a recovery. Enrolment is a
-  first-class retention dimension with its correlational caveat inline.
-- **`scripts/lib/edit.mjs`** makes the edit assertion structural.
-
-- 2,400 ghost customer rows deleted. `shopify_customers` is back to 19,163 with
-  zero rows lacking `customer_created_at`. `loyalty-join.mjs` is UPDATE-only and
-  verified: 2,401 LoyaltyLion customers with no Shopify counterpart skipped.
-- **POS capture is a tracked monthly metric** on `/customers`, framed as a
-  policy question with a price rather than a compliance failure, with the
-  27 Feb 2026 series break shown as a row in the table rather than the series
-  silently stopping.
-- **Smile.io export inspected and NOT imported.** Read in place, never copied.
+1. **4% population gap** (19,163 vs a ShopifyQL export's 20,019) — no orphans
+   found, cause unknown, parked.
+2. **Live API sources for activities and transactions** — decided yes, unbuilt.
+   `/v2/rewards` genuinely does not exist, so that import stays.
+3. **Enrolment before/after test — FEASIBLE.** `enrolled_at` is present on
+   every enrolled customer (79 of 79 sampled). Comparing a customer's order
+   rate before and after their own enrolment is a within-customer comparison
+   and much stronger than the cross-sectional split. It needs order dates
+   relative to enrolment, which is one sweep storing counts either side.
+   **It still would not be causal**: enrolment usually happens AT a purchase,
+   so the "after" window begins at a moment of demonstrated engagement, which
+   biases toward showing improvement. Worth doing, worth labelling.
 
 ## Refund without cancellation — #164665, and why nothing needs fixing
 
@@ -241,32 +243,7 @@ historical figure. That is Naim's call, not a change to make quietly. The
 question is whether venue tables and "By The Glass" are sales or internal
 transfers; "Free of Charge Goods" clearly is not.
 
-## READ THIS FIRST — the 61% needs a caveat it did not have
-
-**61.0% is correct for August 2026 and safe to say. Comparing it to last
-year's ~45% is NOT.** Found while building the trend Naim asked for.
-
-The Odoo connector began requiring a customer on every POS order after
-27 February 2026. POS orders carrying no customer ran 42-50% through late 2025,
-spiked to 87.3% in March 2026, and have been ~0% since April. Unattributable
-revenue therefore left the denominator almost entirely, and the raw share
-jumped with it.
-
-| | Dec 2025 | Aug 2026 | Apparent rise |
-|---|---|---|---|
-| Share of ALL revenue (raw) | 44.1% | 61.0% | +16.9 pts |
-| Like-for-like share | 49.6% | 61.1% | **+11.5 pts** |
-
-**Roughly a third of the apparent rise is the denominator changing, not the
-business.** On a trailing year: like-for-like averages **50.9% across the 8
-months before the break and 60.2% across the 5 months since — +9.2 points.**
-
-That is still a real rise and still the argument Naim wants. It is just
-9 points, not 17. The trend panel leads with the break notice, prints both
-columns with the like-for-like one bold, and rules a line across the table at
-2026-04.
-
-## Done this turn
+## Built, in order
 
 **The 61% now appears in three places, as asked.** Overview (headline block
 above the channel figures, linking to the detail), `/acquisition` (full trend),
@@ -376,32 +353,6 @@ nothing on screen, so it ran alongside the filter work rather than ahead of it.
 At last check 80,000 of ~154,000 rows, **zero Unknown channels**, 10,550 with
 no customer, 5,845 cancelled (stored, not skipped). When it finishes, items 1
 and 2 of the acquisition-channel request become buildable.
-
-## Waiting on a decision
-
-**Nothing.** The filter fix list below is DONE; kept for the record of what was
-proposed and why.
-
-**The filter fix list.** A correctness pass over every page and figure is
-written up in `FILTERS.md` — which range filter each uses, which channel
-filter, and whether it should. Nothing has been CHANGED in the frontend yet,
-deliberately: Naim asked to see broken separated from by-design before code
-moved, because the complaint was "I can't tell which is which".
-
-Proposed, awaiting a yes or a narrower yes:
-
-- **A1–A3** — mechanical: real clock instead of the frozen one, `refreshKey`
-  into four query keys, Export page following the range.
-- **D1–D3** — error states, so a failed query stops rendering as a finding.
-- **C** — captions on the pages that correctly ignore the date range, saying so.
-
-**The verification pack is gated behind this** — an August 2026 spreadsheet,
-one sheet per section (Shopify revenue and orders by channel by day, campaigns,
-flows, push, loyalty snapshot, customer counts), totallable in Excel against
-Shopify admin, Klaviyo and LoyaltyLion directly. Requirement worth preserving:
-**where a figure cannot be checked against a source, the sheet must say so.**
-That is as useful as the ones that can. The point is not bug-hunting; it is
-Naim rebuilding first-hand confidence rather than taking figures on trust.
 
 ## Acquisition channel vs order channel — feasibility, answered
 
@@ -526,33 +477,6 @@ filter it should ignore**, because the channel bar is rendered only by the page
 that reads it; and **`sub_channel` holds exactly four values with no nulls**, so
 the toggles are exhaustive and all four selected does equal the total.
 
-## Changed a previously reported figure
-
-- **The 2026 "stabilisation" is NOT a recovery.** App share of new customers
-  recovered to 48.4%, pushing mix-predicted repeat to 39.9%, its highest since
-  2020 — actual was 33.7%, a **-6.2 gap, the widest recorded**. The line held
-  flat only because mix gain offset continued within-channel decay. If mix
-  recovery stalls it resumes falling.
-- **Retention decline is real but smaller than the raw table showed.** Age-
-  normalised 90-day repeat: 55.8% (2019) to 33.7% (2026). The raw "ever
-  repeated" column runs 86.5% to 39.4% and reads as collapse.
-- **One-and-never-returned 42.7% → 37.9%**, after the sweep revealed 74.3% of
-  buyers first bought before 2025.
-- Standing: attribution August 37,615 → 28,260 (share 22.0% → 16.5%); Mobile
-  App influence 35.8% → 19.2%; Mobile App YoY +831.8% → +23.8%; birthday
-  rewards 0 → 131 in August; pending points 8.34% → 1.59%.
-- **"10.7% of orders have no customer" was wrong — it is 16.4%.** Estimated
-  from comparing two aggregates before order-level data existed; measured at
-  25,197 of 153,827 live orders. The REVENUE half of that claim was right and
-  is unchanged at 9.5%, as is the 84.4% assignable ceiling built on it.
-- **30 August: no figure changed.** The filter audit read code and found no
-  stored or displayed number to be wrong today. `DATA_TODAY` will make range
-  figures wrong from 1 September, which is a fault not yet expressed.
-- **Identity conflicts, house-account share 7.8% → 39.4%.** The first number
-  counted conflicts; the second weights them by orders (588 of 1,494), which is
-  the denominator that matters. Conflicts are very unequal in size and house
-  accounts carry the large ones. Counting understated it fivefold.
-
 ## The customer picture
 
 **Headlines** — 37.9% bought once and never returned; top 1% of buyers take
@@ -659,6 +583,93 @@ Workable list 2,884 never opted in, NOT the 1,362 who opted out. Priority 85
 customers, 324,901 JOD. **SMS: 5,427 buyers reachable only by SMS**,
 2,391,700 JOD, against 572 subscribers.
 
+## Resolved
+
+- **Identity table built.** 18,929 rows. 18,864 carry a LoyaltyLion id (99.7%),
+  6,649 a Klaviyo profile (35.1%), 6,584 both.
+  - **64 conflicts** over 20 months, tracked in `identity_snapshots` so the
+    RATE becomes visible. **The worst spans 5 Shopify customers and 171
+    orders**, mixing an employee (Yousef Mazahreh, 1,220 lifetime orders, house
+    account), a major real customer (Omar Khamash, 436 orders, 17,673 JOD) and
+    three companies with no email address. Those are not one person.
+
+    **House accounts are 7.8% of conflicts but 39.4% of conflicted orders**
+    (588 of 1,494). Counting conflicts understates them fivefold, because
+    conflicts are wildly unequal in size and house accounts carry the large
+    ones. Four of the top five involve a house account and one is two house
+    accounts merged into each other. Separately, **26 of 64 (41%)** involve a
+    customer with **no email** — the case where Klaviyo has to fall back to
+    another identifier.
+
+    Neither is a diagnosis. Top five with ids, for checking in Shopify:
+
+    | Klaviyo profile | Orders | Shopify customers |
+    |---|---|---|
+    | `01GSE2S2VR4ZG9ZQ7QVY75Q4DH` | 171 | 5320661500057 Yousef Mazahreh (1,220, **house**) · 6607593505015 Omar Muhammad Khamash (436) · 9381827117303 شركة جمع للمطاعم العالمة (6, no email) · 9121758085367 Jireas Sahawneh (4, no email) · 9079041917175 شركة الكميه للمطاعم السياحيه (4, no email) |
+    | `01J925FFSAAT36B9T86RCASXX9` | 148 | 8312268947703 Jireas Haddad (151) · 9208254726391 Mousa Sweiss (64, **house**) · 9079041917175 شركة الكميه (4, no email) |
+    | `01GSE3EEV7DWXF2TJPB8Y6ZPZB` | 146 | 6371814768887 Essa Gacaman (218, **house**) · 4535572037785 Caroline Zawaideh (6) |
+    | `01GSE3G85T6GJREFK148WMN86N` | 107 | 5028813242521 Shafiq Ghattas (253, **house**) · 6371814768887 Essa Gacaman (218, **house**) |
+    | `01GSE3H7RNQGKV5GAKZCKTB7KN` | 74 | 2826198843488 Fadi Afram (203) · 3663652094105 Mercedes Alonso (45) |
+
+    `9079041917175` appears in three separate conflicts. The last row is the
+    one with no house account and no missing email, so it is the cleanest
+    candidate for a genuine mis-merge.
+  - **The population split, on the Shopify side where six years exist** (19,090
+    real customers):
+
+    | | Customers | Note |
+    |---|---|---|
+    | never bought | **6,505** | 34% — on file, never ordered |
+    | lapsed before 2025 | **6,392** | 33% — **1,478,104 JOD lifetime**, 5,333 have an email, **2,878 already subscribed** |
+    | bought since 2025 | 6,193 | 32% |
+
+    The lapsed group is the actionable one: 2,878 of them are subscribed right
+    now, so they can be contacted today without asking anyone to opt in.
+
+    **The 9,892 Klaviyo figure CANNOT be split this way.** The Klaviyo link runs
+    through 2025+ orders, so a pre-2025-only buyer has no order to route
+    through. Splitting it needs an email join, which this project does not
+    store. The Shopify split above is the answerable version and covers a
+    different population — 19,090 customers against 17,358 Klaviyo contacts.
+  - Klaviyo linkage is 35.1% because the edge runs through orders and only
+    reaches people who have bought. That is the design, not a shortfall.
+
+- **Push clicks: closed question.** Report no longer says "under
+  investigation". Klaviyo emits opens and bounces for push and no click event,
+  so opens are the only push signal available to anyone.
+- **Webhooks and bulk operations decided**, both recorded in the README with
+  the reasoning rather than just the outcome.
+
+- **API capability sweep done**, recorded in the README with the date. Three
+  findings that change what is next:
+  - **Push clicks do not exist.** Klaviyo has `Opened Push` and `Bounced Push`
+    and NO push-click metric. The report says the zero is "under
+    investigation"; it should say Klaviyo does not emit the event.
+  - **Shopify webhooks are the right fix for retroactive changes**, better than
+    polling `updated_at`. `ORDERS_CANCELLED` fires however old the order. 225
+    topics, none registered, token has the scopes. Blocked on having nothing
+    listening — a Supabase Edge Function would be the home.
+  - **Shopify bulk operations** would replace the 11-minute sweeps with one
+    job, but starting one is a mutation and `assertReadOnly` blocks all
+    mutations by standing instruction. Needs a decision, not an assumption.
+
+- **Enrolment before/after test done** — result inverts the cross-sectional
+  finding. See the enrolment section above.
+
+- **Customer section COMPLETE.** The cohort panel now states that the flat
+  section is two opposing forces cancelling, not a recovery. Enrolment is a
+  first-class retention dimension with its correlational caveat inline.
+- **`scripts/lib/edit.mjs`** makes the edit assertion structural.
+
+- 2,400 ghost customer rows deleted. `shopify_customers` is back to 19,163 with
+  zero rows lacking `customer_created_at`. `loyalty-join.mjs` is UPDATE-only and
+  verified: 2,401 LoyaltyLion customers with no Shopify counterpart skipped.
+- **POS capture is a tracked monthly metric** on `/customers`, framed as a
+  policy question with a price rather than a compliance failure, with the
+  27 Feb 2026 series break shown as a row in the table rather than the series
+  silently stopping.
+- **Smile.io export inspected and NOT imported.** Read in place, never copied.
+
 ## Smile.io export — read, not imported
 
 `/Users/fyxx/Downloads/Project_Smile.io Old Loyalty Program Back Up Data`.
@@ -699,39 +710,28 @@ programme, tiers and point values.
 - **`numberOfOrders` includes cancelled orders.** Verified 808 of 808.
 - Five distinct data start dates. Query `data_coverage`, never a constant.
 
-## Open questions
+## Historic — the filter fix list, as proposed
 
-1. **4% population gap** (19,163 vs a ShopifyQL export's 20,019) — no orphans
-   found, cause unknown, parked.
-2. **Live API sources for activities and transactions** — decided yes, unbuilt.
-   `/v2/rewards` genuinely does not exist, so that import stays.
-3. **Enrolment before/after test — FEASIBLE.** `enrolled_at` is present on
-   every enrolled customer (79 of 79 sampled). Comparing a customer's order
-   rate before and after their own enrolment is a within-customer comparison
-   and much stronger than the cross-sectional split. It needs order dates
-   relative to enrolment, which is one sweep storing counts either side.
-   **It still would not be causal**: enrolment usually happens AT a purchase,
-   so the "after" window begins at a moment of demonstrated engagement, which
-   biases toward showing improvement. Worth doing, worth labelling.
+Nothing here is outstanding. Kept only as the record of what was proposed and
+why, and of the sequencing Naim asked for.
 
-## Next
+**The filter fix list.** A correctness pass over every page and figure is
+written up in `FILTERS.md` — which range filter each uses, which channel
+filter, and whether it should. Nothing has been CHANGED in the frontend yet,
+deliberately: Naim asked to see broken separated from by-design before code
+moved, because the complaint was "I can't tell which is which".
 
-1. **The filter fixes, then the verification pack** — both described under
-   "Waiting on a decision". These come first: everything else assumes the
-   dashboard can be trusted, and right now Naim does not trust it.
-2. **Retroactive-change fixes**: the `updated_at`-driven Shopify repair and the
-   Klaviyo trailing-90-day campaign re-fetch (one API call). Decided: poll now,
-   webhooks later.
-3. **`/v2/orders` on LoyaltyLion** — a VERIFICATION exercise, not a data
-   source. It carries `cancellation_status`, `total_refunded` and
-   `metadata.shopify_source_name`, so it is a third view of every order that is
-   not Shopify. Compare against what we hold and report where they disagree.
-   Agreement everywhere is itself a useful result.
-4. **Critical review of the whole dashboard and report** — once the queue is
-   empty. Not bugs: what is thin, what would mislead a tired reader at 8am,
-   what exists because it was built rather than because it would be used.
-   **Include a three-way split of every number: MEASURED, INFERRED, and NEVER
-   CHALLENGED.** Two believed hypotheses have now been tested and both were
-   artefacts — the draft-order marketing-influence story and the enrolment
-   retention gap. Untested numbers deserve the same scepticism, and the third
-   category is where the next wrong belief is sitting.
+Proposed, awaiting a yes or a narrower yes:
+
+- **A1–A3** — mechanical: real clock instead of the frozen one, `refreshKey`
+  into four query keys, Export page following the range.
+- **D1–D3** — error states, so a failed query stops rendering as a finding.
+- **C** — captions on the pages that correctly ignore the date range, saying so.
+
+**The verification pack is gated behind this** — an August 2026 spreadsheet,
+one sheet per section (Shopify revenue and orders by channel by day, campaigns,
+flows, push, loyalty snapshot, customer counts), totallable in Excel against
+Shopify admin, Klaviyo and LoyaltyLion directly. Requirement worth preserving:
+**where a figure cannot be checked against a source, the sheet must say so.**
+That is as useful as the ones that can. The point is not bug-hunting; it is
+Naim rebuilding first-hand confidence rather than taking figures on trust.

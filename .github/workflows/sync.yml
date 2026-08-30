@@ -116,6 +116,33 @@ jobs:
           node scripts/sync.mjs "${args[@]}" 2>&1 | tee sync-output.txt
 
       # ---------------------------------------------------------------------
+      # Retroactive-change repair.
+      #
+      # The sync above searches Shopify by CREATED date, so it structurally
+      # cannot see a change to an older order. An order placed on the 21st and
+      # cancelled on the 30th is never re-read and its revenue stays on the
+      # books forever — not seen late, never seen.
+      #
+      # Measured against a real cancellation batch on 30 August 2026: ten
+      # orders cancelled worth 1,400.750 JOD plus two silent revenue edits,
+      # a net -1,339.400 JOD (-1.55%) over a trailing fortnight. The oldest was
+      # nine days old and the largest single one.
+      #
+      # This re-reads by UPDATED date instead, which catches all of it. Thirty
+      # days of updates is ~3,700 orders and 15 seconds, against 163,000 and
+      # fourteen minutes for a full sweep, so it runs every night rather than
+      # waiting for someone to notice a number drifting.
+      # ---------------------------------------------------------------------
+      - name: Repair retroactive changes (cancellations, refunds, edits)
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN || 'drynksapp.myshopify.com' }}
+        run: node scripts/sync-orders.mjs --repair 30 --write
+
+      # ---------------------------------------------------------------------
       # Backfill continuation.
       #
       # Klaviyo allows 225 values-report calls a day, so a 600-day backfill

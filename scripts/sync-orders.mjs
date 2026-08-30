@@ -42,13 +42,48 @@ const TO = argOf("--to", new Date().toLocaleDateString("en-CA", { timeZone: "Asi
 const WRITE = args.includes("--write");
 const BATCH = 2000;
 
+/**
+ * THE REPAIR. `--repair N` fetches orders UPDATED in the last N days, whenever
+ * they were created.
+ *
+ * The ordinary sweep searches by created_at, so it structurally cannot see a
+ * change to an older order. An order placed on the 21st and cancelled on the
+ * 30th is never re-read, and its revenue stays on the books forever.
+ *
+ * Measured on 30 August 2026 against a real cancellation batch: 10 orders
+ * cancelled, worth 1,400.750 JOD, plus two silent revenue edits worth 156.000.
+ * Net drift over a trailing fortnight was -1,339.400 JOD, or -1.55%. One of the
+ * ten was nine days old and the single largest at 674.250 JOD, so a window
+ * shorter than the oldest cancellation silently leaves money on the books.
+ *
+ * 30 days is the default because it comfortably covers a weekly cancellation
+ * habit with three weeks of margin. It is cheap: a month of updates is a few
+ * hundred orders, not the 163,584 a full sweep re-reads.
+ */
+const REPAIR_DAYS = args.includes("--repair") ? Number(argOf("--repair", 30)) : null;
+if (REPAIR_DAYS !== null && (!Number.isFinite(REPAIR_DAYS) || REPAIR_DAYS <= 0)) {
+  throw new Error(`--repair needs a positive number of days, got "${argOf("--repair", "")}"`);
+}
+
 const ammanDay = (iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
 const n0 = (v) => Math.round(v).toLocaleString("en-US");
 
-const Q = `query($q:String!,$cursor:String){ orders(first:250, after:$cursor, query:$q, sortKey:CREATED_AT){
+// sortKey follows the field being filtered. Sorting by CREATED_AT while
+// filtering on updated_at still paginates correctly, but UPDATED_AT keeps the
+// cursor walking the same axis as the filter, which is what Shopify optimises.
+const SORT = REPAIR_DAYS === null ? "CREATED_AT" : "UPDATED_AT";
+const Q = `query($q:String!,$cursor:String){ orders(first:250, after:$cursor, query:$q, sortKey:${SORT}){
   pageInfo{hasNextPage endCursor}
   nodes{ id createdAt cancelledAt sourceName customer{id}
          currentTotalPriceSet{shopMoney{amount}} } } }`;
+
+const searchQuery = () => {
+  if (REPAIR_DAYS === null) {
+    return `created_at:>='${FROM}T00:00:00+03:00' created_at:<='${TO}T23:59:59+03:00'`;
+  }
+  const since = new Date(Date.now() - REPAIR_DAYS * 86_400_000).toISOString();
+  return `updated_at:>='${since}'`;
+};
 
 let cursor = null, pages = 0, scanned = 0, written = 0;
 let cancelled = 0, noCustomer = 0, unknownChannel = 0;
@@ -61,10 +96,14 @@ const flush = async (force = false) => {
   batch = [];
 };
 
+if (REPAIR_DAYS !== null) {
+  log.info(`REPAIR mode: orders UPDATED in the last ${REPAIR_DAYS} days, whenever created`);
+}
+
 do {
   const d = await gql(
     Q,
-    { q: `created_at:>='${FROM}T00:00:00+03:00' created_at:<='${TO}T23:59:59+03:00'`, cursor },
+    { q: searchQuery(), cursor },
     `orders page ${pages + 1}`,
   );
   for (const o of d.orders.nodes ?? []) {

@@ -109,6 +109,41 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
   silently stopping.
 - **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
+## Drift: measured, not estimated — and repaired
+
+A real cancellation batch on 30 August 2026 was measured against a baseline
+taken beforehand. `scripts/drift-check.mjs`, baseline in
+`drift-baseline-2026-08-30.json`.
+
+**Net drift over the trailing fortnight: −1,339.400 JOD, −1.55%.** Composition:
+
+| | JOD |
+|---|---|
+| 10 orders cancelled after we stored them | −1,400.750 |
+| 2 silent revenue edits, no cancellation (156→140, 140→0) | −156.000 |
+| 3 orders in Shopify we had never stored | +217.350 |
+| **Net** | **−1,339.400** |
+
+**The export Naim sent understated his own batch.** It listed 10 orders, but 2
+of those (#164582, #164604) were cancelled on the 28th and we already had them.
+Meanwhile 2 orders NOT in the export were cancelled in the same minute-wide
+window: **#164048 (674.250 JOD, cancelled 9 days after the order) and #164499
+(245.000 JOD)**. Those two are **919.250 JOD — 66% of the cancellation value**.
+The CSV was presumably filtered by created-date and missed the older ones.
+
+**Only 1 of 10 was more than 3 days old, and it was the largest.** So a repair
+window sized to "most cancellations" would have caught nine orders and left
+half the money behind.
+
+**REPAIRED.** `scripts/sync-orders.mjs --repair N` fetches orders UPDATED in
+the last N days, whenever created, and upserts them. Run at 30 days it read
+3,711 orders in 15 pages and 15 seconds, against 163,584 orders and 14 minutes
+for a full sweep. After running it, `drift-check --compare` reports a gap of
+**0.000 JOD (0.00%)**. That is the pass condition, and it passes.
+
+**Wired into the nightly job**, not left as a manual step — `.github/workflows/
+sync.yml`, after the main sync, skipped on dry runs. YAML validated.
+
 ## The three August totals, reconciled
 
 Naim found three figures in circulation. All three are now explained, and one

@@ -19,7 +19,7 @@ import {
 } from "@/lib/queries";
 import { previousRange, settledOnly, rangeIncludesToday } from "@/lib/ranges";
 import { deltaPct, jod, num, pct } from "@/lib/format";
-import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { ExcludesHouseAccounts, QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { attributionLimitNote, SUB_CHANNELS, describeChannels } from "@/lib/channels";
 import { ChannelBar } from "@/components/layout/ChannelBar";
 import { ConcentrationNotice } from "@/components/fyxx/ConcentrationNotice";
@@ -310,6 +310,7 @@ function OverviewPage() {
         {attributionLimitNote(channels) ? (
           <p className="mb-3 text-xs text-muted-foreground">{attributionLimitNote(channels)}</p>
         ) : null}
+        <ExcludesHouseAccounts className="mb-3" />
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <StatTile
             label="Revenue"

@@ -119,20 +119,25 @@ export async function fetchAllRows<T>(
  * One row per (date, sub_channel), so callers must aggregate rather than
  * assuming one row per day.
  *
- * Reads the STORED table, which INCLUDES house and staff accounts.
+ * Reads the DERIVED view, which EXCLUDES internal accounts.
  *
- * `shopify_daily_sales_net` exists and would exclude them, would never be
- * stale, and would net cancellations at read time. It was briefly wired up
- * here and has been reverted, because switching it changes what "revenue"
- * means — all-time 10,461,794 → 9,825,893 JOD, −635,901 across 73 accounts —
- * and that is a business decision about whether venue tables and "By The
- * Glass" are sales or internal transfers. It is Naim's to make, not one to
- * arrive at as a side effect of fixing a page inconsistency.
+ * Naim's decision, 30 August 2026, after seeing the 635,901 JOD broken down by
+ * account: exclude all of them — venue tables, By The Glass, terraces,
+ * write-offs, events and named staff. Nothing about them is
+ * customer-attributable and their sales have no use in this dashboard.
  *
- * The known cost of staying here: the Overview total and the acquisition
- * denominator differ by the house-account share of the period (1,161.900 JOD
- * for August 2026). That gap is STATED on the acquisition page and in the
- * report rather than hidden — see DENOMINATOR_NOTE in src/lib/acquisition.ts.
+ * Two accounts are EXEMPT and count as ordinary revenue: Talabat and Careem
+ * are tagged CUSTOMER_INTERNAL but are third-party delivery, real sales to
+ * real customers. See the excluded_accounts view for the full definition.
+ *
+ * Three consequences, all intended:
+ *   - all-time revenue is 9,832,449 rather than 10,460,454
+ *   - the figure is never stale; the stored table lags the nightly sync
+ *   - cancellations net at READ time, so a cancellation corrects old figures
+ *
+ * The exclusion is VISIBLE, not just applied: /excluded lists every account,
+ * and every revenue figure carries a line linking to it. An exclusion nobody
+ * can see is indistinguishable from a wrong number.
  */
 type DailySalesRaw = {
   [K in keyof DailySales]: DailySales[K] | null;
@@ -141,7 +146,7 @@ type DailySalesRaw = {
 export const fetchDailySales = async (r: DateRange): Promise<DailySales[]> => {
   const rows = await fetchAllRows<DailySalesRaw>((from, to) =>
     supabase
-      .from("shopify_daily_sales")
+      .from("shopify_daily_sales_net")
       .select(
         "date,total_online_revenue_jod,orders,source_name,sub_channel,channel,top_order_values",
       )

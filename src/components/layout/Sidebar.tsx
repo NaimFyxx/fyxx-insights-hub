@@ -13,6 +13,7 @@ const NAV = [
   { to: "/activations", label: "Activations" },
   { to: "/export", label: "Export report" },
   { to: "/health", label: "Sync health" },
+  { to: "/excluded", label: "What is excluded" },
 ] as const;
 
 export function Sidebar() {

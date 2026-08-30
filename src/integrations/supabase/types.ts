@@ -530,6 +530,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      shopify_orders: {
+        Row: {
+          cancelled_at: string | null;
+          order_id: string;
+          ordered_at: string;
+          ordered_on: string;
+          revenue_jod: number;
+          shopify_customer_id: string | null;
+          source_name: string | null;
+          sub_channel: string;
+          synced_at: string;
+        };
+        Insert: {
+          cancelled_at?: string | null;
+          order_id: string;
+          ordered_at: string;
+          ordered_on: string;
+          revenue_jod?: number;
+          shopify_customer_id?: string | null;
+          source_name?: string | null;
+          sub_channel: string;
+          synced_at?: string;
+        };
+        Update: {
+          cancelled_at?: string | null;
+          order_id?: string;
+          ordered_at?: string;
+          ordered_on?: string;
+          revenue_jod?: number;
+          shopify_customer_id?: string | null;
+          source_name?: string | null;
+          sub_channel?: string;
+          synced_at?: string;
+        };
+        Relationships: [];
+      };
       shopify_daily_sales: {
         Row: {
           channel: string;
@@ -656,6 +692,16 @@ export type Database = {
           rows: number | null;
           covers_from: string | null;
           covers_to: string | null;
+        };
+        Relationships: [];
+      };
+      excluded_accounts: {
+        Row: {
+          category: string | null;
+          classified_by: string | null;
+          display_name: string | null;
+          shopify_customer_id: string | null;
+          tags: string[] | null;
         };
         Relationships: [];
       };

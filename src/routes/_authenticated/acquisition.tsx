@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
+import { ExcludesHouseAccounts, QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td } from "@/components/fyxx/data-table";
 import { useDateRange } from "@/context/date-range-context";
 import {
@@ -101,6 +101,7 @@ function AcquisitionPage() {
       <p className="border-l-2 border-foreground bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
         ⚠️ {coverageNote(h)}
       </p>
+      <ExcludesHouseAccounts />
       <p className="border-l-2 border-border bg-secondary/40 px-4 py-2 text-xs text-muted-foreground">
         {DENOMINATOR_NOTE}
       </p>

@@ -99,3 +99,23 @@ export function QueryFailed({ error }: { error: unknown }) {
     </div>
   );
 }
+
+/**
+ * The line that sits on every revenue figure.
+ *
+ * Not a README footnote: Naim's point is that an exclusion nobody can see is
+ * indistinguishable from a wrong number, and this dashboard's revenue is ~6%
+ * below Shopify's own total. Anyone comparing the two needs to meet that fact
+ * at the figure, not go looking for it.
+ */
+export function ExcludesHouseAccounts({ className = "" }: { className?: string }) {
+  return (
+    <p className={`text-xs text-muted-foreground ${className}`}>
+      Revenue excludes internal accounts — venue tables, staff and write-offs.{" "}
+      <a href="/excluded" className="underline">
+        See what is excluded
+      </a>
+      .
+    </p>
+  );
+}

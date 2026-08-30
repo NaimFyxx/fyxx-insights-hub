@@ -32,6 +32,43 @@ Do not build API integrations, scheduled jobs, or edge functions. Keep component
 
 This project was built with [Lovable](https://lovable.dev).
 
+## Why revenue here is ~6% below Shopify's own total
+
+Every revenue figure on this dashboard **excludes internal accounts**: venue
+tables, terraces, "By The Glass", write-offs and freebies, event accounts, and
+named staff. 71 accounts, 628,005 JOD across six years. Nothing about them is
+attributable to a customer and none of it is useful for marketing.
+
+The full list is at **/excluded** in the app — every account by name and tag,
+its order count, its revenue, and when it last ordered. Do not re-derive it
+from this file; the app reads the `excluded_accounts` view, which is the single
+definition all the netted views share.
+
+**Two accounts are deliberately NOT excluded despite carrying
+`CUSTOMER_INTERNAL`:** Talabat and Careem. They are third-party delivery —
+real sales to real customers. The tag is a Shopify-side error being corrected;
+once it is, they will fall out of the exemption on their own.
+
+### The venue series stops in February 2026, and nothing is broken
+
+**B2B and venue orders have moved to Odoo and no longer sync to Shopify.** That
+is why every table and terrace account tails off in February 2026 and why the
+excluded total drops to almost nothing after it. Someone looking at that series
+will reasonably think a sync failed. It did not — the orders stopped arriving
+because they are placed in a different system now.
+
+This makes the exclusion **historical cleanup, not an ongoing rule**. Only a
+handful of named staff accounts still place orders through Shopify. If the
+excluded total for a recent month is near zero, that is correct.
+
+### Nine days disappear from the daily series
+
+2020-01-26, 2020-02-09, 2020-02-17, 2020-02-27, 2020-03-07, 2021-05-04,
+2021-05-07, 2022-04-12 and 2022-04-22 have no row in `shopify_daily_sales_net`.
+On each of those days every order was either cancelled or belonged to an
+internal account — 679.75 JOD in total across six years, and **zero
+non-internal orders lost**. A gap on those dates is correct, not missing data.
+
 ## Build with Lovable
 
 Continue developing this project in the [Lovable editor](https://lovable.dev/projects/95ce5edc-4b08-4c0b-9419-beeeb0fc0b55).

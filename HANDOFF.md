@@ -109,6 +109,44 @@ order dates, computed revenue, acquisition channel and loyalty enrolment.
   silently stopping.
 - **Smile.io export inspected and NOT imported.** Read in place, never copied.
 
+## Refund without cancellation — #164665, and why nothing needs fixing
+
+Checked directly against Shopify rather than taken on either agent's word.
+
+**#164665 (`7936312180983`, Alaa Al Khatib)** — `cancelledAt` is genuinely
+null. Financial status REFUNDED, fulfillment FULFILLED, original total 140.0,
+**currentTotal 0.0**, totalRefunded 140.0. So it is a completed order that was
+fulfilled and then fully refunded, never formally cancelled. The other
+session's diagnosis is correct on this point.
+
+**Our figures are already right, and no Shopify surgery is needed.** We store
+`currentTotalPriceSet`, which nets refunds, so this order contributes **0 JOD**
+to every revenue figure. Cancelling it in Shopify or adding a
+`status:cancelled` tag would not move a single dashboard number. Both were
+suggested as fixes; neither is one, for our purposes. Whether it should appear
+in Shopify's own cancelled-orders filter is a Shopify UI question, separate
+from whether our revenue is correct.
+
+**One detail from the other session is wrong.** It attributed the 16 JOD
+discount edit to #164665. That edit was on **#164664** (`7936289308919`) — same
+customer, created 7 minutes earlier, still PAID with currentTotal **140.0** and
+zero refunded. These are two distinct orders that both now read 140:
+
+| | #164664 | #164665 |
+|---|---|---|
+| status | PAID | REFUNDED |
+| original → current | 156 → 140 (edited) | 140 → 0 (refunded) |
+| contributes to revenue | 140 JOD | 0 JOD |
+
+The drift check caught them as two separate rows for exactly this reason, and
+its "revenue changed without cancellation" category exists for this case.
+
+**Small open item for the critical review.** An order refunded to zero still
+counts as an ORDER. In August that is 15 orders, 0.68% of the 2,218 live ones,
+moving AOV from 80.734 to 80.188 — a 0.55 JOD difference. Revenue is
+unambiguously right; whether a fully refunded order should count in the order
+COUNT is a definitional choice, currently made in favour of counting it.
+
 ## Drift: measured, not estimated — and repaired
 
 A real cancellation batch on 30 August 2026 was measured against a baseline

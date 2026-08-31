@@ -27,6 +27,53 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## /v2/orders verification — DONE, and it found something in both directions
+
+`scripts/diagnose/verify-loyaltylion-orders.mjs [--days 30]`. Read-only.
+LoyaltyLion ingests orders through its OWN Shopify integration, so this is the
+only check available that does not derive from our own sweep.
+
+**2,381 orders compared over 30 days. LoyaltyLion sees 99.67% of ours.**
+
+**CHANNEL: no disagreement, on any order.** Every
+`metadata.shopify_source_name` maps to the same sub_channel we stored. This is
+the result worth having: the +831.8% Mobile App error was a source-mapping
+fault, and no internal check could ever have caught it because every internal
+figure derived from the same mapping. **SOURCE_MAP is now independently
+confirmed** rather than merely self-consistent.
+
+**Two order-level disagreements, and Shopify was asked to arbitrate. One each
+way:**
+
+| Order | Shopify says | We said | LoyaltyLion said | Verdict |
+|---|---|---|---|---|
+| #164700 `7937149960439` | cancelled 30 Aug 13:07, current 0.0 | live, 32.200 | cancelled | **we were stale** — our sweep ran 29 Aug 23:29, before the cancellation |
+| #163417 `7894644556023` | cancelled 16 Aug 10:06, current 0.0 | cancelled, 0 | **not_cancelled, 42.000** | **LoyaltyLion is wrong** |
+
+Running `--repair 30` cleared ours. The remaining disagreement is
+LoyaltyLion's: it has been carrying a cancelled order as live and full-value
+for two weeks.
+
+**So LoyaltyLion is a useful cross-check, NOT an authority.** It caught a
+genuine staleness of ours and is itself wrong on another order in the same
+window. Where the two agree the agreement is meaningful precisely because they
+read Shopify separately; where they differ, Shopify decides.
+
+**Two faults in the verification script itself, both found by running it:**
+
+- It compared `total − total_refunded` against our revenue. Both figures are
+  ALREADY net, so that double-counted every refund and manufactured **21
+  disagreements out of 21 agreements**. Order 7936312180983 is the proof:
+  LoyaltyLion 0 with 140 refunded, Shopify currentTotalPrice 0, ours 0 — three
+  systems agreeing, reported as a fault by arithmetic. Same shape as the
+  points-liability trap already documented in `lib/loyaltylion.mjs`: a current
+  balance and a lifetime counter look interchangeable and are not.
+- Its date-filter guard compared a UTC timestamp against Amman-dated bounds,
+  so an order placed 00:30 Amman read as the previous day and the guard
+  accused LoyaltyLion of ignoring a filter it had honoured.
+
+Both would have been invisible without running the thing against real data.
+
 ## The gate — proven, not assumed
 
 Naim's point: every step being `continue-on-error` with a final gate is the

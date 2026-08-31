@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/queries";
 
 /** The unattended jobs, and how far behind each is allowed to be. */
 export const SOURCES = [
@@ -199,4 +200,56 @@ export async function fetchSeedResidue(): Promise<SeedResidue[]> {
     }),
   );
   return hits.filter((h): h is SeedResidue => h !== null);
+}
+
+/**
+ * Nights where the LoyaltyLion tier snapshot was never taken.
+ *
+ * THIS IS THE ONLY IRRECOVERABLE LOSS IN THE SYSTEM. Every other source can be
+ * re-fetched for a past date. LoyaltyLion has no history endpoint for tier
+ * counts or points outstanding — the API answers only "what is true now" — so
+ * a night that is not recorded is gone permanently. Nothing can backfill it.
+ *
+ * It nearly happened silently on 31 August 2026: a false alarm in the filter
+ * guard failed the whole run, and the snapshot would have been lost had the
+ * failure email not been read. A generic "sync failed" does not convey that
+ * one of the failures destroys data and the others merely delay it.
+ *
+ * A day counts as scanned only if it carries tier counts. The imported year of
+ * points history has none, so a points-only row is not a snapshot.
+ */
+export type SnapshotGap = { date: string };
+
+export async function fetchSnapshotGaps(): Promise<{
+  gaps: SnapshotGap[];
+  firstScan: string | null;
+  lastScan: string | null;
+  scanned: number;
+}> {
+  const rows = await fetchAllRows<{ snapshot_date: string | null; blue_members: number | null }>(
+    (from, to) =>
+      supabase
+        .from("ll_snapshots")
+        .select("snapshot_date,blue_members")
+        .order("snapshot_date")
+        .range(from, to),
+  );
+  const scanned = rows
+    .filter((r) => r.snapshot_date && Number(r.blue_members ?? 0) > 0)
+    .map((r) => r.snapshot_date as string)
+    .sort();
+  if (scanned.length === 0) return { gaps: [], firstScan: null, lastScan: null, scanned: 0 };
+
+  const have = new Set(scanned);
+  const first = scanned[0]!;
+  const last = scanned[scanned.length - 1]!;
+  const gaps: SnapshotGap[] = [];
+  // Walk the span day by day rather than differencing consecutive rows, so a
+  // multi-day outage is listed as each missing date rather than one range.
+  for (let d = new Date(`${first}T00:00:00Z`); ; d.setUTCDate(d.getUTCDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > last) break;
+    if (!have.has(iso)) gaps.push({ date: iso });
+  }
+  return { gaps, firstScan: first, lastScan: last, scanned: scanned.length };
 }

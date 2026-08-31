@@ -27,6 +27,54 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## Step isolation — it was the second explanation, not a regression
+
+Naim remembered per-source isolation being built and asked which it was before
+rebuilding it. **It had not regressed.** The 31 August log proves the sync
+script isolated its sources exactly as designed:
+
+    ✓ Klaviyo: 0 campaigns, 4 flow rows, 4 push rows, 3 attributed day(s)
+    ✓ Shopify: 9 day rows
+    ✗ LoyaltyLion failed — ...
+    ✗ 1 of 3 source(s) failed. Successful sources were still written.
+
+Klaviyo and Shopify both completed and wrote. What was NOT isolated was the
+WORKFLOW STEPS: `sync.mjs` exits 1, which failed the step, which cancelled
+every step after it. The log shows the retroactive repair never executed —
+"REPAIR mode" appears zero times.
+
+So the isolation covered the main sync but not the repair, backfill and reach
+steps added later. Exactly Naim's second hypothesis.
+
+**Fixed at the workflow level.** Every step is now `continue-on-error` with
+`if: !cancelled()` — a cancelled run still stops, but a failed sync no longer
+prevents an unrelated repair. On its own that would silently turn a failed
+night GREEN, so a final gate step reads every outcome, names which failed and
+exits 1. The run summary gained a per-step outcome table. YAML validated;
+9 steps.
+
+## Missing loyalty snapshots — surfaced, and none outstanding
+
+**No other night has been missed.** Tier snapshots run 2026-08-27 to 08-31,
+five days, five recorded, zero gaps — the 31st because it was refilled
+manually. The history is only five days old, so there was little opportunity
+for others.
+
+**Made loud, because it is the only irrecoverable loss in the system.**
+`fetchSnapshotGaps()` in `src/lib/health.ts` walks the span day by day and
+lists every date with no tier-bearing row. The health page shows it ABOVE
+everything else in a destructive-bordered block naming each missing date.
+
+There is no dismiss and no retry, deliberately. LoyaltyLion answers only "what
+is true now" and keeps no history, so a missed night cannot be backfilled and
+the notice cannot honestly be cleared. When there are no gaps the page states
+that positively, with the span and the count, rather than staying silent —
+silence is what let 31 August nearly pass unnoticed.
+
+**Still open:** the loyalty chart interpolates across missing dates rather than
+breaking the line. Not changed yet; with zero gaps there is nothing to render
+differently today, but it should break rather than imply a value.
+
 ## Nightly sync failed 31 Aug — a false alarm from our own guard
 
 **Not the repair step**, which was the obvious suspect since it landed the day

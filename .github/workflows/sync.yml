@@ -89,8 +89,14 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run || false }}
           FORCE: ${{ inputs.force || false }}
 
+      # continue-on-error, NOT because a failure is acceptable, but so the
+      # steps below still run. The job is still failed — the gate at the bottom
+      # does that once every step has had its turn. Before this, a LoyaltyLion
+      # false alarm on 31 August aborted the Shopify repair, which had nothing
+      # to do with it, and cost a loyalty snapshot that cannot be recovered.
       - name: Run sync
         id: sync
+        continue-on-error: true
         env:
           # Secrets are passed as environment variables and never interpolated
           # into a command line, so they cannot leak via the run log's echoed
@@ -134,7 +140,11 @@ jobs:
       # waiting for someone to notice a number drifting.
       # ---------------------------------------------------------------------
       - name: Repair retroactive changes (cancellations, refunds, edits)
-        if: ${{ inputs.dry_run != true }}
+        id: repair
+        continue-on-error: true
+        # !cancelled() rather than always(): a cancelled run should stop, but a
+        # failed sync must not prevent an unrelated repair.
+        if: ${{ !cancelled() && inputs.dry_run != true }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -158,7 +168,9 @@ jobs:
       # Clear the variable when the backfill is done.
       # ---------------------------------------------------------------------
       - name: Continue backfill
-        if: ${{ vars.BACKFILL_FROM != '' && inputs.dry_run != true }}
+        id: backfill
+        continue-on-error: true
+        if: ${{ !cancelled() && vars.BACKFILL_FROM != '' && inputs.dry_run != true }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -187,7 +199,9 @@ jobs:
       # away at history a bounded number of days per night.
       # ---------------------------------------------------------------------
       - name: Unique reach
-        if: ${{ inputs.dry_run != true }}
+        id: reach
+        continue-on-error: true
+        if: ${{ !cancelled() && inputs.dry_run != true }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -209,6 +223,15 @@ jobs:
           {
             echo "### Data sync — ${{ job.status }}"
             echo ""
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| Sync | ${{ steps.sync.outcome }} |"
+            echo "| Retroactive repair | ${{ steps.repair.outcome || 'skipped' }} |"
+            echo "| Backfill | ${{ steps.backfill.outcome || 'skipped' }} |"
+            echo "| Unique reach | ${{ steps.reach.outcome || 'skipped' }} |"
+            echo ""
+            echo "Each step runs independently: one failing no longer prevents the others."
+            echo ""
             echo "| | |"
             echo "|---|---|"
             echo "| Range | ${FROM:-trailing 3 days} → ${TO:-today} |"
@@ -229,3 +252,31 @@ jobs:
           TO: ${{ inputs.to }}
           SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
           DRY_RUN: ${{ inputs.dry_run || false }}
+
+      # ---------------------------------------------------------------------
+      # The gate.
+      #
+      # Every step above is continue-on-error so that one failure cannot cancel
+      # the rest. On its own that would silently turn a failed night GREEN,
+      # which is worse than the problem it fixes — so the job's real verdict is
+      # decided here, after every step has had its turn, and names which failed.
+      # ---------------------------------------------------------------------
+      - name: Fail the run if any step failed
+        if: always()
+        env:
+          SYNC: ${{ steps.sync.outcome }}
+          REPAIR: ${{ steps.repair.outcome }}
+          BACKFILL: ${{ steps.backfill.outcome }}
+          REACH: ${{ steps.reach.outcome }}
+        run: |
+          failed=""
+          [ "$SYNC" = "failure" ]     && failed="$failed sync"
+          [ "$REPAIR" = "failure" ]   && failed="$failed retroactive-repair"
+          [ "$BACKFILL" = "failure" ] && failed="$failed backfill"
+          [ "$REACH" = "failure" ]    && failed="$failed unique-reach"
+          if [ -n "$failed" ]; then
+            echo "Failed step(s):$failed"
+            echo "Every other step still ran and wrote what it could."
+            exit 1
+          fi
+          echo "All steps completed."

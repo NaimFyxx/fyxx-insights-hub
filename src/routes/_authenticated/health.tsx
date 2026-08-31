@@ -7,6 +7,7 @@ import {
   summarise,
   fetchBackfillProgress,
   fetchSeedResidue,
+  fetchSnapshotGaps,
   type SourceHealth,
 } from "@/lib/health";
 import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
@@ -51,12 +52,13 @@ function HealthPage() {
     queryKey: ["health", refreshKey],
     queryFn: async () => {
       const rows = await fetchSyncLog();
-      const [flows, reach, seed] = await Promise.all([
+      const [flows, reach, seed, snapshots] = await Promise.all([
         fetchBackfillProgress("klaviyo_flows", BACKFILL_FROM),
         fetchBackfillProgress("klaviyo_reach", BACKFILL_FROM),
         fetchSeedResidue(),
+        fetchSnapshotGaps(),
       ]);
-      return { health: summarise(rows), rows, flows, reach, seed };
+      return { health: summarise(rows), rows, flows, reach, seed, snapshots };
     },
     refetchInterval: 60_000,
   });
@@ -82,6 +84,7 @@ function HealthPage() {
   // "paused" is expected behaviour during a backfill, not something to chase.
   const problems = data.health.filter((h) => h.state !== "ok" && h.state !== "paused");
   const paused = data.health.filter((h) => h.state === "paused");
+  const gaps = data.snapshots.gaps;
 
   return (
     <div className="space-y-8">
@@ -89,6 +92,47 @@ function HealthPage() {
         title="Sync health"
         subtitle="Four things run unattended. This is whether they are working."
       />
+
+      {/* ABOVE everything else, and never auto-dismissed. Every other failure
+          on this page delays data; this one destroyed it. LoyaltyLion has no
+          history endpoint for tier counts, so a night not recorded is gone —
+          no backfill exists, which is why there is no "retry" here. */}
+      {gaps.length > 0 ? (
+        <section className="border-2 border-destructive bg-destructive/5 px-5 py-4">
+          <p className="label-xs text-destructive">
+            Permanently missing loyalty snapshot{gaps.length === 1 ? "" : "s"}
+          </p>
+          <p className="mt-2 text-2xl">
+            <span className="display-num">{num(gaps.length)}</span>{" "}
+            <span className="text-sm text-muted-foreground">
+              night{gaps.length === 1 ? "" : "s"} never recorded
+            </span>
+          </p>
+          <ul className="mt-3 text-sm">
+            {gaps.map((g) => (
+              <li key={g.date} className="text-foreground">
+                {g.date}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
+            Tier counts and points outstanding are only knowable on the day they are read —
+            LoyaltyLion answers &ldquo;what is true now&rdquo; and keeps no history. These nights
+            <b> cannot be backfilled</b> and this notice will not clear. Treat those dates as
+            absent rather than zero; any comparison spanning them is comparing across a hole.
+          </p>
+        </section>
+      ) : (
+        <section className="border border-border px-5 py-3">
+          <p className="text-xs text-muted-foreground">
+            <span className="text-foreground">No missing loyalty snapshots.</span>{" "}
+            {data.snapshots.scanned} night{data.snapshots.scanned === 1 ? "" : "s"} recorded
+            without a gap, {data.snapshots.firstScan} to {data.snapshots.lastScan}. This is the
+            only figure in the system that cannot be re-fetched after the fact, so it is checked
+            explicitly rather than inferred from whether the sync passed.
+          </p>
+        </section>
+      )}
 
       {problems.length ? (
         <p className="border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs">

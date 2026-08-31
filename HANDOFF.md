@@ -27,6 +27,44 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## Nightly sync failed 31 Aug — a false alarm from our own guard
+
+**Not the repair step**, which was the obvious suspect since it landed the day
+before. `sync_log` shows the run got through `klaviyo_flows`,
+`klaviyo_campaigns` and `shopify_daily_sales` successfully, then errored on
+`ll_snapshots` at 01:14 UTC — matching the 1m38s in the failure email.
+
+**Cause: `assertFilterHonoured` was testing the wrong property.** It fetched 50
+records with the date filter and 50 without, and threw if the two lists had the
+same ids. That is not a test of whether a filter works — it is a test of
+whether the unfiltered page happens to START with the same rows, which depends
+on an ordering LoyaltyLion neither documents nor holds stable. On a busy
+endpoint over a 3-day window the two legitimately coincide, and the guard then
+fails a run in which nothing is wrong.
+
+**Proved by probing the API minutes later:** `/transactions` and `/activities`
+both honoured the filter perfectly — 50 of 50 records inside the window, while
+the unfiltered page spanned 2026-08-16 to 08-31. The filter was never ignored.
+
+**Fixed by asserting the property we actually depend on:** every record
+returned falls inside the requested window. The unfiltered page is now used
+only to confirm the endpoint HAS out-of-window rows to exclude; if it does not,
+the result is INCONCLUSIVE rather than failed, because a quiet endpoint cannot
+prove anything either way.
+
+**Not a weakening — verified.** Tested against a deliberately unsupported
+parameter (`nonsense_param=whatever`), which LoyaltyLion silently ignores per
+the banner in that file. The new guard still throws.
+
+**The missed snapshot has been taken.** Tier counts cannot be reconstructed
+after the fact — the API has no history — so a skipped day is permanent. The
+2026-08-31 snapshot is now written.
+
+**Worth noting about the failure mode:** the run aborts entirely on the first
+source error, so a false alarm in LoyaltyLion also cost that night's Shopify
+repair step, which never ran. Whether each source should fail independently is
+a design question, not a bug, and is not changed here.
+
 ## Orphaned loyalty sign-ups — swept, detailed, and the cause established
 
 `scripts/diagnose/orphan-loyalty.mjs`. Swept **11,925 enrolled LoyaltyLion

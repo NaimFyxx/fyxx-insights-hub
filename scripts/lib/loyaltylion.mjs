@@ -45,29 +45,71 @@ const get = (path, label) =>
   limiter.run(() => withRetry(label, () => httpJson(`${BASE}${path}`, { headers: headers() }, label)));
 
 /**
- * Proves a query parameter is actually honoured before trusting it.
+ * Proves a date filter is actually honoured before trusting it.
  *
- * Fetches one page with and one without the filter and compares counts. See
- * the banner at the top of this file: LoyaltyLion answers 200 for parameters
- * it ignores, so a status code proves nothing.
+ * See the banner at the top of this file: LoyaltyLion answers 200 for
+ * parameters it ignores, so a status code proves nothing.
+ *
+ * THIS TESTS THE DATES, NOT THE IDS. The original version compared the first
+ * 50 filtered records against the first 50 unfiltered ones and threw if they
+ * matched. That is not a test of whether the filter worked — it is a test of
+ * whether the unfiltered page happens to begin with the same rows, which
+ * depends on an ordering LoyaltyLion does not document and does not hold
+ * stable. On a busy endpoint over a recent window the two legitimately
+ * coincide, and the guard then fails a run in which nothing is wrong.
+ *
+ * It did exactly that on 31 August 2026 at 01:14 UTC, aborting the whole
+ * nightly sync after Klaviyo and Shopify had already succeeded. A probe
+ * minutes later showed /transactions and /activities both honouring the
+ * filter perfectly: 50 of 50 records inside the window.
+ *
+ * The replacement asserts the property we actually depend on — every record
+ * returned falls inside the requested window — and uses the unfiltered page
+ * only to confirm the endpoint HAS out-of-window data to exclude. If it does
+ * not, the check is INCONCLUSIVE rather than failed, because a quiet endpoint
+ * cannot prove anything either way.
+ *
+ * This is not a weakening. A filter that is silently ignored returns records
+ * outside the window, and that still throws.
  */
-export async function assertFilterHonoured(path, filterQuery, key = "customers") {
+export async function assertFilterHonoured(path, filterQuery, key = "customers", window = null) {
   const sep = path.includes("?") ? "&" : "?";
   const [filtered, unfiltered] = await Promise.all([
     get(`${path}${sep}limit=50&${filterQuery}`, "filter probe (with)"),
     get(`${path}${sep}limit=50`, "filter probe (without)"),
   ]);
-  const a = (filtered[key] ?? []).length;
-  const b = (unfiltered[key] ?? []).length;
-  const sameIds =
-    a === b && (filtered[key] ?? []).every((x, i) => x.id === (unfiltered[key] ?? [])[i]?.id);
-  if (sameIds) {
+  const F = filtered[key] ?? [];
+  const U = unfiltered[key] ?? [];
+
+  if (!window) {
+    log.info(`filter "${filterQuery}": no window given, cannot verify by date`);
+    return true;
+  }
+  const day = (x) => String(x.created_at ?? x.date ?? "").slice(0, 10);
+  const outside = F.filter((x) => day(x) && (day(x) < window.from || day(x) > window.to));
+  if (outside.length) {
     throw new Error(
-      `LoyaltyLion is IGNORING the filter "${filterQuery}" — it returned HTTP 200 with the same ` +
-        `${a} records as the unfiltered request.\n  Do not trust this filter. Filter client-side instead.`,
+      `LoyaltyLion is IGNORING the filter "${filterQuery}" — ${outside.length} of ${F.length} ` +
+        `records fall outside ${window.from}..${window.to} (e.g. ${day(outside[0])}).\n` +
+        `  Do not trust this filter. Filter client-side instead.`,
     );
   }
-  log.ok(`filter "${filterQuery}" is honoured (${a} vs ${b} unfiltered)`);
+  const uOutside = U.filter((x) => day(x) && (day(x) < window.from || day(x) > window.to)).length;
+  if (!F.length) {
+    log.info(`filter "${filterQuery}": no records in range, nothing to verify`);
+  } else if (!uOutside) {
+    // Everything the endpoint holds is inside the window anyway, so excluding
+    // nothing is the correct answer and proves nothing about the filter.
+    log.info(
+      `filter "${filterQuery}": all ${F.length} records in range, but the unfiltered page holds ` +
+        `no out-of-range rows either — inconclusive, not failed`,
+    );
+  } else {
+    log.ok(
+      `filter "${filterQuery}" is honoured — ${F.length}/${F.length} inside ${window.from}..${window.to}, ` +
+        `while the unfiltered page returns ${uOutside} row(s) outside it`,
+    );
+  }
   return true;
 }
 
@@ -259,8 +301,8 @@ export async function fetchPeriodActivity(from, to) {
   // called anywhere. Both parameterised endpoints are proven here, once per
   // run, before any figure is derived from them. Re-checked 29 August 2026:
   // /transactions, /activities and /customers all honour the date filter.
-  await assertFilterHonoured("/transactions", `${q}`, "transactions");
-  await assertFilterHonoured("/activities", `${q}`, "activities");
+  await assertFilterHonoured("/transactions", `${q}`, "transactions", { from, to });
+  await assertFilterHonoured("/activities", `${q}`, "activities", { from, to });
 
   let redemptions = 0;
   for await (const batch of paginate(`/transactions?${q}`, "transactions", "transactions")) {

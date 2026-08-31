@@ -187,3 +187,53 @@ export function worstConcentration(
   }
   return worst;
 }
+
+/**
+ * One point per calendar day, with `null` where no snapshot was taken.
+ *
+ * A date left OUT of a chart's data array is not "no data" to a line chart:
+ * the line joins its neighbours and draws straight across, asserting a
+ * measurement nobody made. LoyaltyLion keeps no history, so a missed night can
+ * never be backfilled — the break has to be permanent and visible.
+ *
+ * Only rows carrying tier counts count as measured. The imported year of
+ * points history has none, and treating those as zero would draw the
+ * programme emptying and refilling.
+ */
+export type TierSnapshotRow = {
+  snapshot_date: string;
+  blue_members: number;
+  silver_members: number;
+  gold_members: number;
+  platinum_members: number;
+};
+
+export type TierSeriesPoint = {
+  date: string;
+  Blue: number | null;
+  Silver: number | null;
+  Gold: number | null;
+  Platinum: number | null;
+};
+
+export function tierSeriesWithGaps(scanned: TierSnapshotRow[]): TierSeriesPoint[] {
+  if (!scanned.length) return [];
+  const rows = [...scanned].sort((a, b) => (a.snapshot_date < b.snapshot_date ? -1 : 1));
+  const have = new Map(rows.map((s) => [s.snapshot_date, s]));
+  const first = rows[0]!.snapshot_date;
+  const last = rows[rows.length - 1]!.snapshot_date;
+  const out: TierSeriesPoint[] = [];
+  for (const d = new Date(`${first}T00:00:00Z`); ; d.setUTCDate(d.getUTCDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > last) break;
+    const s = have.get(iso);
+    out.push({
+      date: iso,
+      Blue: s ? s.blue_members : null,
+      Silver: s ? s.silver_members : null,
+      Gold: s ? s.gold_members : null,
+      Platinum: s ? s.platinum_members : null,
+    });
+  }
+  return out;
+}

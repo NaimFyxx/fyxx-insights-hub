@@ -269,6 +269,15 @@ jobs:
           BACKFILL: ${{ steps.backfill.outcome }}
           REACH: ${{ steps.reach.outcome }}
         run: |
+          # The sync step carries no `if:`, so it ALWAYS produces an outcome.
+          # An empty one means the step id no longer resolves — a rename, or a
+          # step deleted — and the gate would then wave every failure through
+          # while looking healthy. Fail loudly instead of silently passing.
+          if [ -z "$SYNC" ]; then
+            echo "Gate cannot read steps.sync.outcome — the step id has changed."
+            echo "Fix the gate before trusting this workflow: it would pass regardless."
+            exit 1
+          fi
           failed=""
           [ "$SYNC" = "failure" ]     && failed="$failed sync"
           [ "$REPAIR" = "failure" ]   && failed="$failed retroactive-repair"

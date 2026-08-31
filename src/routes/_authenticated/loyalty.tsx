@@ -6,6 +6,7 @@ import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct, pointsToJod } from "@/lib/format";
 import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
 import { TierLineChart } from "@/components/charts/TierLineChart";
+import { tierSeriesWithGaps } from "@/lib/timeseries";
 
 export const Route = createFileRoute("/_authenticated/loyalty")({
   head: () => ({
@@ -143,13 +144,15 @@ function LoyaltyPage() {
   // draws their zero tier counts as real values — a year-long flat line at
   // zero followed by a vertical spike, which reads as explosive growth rather
   // than as the day measurement began.
-  const chart = scanned.map((s) => ({
-    date: s.snapshot_date,
-    Blue: s.blue_members,
-    Silver: s.silver_members,
-    Gold: s.gold_members,
-    Platinum: s.platinum_members,
-  }));
+  //
+  // MISSING NIGHTS BECOME NULLS, NOT ABSENT ROWS. A date that is simply left
+  // out of the array is not "no data" to a line chart — the line joins the two
+  // neighbours and draws straight through it, asserting a measurement that was
+  // never taken. LoyaltyLion keeps no history, so a missed night can never be
+  // filled; the line must break there and stay broken. Emitting an explicit
+  // null for every unscanned day in the span is what makes that happen.
+  const chart = tierSeriesWithGaps(scanned);
+  const chartGaps = chart.filter((p) => p.Blue === null).length;
 
   return (
     <div className="space-y-8">
@@ -244,7 +247,17 @@ function LoyaltyPage() {
           <>
             <TierLineChart data={chart} />
             <p className="mt-2 text-xs text-muted-foreground">
-              {chart.length} measured day{chart.length === 1 ? "" : "s"}. Tier snapshots began 27
+              {chart.length - chartGaps} measured day
+              {chart.length - chartGaps === 1 ? "" : "s"}
+              {chartGaps > 0 ? (
+                <>
+                  {" "}
+                  and <b>{chartGaps} night{chartGaps === 1 ? "" : "s"} never recorded</b>, drawn as
+                  a break rather than a line — LoyaltyLion keeps no history, so those days cannot
+                  be filled in
+                </>
+              ) : null}
+              . Tier snapshots began 27
               Aug 2026; LoyaltyLion cannot report tiers historically.
             </p>
           </>

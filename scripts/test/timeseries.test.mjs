@@ -118,5 +118,50 @@ group("concentration flag — the real 8 August case");
       top_order_values:[3364.22,900,300,100,50] }], "2026-08-03", "Draft Orders", "weekly") !== null);
 }
 
+
+/* ===========================================================================
+ * tierSeriesWithGaps — a missed loyalty night must BREAK the line.
+ *
+ * The only irrecoverable loss in the system: LoyaltyLion answers "what is true
+ * now" and keeps no history, so a night not recorded is gone for good. A chart
+ * that draws through the gap asserts a measurement nobody took.
+ * ======================================================================== */
+{
+  const row = (d, blue) => ({
+    snapshot_date: d, blue_members: blue,
+    silver_members: 10, gold_members: 5, platinum_members: 1,
+  });
+
+  const withHole = m.tierSeriesWithGaps([
+    row("2026-08-27", 100), row("2026-08-28", 110),
+    row("2026-09-01", 150), row("2026-09-02", 160),
+  ]);
+  check("every calendar day in the span is present", withHole.length === 7, `${withHole.length} points`);
+  check("no date is skipped",
+    withHole.map((p) => p.date).join(",") ===
+      "2026-08-27,2026-08-28,2026-08-29,2026-08-30,2026-08-31,2026-09-01,2026-09-02");
+  const nulls = withHole.filter((p) => p.Blue === null).map((p) => p.date);
+  check("the three missing nights are null", nulls.join(",") === "2026-08-29,2026-08-30,2026-08-31", nulls.join(" "));
+  // The distinction that matters. A zero would draw the programme emptying to
+  // nothing and refilling overnight; null draws a break.
+  check("an unmeasured night is null, NEVER zero",
+    withHole.every((p) => p.Blue === null || p.Blue > 0));
+
+  const contiguous = m.tierSeriesWithGaps([
+    row("2026-08-27", 100), row("2026-08-28", 110), row("2026-08-29", 120),
+  ]);
+  check("a contiguous run gains no rows", contiguous.length === 3);
+  check("no nulls when nothing is missing", contiguous.every((p) => p.Blue !== null));
+
+  const unsorted = m.tierSeriesWithGaps([
+    row("2026-08-29", 120), row("2026-08-27", 100), row("2026-08-28", 110),
+  ]);
+  check("unsorted input does not fabricate a span",
+    unsorted.map((p) => p.date).join(",") === contiguous.map((p) => p.date).join(","));
+
+  check("empty input is empty, not a crash", m.tierSeriesWithGaps([]).length === 0);
+  check("a single day is one point", m.tierSeriesWithGaps([row("2026-08-27", 100)]).length === 1);
+}
+
 console.log(failed === 0 ? "\nAll checks passed.\n" : `\n${failed} check(s) FAILED.\n`);
 process.exit(failed ? 1 : 0);

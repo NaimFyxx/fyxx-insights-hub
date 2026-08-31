@@ -27,6 +27,60 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## The gate — proven, not assumed
+
+Naim's point: every step being `continue-on-error` with a final gate is the
+pattern where one mistake turns every failure green forever. So the gate was
+extracted verbatim from the YAML and run under `bash -e`, which is exactly how
+GitHub Actions executes a `run:` block.
+
+| sync | repair | backfill | reach | exit | says |
+|---|---|---|---|---|---|
+| success | success | success | success | **0** | All steps completed. |
+| failure | success | success | success | **1** | Failed step(s): sync |
+| success | failure | success | success | **1** | Failed step(s): retroactive-repair |
+| success | success | success | failure | **1** | Failed step(s): unique-reach |
+| failure | failure | failure | failure | **1** | names all four |
+| success | skipped | skipped | skipped | **0** | dry run passes |
+| (all empty) | | | | **1** | Gate cannot read steps.sync.outcome |
+
+**One hole found and closed.** With all outcomes empty the gate passed — which
+is what happens if a step id is ever renamed, and it would wave every future
+failure through while looking healthy. The sync step carries no `if:`, so its
+outcome can never legitimately be empty; the gate now fails loudly when it is.
+
+Also verified the workflow reads `.outcome` and not `.conclusion`.
+`continue-on-error` rewrites `conclusion` to success — reading it would have
+made the gate permanently green, which is the exact failure mode being guarded
+against.
+
+## Chart interpolation across missing nights — fixed and tested
+
+**The fault was real.** `chart` was built from scanned days only, so a missing
+date was simply absent from the array — and an absent date is not "no data" to
+a line chart. Recharts joins the neighbours and draws straight through, which
+asserts a measurement nobody took.
+
+**Fixed** by emitting one point per calendar day with `null` for unscanned
+nights, and setting `connectNulls={false}` explicitly rather than relying on
+the library default now that it is load-bearing. `TierPoint` is nullable on
+purpose: the type has to be able to say "not measured".
+
+**Extracted to `tierSeriesWithGaps()` in `src/lib/timeseries.ts` so it can be
+tested.** Inline in a component it could only be checked by looking at a chart.
+
+**Nine checks in `scripts/test/timeseries.test.mjs`, and the test was watched
+failing before being trusted:**
+
+- reverting to "omit missing days" → **3 checks FAIL**
+- writing a missing night as `0` instead of `null` → **2 checks FAIL**
+- restored → all pass
+
+**Caught while writing it:** the first version of the test was appended after
+`process.exit()` and used `assert` rather than this file's `check()` helper. It
+was dead code that would have reported success forever. Moved above the exit
+and rewritten.
+
 ## Step isolation — it was the second explanation, not a regression
 
 Naim remembered per-source isolation being built and asked which it was before

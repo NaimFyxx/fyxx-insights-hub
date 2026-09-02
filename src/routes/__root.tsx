@@ -119,6 +119,22 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  // Applied HERE, on the client the provider actually hands to the tree.
+  //
+  // The same option is set where the client is constructed in router.tsx, and
+  // it reached the bundle, but queries still came back fetchStatus "paused" —
+  // so the instance rendering the app is not the instance that option was set
+  // on. Setting it at the provider is the one place guaranteed to be the
+  // client every useQuery reads.
+  //
+  // Why it matters: React Query's default networkMode "online" PAUSES a query
+  // when a fetch fails like a dead network, rather than failing it. A paused
+  // query reports status "pending", isError FALSE and isLoading FALSE, so the
+  // error branch never runs, an `isLoading || !data` guard spins forever, and
+  // a panel keyed off `rows.length` announces "No campaigns in range" for a
+  // month that has eight. Verified live on 2 September 2026.
+  queryClient.setDefaultOptions({ queries: { networkMode: "always" } });
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}

@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchCampaigns } from "@/lib/queries";
 import { jod, num, pct, rate } from "@/lib/format";
+import { UNSUBSCRIBE_WATCH_RATE } from "@/lib/engagement";
 import { OpensCaveat, QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
@@ -52,6 +53,13 @@ function CampaignsPage() {
       />
       {isError ? <QueryFailed error={error} /> : null}
       <OpensCaveat />
+      <p className="text-xs text-muted-foreground">
+        <b>Unsubscribe rate is the cost column</b>, and the one engagement figure Apple Mail
+        cannot distort — no mail client unsubscribes on someone&rsquo;s behalf. Read it beside
+        revenue, never on its own: a campaign that earns well while burning list is not a success.
+        A dash means the figure has not been fetched for that campaign yet, which is not the same
+        as nobody unsubscribing.
+      </p>
 
       <Panel title="Revenue per campaign">
         {rows.length ? (
@@ -84,6 +92,7 @@ function CampaignsPage() {
                 <Th align="right">Click rate</Th>
                 <Th align="right">Orders</Th>
                 <Th align="right">Revenue JOD</Th>
+                <Th align="right">Unsub. rate</Th>
               </tr>
             </thead>
             <tbody>
@@ -98,6 +107,23 @@ function CampaignsPage() {
                   <Td align="right">{pct(Number(r.click_rate) * 100)}</Td>
                   <Td align="right">{num(r.orders)}</Td>
                   <Td align="right">{jod(Number(r.revenue_jod))}</Td>
+                  {/* null means NOT YET FETCHED, and must not render as 0% —
+                      a zero here would claim a campaign cost no subscribers. */}
+                  <Td align="right">
+                    {r.unsubscribe_rate === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span
+                        className={
+                          Number(r.unsubscribe_rate) >= UNSUBSCRIBE_WATCH_RATE
+                            ? "text-destructive"
+                            : ""
+                        }
+                      >
+                        {pct(Number(r.unsubscribe_rate) * 100)}
+                      </span>
+                    )}
+                  </Td>
                 </tr>
               ))}
               <TotalsRow>

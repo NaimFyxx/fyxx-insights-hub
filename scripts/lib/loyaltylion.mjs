@@ -305,10 +305,37 @@ export async function fetchPeriodActivity(from, to) {
   await assertFilterHonoured("/activities", `${q}`, "activities", { from, to });
 
   let redemptions = 0;
+  // Claimed rewards ride along in the same pass that counts redemptions, so
+  // making ll_rewards a live table costs no extra API calls.
+  //
+  // This SUPERSEDES the manual CSV import. /v2/transactions carries every row
+  // the export did, over the same span, plus 87 more. Two columns cannot be
+  // reproduced — order_total_jod and used_with_orders, which link a reward to
+  // the order it was spent on — because the API does not expose them. Nothing
+  // reads those columns today, so nothing is lost; if that question is ever
+  // asked, the export is the only source and this comment is the reason why.
+  const rewards = [];
   for await (const batch of paginate(`/transactions?${q}`, "transactions", "transactions")) {
     for (const t of batch) {
       const isReward = t.resource === "claimed_reward" || Boolean(t.claimed_reward);
-      if (isReward && t.state !== "void" && t.state !== "declined") redemptions++;
+      if (!isReward) continue;
+      if (t.state !== "void" && t.state !== "declined") redemptions++;
+      const cr = t.claimed_reward ?? {};
+      const rw = cr.reward ?? {};
+      rewards.push({
+        ll_customer_id: String(t.customer?.id ?? cr.customer_id ?? ""),
+        claimed_at: t.created_at,
+        // title is part of the primary key, so it can never be null.
+        title: rw.title ?? "(untitled reward)",
+        // Points are stored NEGATIVE on a redemption transaction; the column
+        // records what the reward cost, so take the magnitude.
+        cost_points: Math.abs(int(t.points_approved ?? t.points ?? 0)),
+        state: cr.state ?? t.state ?? null,
+        amount: rw.discount_amount ?? null,
+        discount_type: rw.discount_type ?? null,
+        expires_at: cr.expires_at ?? null,
+        source: "v2_transactions",
+      });
     }
   }
 
@@ -359,7 +386,7 @@ export async function fetchPeriodActivity(from, to) {
   }
 
   reportBirthdayMatch({ matchedRules, allRuleNames, birthday, valueSpread });
-  return { redemptions, birthdayRewards: birthday, valueSpread, matchedRules: [...matchedRules] };
+  return { redemptions, rewards, birthdayRewards: birthday, valueSpread, matchedRules: [...matchedRules] };
 }
 
 /** Prints the birthday-rule evidence loudly enough to be checked at a glance. */

@@ -32,6 +32,25 @@ Do not build API integrations, scheduled jobs, or edge functions. Keep component
 
 This project was built with [Lovable](https://lovable.dev).
 
+## The LoyaltyLion rewards CSV is superseded — do not re-import it
+
+`ll_rewards` is now written live from **`/v2/transactions`** on every nightly
+sync, tagged `source = 'v2_transactions'`. LoyaltyLion support confirmed
+claimed rewards appear there, and it turned out to be better than the export:
+the API carries every row the CSV had over the same span, **plus 87 more**.
+
+The CSV rows are still present, tagged `source = 'll_export_20260829'`. They
+are kept, not deleted, for one reason: **two columns cannot be reproduced from
+the API** — `order_total_jod` and `used_with_orders`, which link a redeemed
+reward to the order it was spent on and that order's value. Nothing reads those
+columns today, so nothing is lost, but if "what was a redeemed reward spent on"
+is ever asked, the export is the only source.
+
+Reports exports are UI-only and cannot be triggered programmatically, which is
+why this was a manual import in the first place. There is now no reason to
+repeat it. If you find the CSV in Downloads and wonder whether it still needs
+loading: it does not.
+
 ## Why revenue here is ~6% below Shopify's own total
 
 Every revenue figure on this dashboard **excludes internal accounts**: venue

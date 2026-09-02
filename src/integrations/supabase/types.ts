@@ -112,6 +112,9 @@ export type Database = {
       };
       klaviyo_campaigns: {
         Row: {
+          spam_complaints: number | null;
+          unsubscribe_rate: number | null;
+          unsubscribes: number | null;
           campaign_id: string;
           campaign_message_id: string;
           click_rate: number;
@@ -131,6 +134,9 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          spam_complaints?: number | null;
+          unsubscribe_rate?: number | null;
+          unsubscribes?: number | null;
           campaign_id: string;
           campaign_message_id: string;
           click_rate?: number;
@@ -150,6 +156,9 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          spam_complaints?: number | null;
+          unsubscribe_rate?: number | null;
+          unsubscribes?: number | null;
           campaign_id?: string;
           campaign_message_id?: string;
           click_rate?: number;
@@ -172,6 +181,9 @@ export type Database = {
       };
       klaviyo_flows: {
         Row: {
+          spam_complaints: number | null;
+          unsubscribe_rate: number | null;
+          unsubscribes: number | null;
           click_rate: number;
           clicked: number;
           conversion_rate: number;
@@ -191,6 +203,9 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          spam_complaints?: number | null;
+          unsubscribe_rate?: number | null;
+          unsubscribes?: number | null;
           click_rate?: number;
           clicked?: number;
           conversion_rate?: number;
@@ -210,6 +225,9 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          spam_complaints?: number | null;
+          unsubscribe_rate?: number | null;
+          unsubscribes?: number | null;
           click_rate?: number;
           clicked?: number;
           conversion_rate?: number;

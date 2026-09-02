@@ -18,6 +18,14 @@ export type AttributedDay = {
 };
 
 export type Campaign = {
+  /**
+   * NULL means not fetched yet, NOT zero unsubscribes. The columns were added
+   * on 2 September 2026 and older rows carry null until they are re-synced;
+   * rendering a null as 0% would claim a campaign cost no subscribers.
+   */
+  unsubscribes: number | null;
+  unsubscribe_rate: number | null;
+  spam_complaints: number | null;
   id: string;
   name: string;
   sent_on: string;

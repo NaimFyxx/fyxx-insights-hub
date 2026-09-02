@@ -1317,6 +1317,17 @@ programme, tiers and point values.
 
 ## Traps worth knowing
 
+- **A feature that has never been used has never been tested — by anyone.** The
+  report page's Save button could never have worked: it upserts on
+  `(start_date, end_date)` and no unique constraint existed, so Postgres would
+  have rejected it with 42P10 every time. Nobody noticed because `reports` had
+  0 rows, so the failure had never fired. Same shape as the Lovable seed data
+  and the unused guards: **absence of evidence reading as evidence of absence.**
+  When adding an upsert, check the conflict target against the actual
+  constraint — this was then caught a second time, before shipping, on
+  `ll_rewards`, whose primary key turned out to be three columns rather than
+  the two the code named.
+
 - **A silent no-op edit is the same fault as a silent zero.** `str.replace`
   does nothing when its target has been reformatted, and `git add -A` commits
   the unrelated files without complaint — so a change can be reported as landed

@@ -84,7 +84,22 @@ export const CAMPAIGN_JUDGEMENT = [
     metric: "Orders attributed",
     why: "Klaviyo's own attribution, netted of cancellations. Smaller numbers, but it is the thing being optimised.",
   },
+  {
+    metric: "Unsubscribe rate",
+    why: "The cost side, and the one engagement figure Apple Mail cannot distort — no mail client unsubscribes on someone's behalf. A campaign that earns well while burning list is not a success. Read it beside revenue, never on its own.",
+  },
 ] as const;
+
+/**
+ * A rate above this is worth a second look.
+ *
+ * NOT a hard threshold and deliberately not enforced anywhere. Klaviyo's own
+ * guidance and general email practice put a healthy unsubscribe rate below
+ * about 0.2-0.5%; our own campaigns will establish what normal looks like here
+ * once the column has a few months of history. Until then this only decides
+ * whether a figure is tinted, and the tint means "look", not "bad".
+ */
+export const UNSUBSCRIBE_WATCH_RATE = 0.005;
 
 /** True where a figure counts opens and therefore needs the caveat. */
 export const OPEN_METRICS = ["opened", "open_rate", "opens"] as const;

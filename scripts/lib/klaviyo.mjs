@@ -165,6 +165,12 @@ export async function fetchCampaignMeta(from, to) {
 const STATS = [
   "recipients", "delivered", "opens_unique", "open_rate",
   "clicks_unique", "click_rate", "conversions", "conversion_rate", "conversion_value",
+  // Unsubscribe rate is the only engagement figure Apple Mail Privacy
+  // Protection cannot distort — no mail client unsubscribes on a recipient's
+  // behalf — and it is a real cost: a campaign that earns well while burning
+  // list is not a success. Spam complaints ride along in the same call and are
+  // the sharper version of the same signal.
+  "unsubscribes", "unsubscribe_rate", "spam_complaints",
 ];
 
 /** ------------------------------------------------------------------------
@@ -649,6 +655,9 @@ export function toCampaignRows(results, meta) {
         orders: int(s.conversions),
         conversion_rate: rate4(s.conversion_rate),
         revenue_jod: money3(s.conversion_value),
+        unsubscribes: int(s.unsubscribes),
+        unsubscribe_rate: rate4(s.unsubscribe_rate),
+        spam_complaints: int(s.spam_complaints),
       });
     }
   }
@@ -695,6 +704,9 @@ export function toFlowRows(results, day) {
         conversions: int(s.conversions),
         conversion_rate: rate4(s.conversion_rate),
         revenue_jod: money3(s.conversion_value),
+        unsubscribes: int(s.unsubscribes),
+        unsubscribe_rate: rate4(s.unsubscribe_rate),
+        spam_complaints: int(s.spam_complaints),
       });
     }
   }

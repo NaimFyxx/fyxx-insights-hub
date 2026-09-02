@@ -504,12 +504,24 @@ async function syncLoyalty({ from, to, dryRun }) {
   const period = await ll.fetchPeriodActivity(from, to);
   const row = ll.toSnapshotRow(snap, period, snapshotDate);
 
+  // Claimed rewards, from the same pass. Supersedes the manual CSV import —
+  // see the comment in fetchPeriodActivity for what the API cannot reproduce.
+  const rewards = (period.rewards ?? []).filter((r) => r.ll_customer_id && r.claimed_at && r.title);
+
   if (dryRun) {
     log.info("LoyaltyLion — would write:");
     preview("ll_snapshots", [row], ["snapshot_date", "blue_members", "silver_members", "gold_members", "platinum_members"]);
     log.info(`      points_outstanding=${row.points_outstanding} (≈ ${money3(row.points_outstanding / ll.POINTS_PER_JOD)} JOD liability)`);
     log.info(`      redemptions=${row.redemptions}  birthday_rewards_issued=${row.birthday_rewards_issued}`);
+    log.info(`      ll_rewards: ${rewards.length} claimed reward(s) from /v2/transactions`);
     return 1;
+  }
+  if (rewards.length) {
+    // The primary key is (ll_customer_id, claimed_at, title) — all THREE.
+    // Naming only the first two would fail with 42P10, exactly the fault that
+    // had silently broken the report page's Save. Checked before shipping.
+    const rw = await upsert("ll_rewards", rewards, "ll_customer_id,claimed_at,title", { dryRun });
+    log.ok(`ll_rewards: ${rw} claimed reward(s) written from /v2/transactions`);
   }
   const w = await upsert("ll_snapshots", [row], "snapshot_date", { dryRun });
   await writeSyncLog(

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchPush } from "@/lib/queries";
 import { jod, num, pct, rate } from "@/lib/format";
-import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { OpensCaveat, QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 
 export const Route = createFileRoute("/_authenticated/push")({
@@ -63,6 +63,12 @@ function PushPage() {
         subtitle="Grouped by the flow or campaign that sent the notification. Klaviyo cannot split by Shopify sales channel, so no channel filter applies here."
       />
       {isError ? <QueryFailed error={error} /> : null}
+      <OpensCaveat />
+      <p className="text-xs text-muted-foreground">
+        Push opens are a different measurement from email opens and are not affected by Apple
+        Mail. But Klaviyo emits no push CLICK event of any kind, so for push there is nothing to
+        fall back to — opens and conversions are the whole picture.
+      </p>
       <Panel title="Push notifications">
         {isLoading ? (
           <EmptyState>Loading…</EmptyState>

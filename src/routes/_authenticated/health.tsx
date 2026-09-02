@@ -29,7 +29,11 @@ const BACKFILL_FROM = "2025-01-01";
 
 const STATE_LABEL: Record<SourceHealth["state"], string> = {
   ok: "OK",
-  stale: "Stale",
+  stale: "Stale — job",
+  // Distinct from "stale" on purpose. The job is succeeding; the DATA is old.
+  // The two need different fixes, and collapsing them is what let reach report
+  // healthy while its figures were a week behind.
+  behind: "Behind — data",
   failing: "FAILING",
   paused: "Paused — daily quota",
   never: "Never run",
@@ -39,7 +43,7 @@ function StateBadge({ state }: { state: SourceHealth["state"] }) {
   const cls =
     state === "ok"
       ? "text-foreground"
-      : state === "stale" || state === "paused"
+      : state === "stale" || state === "behind" || state === "paused"
         ? "text-muted-foreground"
         : "text-destructive font-medium";
   return <span className={cls}>{STATE_LABEL[state]}</span>;
@@ -135,13 +139,23 @@ function HealthPage() {
       )}
 
       {problems.length ? (
-        <p className="border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs">
-          {problems.length} source{problems.length === 1 ? "" : "s"} needing attention:{" "}
-          {problems.map((p) => p.label).join(", ")}
-        </p>
+        <div className="border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs">
+          <p className="font-semibold">
+            {problems.length} source{problems.length === 1 ? "" : "s"} needing attention
+          </p>
+          <ul className="mt-2 space-y-1">
+            {problems.map((p) => (
+              <li key={p.key}>
+                <span className="text-foreground">{p.label}</span>
+                {p.why ? <span className="text-muted-foreground"> — {p.why}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : (
         <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
-          All sources ran successfully and recently.
+          All sources ran recently <b>and their data reaches today</b>. Both are checked: a job
+          can succeed every night while its data stays weeks behind, which is not health.
         </p>
       )}
 

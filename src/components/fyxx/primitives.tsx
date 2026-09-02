@@ -119,3 +119,21 @@ export function ExcludesHouseAccounts({ className = "" }: { className?: string }
     </p>
   );
 }
+
+/**
+ * The caveat that must sit beside every open figure.
+ *
+ * Its absence was the largest unlabelled distortion in the dashboard: opens
+ * appeared on four surfaces including the monthly report to Zeid, with nothing
+ * saying that Apple Mail fires the open pixel by pre-fetching images.
+ */
+export function OpensCaveat({ className = "" }: { className?: string }) {
+  return (
+    <p className={`text-xs text-muted-foreground ${className}`}>
+      ⚠️ <b>Opens are not readers.</b> Apple Mail pre-fetches images and marks a message opened
+      whether or not anyone read it, so opens and open rates are inflated by an unknown amount —
+      and are <b>not comparable across time</b>, because the inflation grows with Apple&rsquo;s
+      share of the list. Judge a campaign on clicks, orders and revenue instead.
+    </p>
+  );
+}

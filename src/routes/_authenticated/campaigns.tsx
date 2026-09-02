@@ -4,7 +4,7 @@ import { format, parseISO } from "date-fns";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchCampaigns } from "@/lib/queries";
 import { jod, num, pct, rate } from "@/lib/format";
-import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { OpensCaveat, QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 
@@ -51,6 +51,7 @@ function CampaignsPage() {
         subtitle="One row per campaign sent in the selected range. Klaviyo cannot split by Shopify sales channel, so no channel filter applies here."
       />
       {isError ? <QueryFailed error={error} /> : null}
+      <OpensCaveat />
 
       <Panel title="Revenue per campaign">
         {rows.length ? (

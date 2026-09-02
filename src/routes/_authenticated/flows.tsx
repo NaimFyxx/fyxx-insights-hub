@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useDateRange } from "@/context/date-range-context";
 import { fetchFlows } from "@/lib/queries";
 import { jod, num, pct, rate } from "@/lib/format";
-import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
+import { OpensCaveat, QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
 
 export const Route = createFileRoute("/_authenticated/flows")({
@@ -124,6 +124,7 @@ function FlowsPage() {
         subtitle="Aggregated per flow across the selected range. Klaviyo cannot split by Shopify sales channel, so no channel filter applies here."
       />
       {isError ? <QueryFailed error={error} /> : null}
+      <OpensCaveat />
       <Panel title="Live flows">
         {isLoading ? (
           <EmptyState>Loading…</EmptyState>

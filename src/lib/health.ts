@@ -2,16 +2,36 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/queries";
 import { tierSeriesWithGaps } from "@/lib/timeseries";
 
-/** The unattended jobs, and how far behind each is allowed to be. */
+/**
+ * The unattended jobs, and how far behind each is allowed to be.
+ *
+ * TWO thresholds, because "did the job run" and "is the data current" are
+ * different questions and only the second is what anyone means.
+ *
+ *   staleAfterHours     how long since the job last SUCCEEDED
+ *   dataStaleAfterDays  how far the DATA lags today
+ *
+ * The second exists because a backfill can succeed nightly, forever, while
+ * recent days stay empty. On 2 September 2026 `klaviyo_reach` had run
+ * successfully that morning and its data covered only to 26 August — seven
+ * days behind — and this page called it healthy. The monthly report caught it
+ * and refused to total reach at 3 of 31 days; the health page did not.
+ *
+ * `null` means the source has no meaningful data date (the backup covers the
+ * whole database, not a range).
+ */
 export const SOURCES = [
-  { key: "klaviyo_campaigns", label: "Klaviyo campaigns", staleAfterHours: 36 },
-  { key: "klaviyo_flows", label: "Klaviyo flows", staleAfterHours: 36 },
-  { key: "shopify_daily_sales", label: "Shopify sales", staleAfterHours: 36 },
-  { key: "ll_snapshots", label: "Loyalty snapshot", staleAfterHours: 36 },
-  { key: "klaviyo_reach", label: "Unique reach", staleAfterHours: 36 },
-  { key: "klaviyo_order_influence", label: "Order influence", staleAfterHours: 24 * 8 },
-  { key: "shopify_margin_monthly", label: "Margin", staleAfterHours: 24 * 8 },
-  { key: "database_backup", label: "Database backup", staleAfterHours: 24 * 9 },
+  { key: "klaviyo_campaigns", label: "Klaviyo campaigns", staleAfterHours: 36, dataStaleAfterDays: 2 },
+  { key: "klaviyo_flows", label: "Klaviyo flows", staleAfterHours: 36, dataStaleAfterDays: 2 },
+  { key: "shopify_daily_sales", label: "Shopify sales", staleAfterHours: 36, dataStaleAfterDays: 2 },
+  { key: "ll_snapshots", label: "Loyalty snapshot", staleAfterHours: 36, dataStaleAfterDays: 2 },
+  // Reach is quota-limited and works through a backfill queue, so it is
+  // allowed to lag further than the nightly sources — but not indefinitely,
+  // which is what no threshold at all meant.
+  { key: "klaviyo_reach", label: "Unique reach", staleAfterHours: 36, dataStaleAfterDays: 4 },
+  { key: "klaviyo_order_influence", label: "Order influence", staleAfterHours: 24 * 8, dataStaleAfterDays: 9 },
+  { key: "shopify_margin_monthly", label: "Margin", staleAfterHours: 24 * 8, dataStaleAfterDays: 40 },
+  { key: "database_backup", label: "Database backup", staleAfterHours: 24 * 9, dataStaleAfterDays: null },
 ] as const;
 
 export type SyncRow = {
@@ -32,7 +52,11 @@ export type SourceHealth = {
   /** Latest date actually covered, which is not the same as when it last ran. */
   coveredThrough: string | null;
   hoursSinceSuccess: number | null;
-  state: "ok" | "stale" | "failing" | "paused" | "never";
+  /** How far the DATA lags today, in days. Null when the source has no range. */
+  daysBehind: number | null;
+  state: "ok" | "stale" | "behind" | "failing" | "paused" | "never";
+  /** Set when state is "stale" or "behind", so the page can say which. */
+  why: string | null;
 };
 
 /** Recent sync_log, enough to see the last success even after failures. */
@@ -66,14 +90,40 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
         .sort()
         .at(-1) ?? null;
 
+    const daysBehind =
+      coveredThrough === null
+        ? null
+        : Math.floor(
+            (Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`) -
+              Date.parse(`${coveredThrough}T00:00:00Z`)) /
+              86_400_000,
+          );
+
     let state: SourceHealth["state"] = "ok";
+    let why: string | null = null;
     if (!lastSuccess) state = "never";
     // A daily-quota stop is a normal pause, not a fault: work already done is
     // saved and the next scheduled run continues. Showing it as FAILING would
     // send someone debugging a job that is behaving correctly.
     else if (lastRun && lastRun.status === "quota_exhausted") state = "paused";
     else if (lastRun && lastRun.status !== "success") state = "failing";
-    else if (hours !== null && hours > s.staleAfterHours) state = "stale";
+    else if (hours !== null && hours > s.staleAfterHours) {
+      state = "stale";
+      why = `the job has not succeeded for ${Math.round(hours)}h`;
+    }
+    // Checked AFTER job staleness, and reported separately, because the fix is
+    // different: a job that has not run needs restarting, a job that runs but
+    // lags needs its backlog cleared.
+    else if (
+      s.dataStaleAfterDays !== null &&
+      daysBehind !== null &&
+      daysBehind > s.dataStaleAfterDays
+    ) {
+      state = "behind";
+      why =
+        `the job is succeeding, but its data only reaches ${coveredThrough} — ` +
+        `${daysBehind} day${daysBehind === 1 ? "" : "s"} behind`;
+    }
 
     return {
       key: s.key,
@@ -82,7 +132,9 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
       lastSuccess,
       coveredThrough,
       hoursSinceSuccess: hours,
+      daysBehind,
       state,
+      why,
     };
   });
 }

@@ -107,6 +107,13 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
     ["What this is: every figure the dashboard shows for this month, from the same tables the dashboard reads."],
     ["Totals are Excel formulas, not stored values, so filtering or re-sorting recomputes them."],
     [""],
+    ["BEFORE ANYTHING ELSE: OPEN RATES", { bold: true }],
+    ["Apple Mail pre-fetches images and marks a message opened whether or not anyone read it."],
+    ["Every open figure in this workbook is inflated by an unknown amount, and open rates are NOT"],
+    ["comparable across months, because the inflation grows as Apple's share of the list grows."],
+    ["Across 64 of our own campaigns, click rate predicts revenue at 0.778 and open rate at 0.403."],
+    ["Judge a campaign on revenue per delivered message, click rate, and orders — in that order."],
+    [""],
     ["THE FOUR FIGURES THAT WILL NOT MATCH THEIR SOURCE, AND WHY", { bold: true }],
     [""],
     ["1. Klaviyo attributed revenue will be LOWER here than in Klaviyo's own reporting."],
@@ -227,7 +234,7 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
   sheet("Campaigns", {
     source: "klaviyo_campaigns — one row per campaign, on its SEND date",
     check: "Klaviyo > Campaigns, filtered to this month. Compare row by row on name and send date.",
-    cannot: "The Sent total. It counts sends, not unique people, so it cannot be compared to any single Klaviyo number. Revenue is Klaviyo's own attribution and is NOT netted of cancellations on this sheet." + testNote,
+    cannot: "The Sent total. It counts sends, not unique people, so it cannot be compared to any single Klaviyo number. Revenue is Klaviyo's own attribution and is NOT netted of cancellations on this sheet. " + "Opens are NOT readers. Apple Mail pre-fetches images and marks a message opened whether or not anyone read it, so opens and open rates are inflated by an unknown amount and are not comparable across time — the inflation grows with Apple's share of the list. Across 64 of our own campaigns, click rate predicts revenue at 0.778 and open rate at 0.403, so judge a campaign on clicks, orders and revenue. This is not a fault in the data: Klaviyo reports what it can see, and what it can see is a pre-fetch." + testNote,
   }, [
     { header: "Campaign", key: "name" },
     { header: "Sent on", key: "sent_on" },
@@ -260,7 +267,7 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
   sheet("Flows", {
     source: "klaviyo_flows — stored per flow per DAY, aggregated here across the month",
     check: "Klaviyo > Flows > Analytics, date range set to this month. Compare per flow.",
-    cannot: "Recipients is sends, not unique people, for the same reason as campaigns.",
+    cannot: "Recipients is sends, not unique people, for the same reason as campaigns. " + "Opens are NOT readers. Apple Mail pre-fetches images and marks a message opened whether or not anyone read it, so opens and open rates are inflated by an unknown amount and are not comparable across time — the inflation grows with Apple's share of the list. Across 64 of our own campaigns, click rate predicts revenue at 0.778 and open rate at 0.403, so judge a campaign on clicks, orders and revenue. This is not a fault in the data: Klaviyo reports what it can see, and what it can see is a pre-fetch.",
   }, [
     { header: "Flow", key: "flow_name" },
     { header: "Channel", key: "send_channel" },
@@ -291,7 +298,7 @@ log.info(`building the pack for ${MONTH} (${FROM} to ${TO})`);
   sheet("Push", {
     source: "klaviyo_push — grouped by the flow or campaign that sent the notification",
     check: "Klaviyo > Analytics, push channel, this month. Opens and deliveries should match.",
-    cannot: "Clicks. Klaviyo emits no push click event of any kind, so no click column exists here or anywhere else. Opens are the only push engagement signal available.",
+    cannot: "Clicks. Klaviyo emits no push click event of any kind, so no click column exists here or anywhere else. Opens are the only push engagement signal available — and unlike email opens there is nothing to fall back to. Push opens are a different measurement from email opens and are NOT affected by Apple Mail pre-fetching.",
   }, [
     { header: "Source", key: "source_name" },
     { header: "Type", key: "source_type" },

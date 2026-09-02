@@ -27,6 +27,98 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## MPP labelled, and what replaces open rate — MEASURED, not assumed
+
+**Labelled in all four places:** Campaigns, Flows and Push pages (shared
+`OpensCaveat` component so the wording cannot drift), the monthly report, and
+the verification pack — where it now LEADS the "Read me first" sheet, above the
+four figures that cannot be reconciled.
+
+**What replaces it was tested on our own 64 campaigns**, not taken as received
+wisdom. `scripts/diagnose/engagement-signal.mjs`:
+
+| | open rate | click rate |
+|---|---|---|
+| range | 26.9% – 89.0% | 0% – 10.2% |
+| mean | 45.1% | 1.4% |
+| relative spread | 0.30 | **1.14** |
+| correlation with revenue per delivered | 0.403 | **0.779** |
+| correlation with order rate | 0.416 | **0.798** |
+
+**Clicks explain ~61% of the variance in revenue; opens ~16%.** Click rate
+carries 3.9x the relative spread, so it can rank campaigns where open rate
+cannot. And opens barely predict clicks at all (0.359).
+
+**The honest answer to "what replaces it" is three things and nothing else:**
+revenue per delivered message, click rate, orders attributed. That is the whole
+list — `CAMPAIGN_JUDGEMENT` in `src/lib/engagement.ts`.
+
+**Push is the exception and is stated separately.** Push opens are unaffected by
+Apple Mail, but Klaviyo emits no push click event, so for push there is nothing
+to fall back to.
+
+## Health now checks data freshness, not just job success
+
+`SOURCES` gained `dataStaleAfterDays` beside `staleAfterHours`, and a new
+`behind` state distinct from `stale` — the fixes differ: a job that has not run
+needs restarting, a job that runs but lags needs its backlog cleared.
+
+**Proven against the real situation.** On 2 September `klaviyo_reach` had
+succeeded that morning and its data reached only 26 August:
+
+    Shopify sales      state=ok      behind=0d
+    Unique reach       state=behind  behind=7d  the job is succeeding, but its
+                                                data only reaches 2026-08-26
+
+`coveredThrough` was already computed and simply never used in the verdict.
+
+## The two empty tables — one broken, one merely unused
+
+**Activations is UNUSED, not broken.** Full CRUD policies, insert payload
+matches the schema, and with zero rows it degrades correctly to "No activations
+for this month". Enter one and it will work.
+
+**Reports was BROKEN.** `saveNarrative` upserts with
+`onConflict: "start_date,end_date"` and no unique constraint on that pair
+existed — Postgres rejects that with **SQLSTATE 42P10**. Proven with a
+rolled-back probe, not inferred. **The report page's Save button had never been
+able to work**, and nobody had noticed because `reports` has 0 rows.
+
+Fixed by adding `reports_period_unique`, then re-probed: ACCEPTED. Watched
+failing, then watched passing.
+
+**One hazard that fix created, closed in the same pass:** the Export page used a
+plain `.insert()`, which would now collide on the second export of a period.
+Switched to the same upsert. Before the constraint it would have written
+duplicates and `fetchNarrative`'s `.maybeSingle()` would have thrown later —
+so that path was broken either way, just further downstream.
+
+## QueryFailed — partly proven, and the limit stated
+
+**Every one of the twelve pages has a REACHABLE error branch.** Checked by
+ordering, not by presence: an `isError` check placed after `isLoading || !data`
+would be dead code. The report page flagged in that scan and turned out to be a
+false positive — it uses sibling conditionals rather than an if/else chain.
+
+**The mechanism the pages depend on is proven.** Every failure mode produces an
+ERROR rather than empty data:
+
+| broken query | result |
+|---|---|
+| missing table | THREW |
+| missing column | THREW |
+| empty date — the original trigger | THREW |
+| empty date on the paged path | THREW |
+
+That is what turns "No campaigns in range." into "this could not be loaded".
+
+**NOT proven: the rendered result in a browser.** The pages sit behind a
+Supabase auth guard and I will not enter credentials. So this remains a
+structural and data-layer proof, not the visual one Naim asked for. To finish
+it properly someone logged in should clear a custom date on each page and
+confirm the red block appears. Until then QueryFailed stays in the
+"only ever watched passing" column for its rendering half.
+
 ## Critical review — DONE, in `REVIEW.md`
 
 Four splits: MEASURED / INFERRED / NEVER CHALLENGED, plus guards by whether

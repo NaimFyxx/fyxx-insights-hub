@@ -41,12 +41,21 @@ function ExportPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error: dbError } = await supabase.from("reports").insert({
-        start_date: from,
-        end_date: to,
-        month_highlight: highlight.trim(),
-        next_month_bullets: bullets.map((b) => b.trim()),
-      });
+      // UPSERT, not insert. `reports` now carries a unique constraint on
+      // (start_date, end_date) — added because saveNarrative on the report
+      // page upserts against it and Postgres was rejecting that with 42P10,
+      // so Save had never worked. A plain insert here would hit the same
+      // constraint the second time a period is exported. Both pages write one
+      // narrative per period, which is the intended shape.
+      const { error: dbError } = await supabase.from("reports").upsert(
+        {
+          start_date: from,
+          end_date: to,
+          month_highlight: highlight.trim(),
+          next_month_bullets: bullets.map((b) => b.trim()),
+        },
+        { onConflict: "start_date,end_date" },
+      );
       if (dbError) throw new Error(dbError.message);
     },
     onSuccess: () => {

@@ -17,6 +17,7 @@ import { ammanNow, iso, type DateRange } from "@/lib/ranges";
 import { useDateRange } from "@/context/date-range-context";
 import { num, pct, jod } from "@/lib/format";
 import { attributionLimitNote, SUB_CHANNELS } from "@/lib/channels";
+import { ENGAGEMENT_SIGNAL } from "@/lib/engagement";
 import "@/styles/report.css";
 
 export const Route = createFileRoute("/_authenticated/report")({
@@ -480,8 +481,15 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </tbody>
           </table>
           <p className="caption">
-            Open and click rates are Klaviyo&rsquo;s own, measured against messages delivered
-            rather than sent.
+            <b>Open rate is the weakest column here and should not carry a decision.</b> Apple
+            Mail pre-fetches images and marks a message opened whether or not anyone read it, so
+            opens are inflated by an unknown amount and cannot be compared with earlier months —
+            the inflation grows as Apple&rsquo;s share of the list grows. Across our own{" "}
+            {ENGAGEMENT_SIGNAL.campaigns} campaigns, click rate predicts revenue roughly four
+            times better than open rate ({ENGAGEMENT_SIGNAL.clickVsRevenue} against{" "}
+            {ENGAGEMENT_SIGNAL.openVsRevenue}). Judge a campaign on clicks, orders and revenue.
+            Open and click rates are otherwise Klaviyo&rsquo;s own, measured against messages
+            delivered rather than sent.
             {campaigns.excludedTests.length ? (
               <>
                 {" "}

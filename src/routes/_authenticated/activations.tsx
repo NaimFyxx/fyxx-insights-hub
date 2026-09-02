@@ -180,7 +180,9 @@ function ActivationsPage() {
       ) : null}
 
       <Panel title="Calendar list">
-        {isLoading ? (
+        {isError ? (
+          <EmptyState>Not loaded — see the error above.</EmptyState>
+        ) : isLoading ? (
           <EmptyState>Loading…</EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState>No activations for this month.</EmptyState>

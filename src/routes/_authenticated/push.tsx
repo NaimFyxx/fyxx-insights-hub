@@ -70,7 +70,9 @@ function PushPage() {
         fall back to — opens and conversions are the whole picture.
       </p>
       <Panel title="Push notifications">
-        {isLoading ? (
+        {isError ? (
+          <EmptyState>Not loaded — see the error above.</EmptyState>
+        ) : isLoading ? (
           <EmptyState>Loading…</EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState>No push sends in range.</EmptyState>

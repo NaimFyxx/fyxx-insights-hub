@@ -126,7 +126,9 @@ function FlowsPage() {
       {isError ? <QueryFailed error={error} /> : null}
       <OpensCaveat />
       <Panel title="Live flows">
-        {isLoading ? (
+        {isError ? (
+          <EmptyState>Not loaded — see the error above.</EmptyState>
+        ) : isLoading ? (
           <EmptyState>Loading…</EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState>No flow sends in range.</EmptyState>

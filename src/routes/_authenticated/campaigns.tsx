@@ -62,7 +62,11 @@ function CampaignsPage() {
       </p>
 
       <Panel title="Revenue per campaign">
-        {rows.length ? (
+        {isError ? (
+          <EmptyState>Not loaded — see the error above.</EmptyState>
+        ) : isLoading ? (
+          <EmptyState>Loading…</EmptyState>
+        ) : rows.length ? (
           <SimpleBarChart
             data={rows.map((r) => ({ label: r.name, value: Number(r.revenue_jod) }))}
             valueSuffix=" JOD"
@@ -75,7 +79,9 @@ function CampaignsPage() {
       </Panel>
 
       <Panel title="Campaign detail">
-        {isLoading ? (
+        {isError ? (
+          <EmptyState>Not loaded — see the error above.</EmptyState>
+        ) : isLoading ? (
           <EmptyState>Loading…</EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState>No campaigns in range.</EmptyState>

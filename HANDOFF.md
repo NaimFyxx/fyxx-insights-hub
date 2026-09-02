@@ -27,6 +27,47 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## Unsubscribe rate — added as the fourth metric
+
+Naim's addition, and the data supports it. Klaviyo accepts `unsubscribes`,
+`unsubscribe_rate` and `spam_complaints` in the same values-report call, so it
+costs no extra quota. Probe returned 50 unsubscribes and 3 spam complaints on
+11,700 delivered for one recent campaign.
+
+Stored on `klaviyo_campaigns` and `klaviyo_flows`, shown as a fourth COLUMN on
+the campaigns table rather than a headline, tinted above 0.5% — a "look at
+this" marker, not a verdict. Added to `CAMPAIGN_JUDGEMENT` with the reasoning:
+the cost side, and the one engagement figure Apple Mail cannot distort.
+
+**A fault of mine, caught and fixed within the hour.** The columns were first
+created `NOT NULL DEFAULT 0`, which would have made "not fetched yet"
+indistinguishable from "nobody unsubscribed" — every historical campaign
+reading as a perfect zero. That is the exact class of error this project keeps
+correcting. Now nullable, existing rows reset to NULL, and the UI renders a
+dash with a caption saying a dash is not a zero.
+
+Backfill of Aug–Sep was still running at the end of the session; flow values are
+rate-limited to 2 calls/min. Until it lands the column shows dashes, correctly.
+
+## Claimed rewards are now a LIVE source
+
+`/v2/transactions` carries every claimed reward the CSV had, over the same
+span, **plus 87 more**. Written on every nightly sync from the pass that
+already counts redemptions, so it costs no extra API calls. Verified: 22 rows
+written for 31 Aug – 2 Sep, tagged `source = 'v2_transactions'`.
+
+**Two columns cannot be reproduced** — `order_total_jod` and
+`used_with_orders`, which link a reward to the order it was spent on. Nothing
+reads them today so nothing is lost, but the CSV rows are KEPT rather than
+deleted because the API cannot answer that question. Recorded in the README so
+nobody re-imports the file, and nobody assumes the API is a full replacement.
+
+**The trap repeated itself and was caught the second time.** The upsert first
+named `(ll_customer_id, claimed_at)` while the primary key is
+`(ll_customer_id, claimed_at, title)` — three columns. That is 42P10 again,
+the same fault as the report Save button, found before shipping this time by
+checking the constraint rather than assuming it.
+
 ## MPP labelled, and what replaces open rate — MEASURED, not assumed
 
 **Labelled in all four places:** Campaigns, Flows and Push pages (shared

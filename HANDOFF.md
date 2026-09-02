@@ -27,6 +27,41 @@ It is written for a reader who has seen none of this: "the till began recording
 a customer on every in-store order", not "the Odoo connector requires a
 customer". The headline tile carries the like-for-like figure inline too.
 
+## Critical review — DONE, in `REVIEW.md`
+
+Four splits: MEASURED / INFERRED / NEVER CHALLENGED, plus guards by whether
+they have been watched failing. Everything checked against the database or the
+code rather than recalled.
+
+**The finding that matters most: email open rates carry no Apple MPP caveat
+anywhere** — not in the app, the report or the verification pack. Apple
+pre-fetches images and marks messages opened whether or not anyone read them.
+Every open figure and every open-rate comparison in Zeid's monthly report is
+inflated by an unknowable amount, unlabelled. Largest unmarked distortion in
+the system, and the cheapest to fix.
+
+**Second: health measures whether the JOB RAN, not whether the DATA IS
+CURRENT.** `klaviyo_reach` reports healthy — the nightly job succeeds — while
+reach data covers **3 of 31 August days**. The monthly report catches this and
+refuses to total; the health page does not. A backfill can run successfully
+forever while recent days stay empty.
+
+**Two pages are backed by empty tables:** `activations` (0 rows) and
+`reports` (0 rows) both have full CRUD pages and nav entries.
+
+**The guards split is the uncomfortable one.** Ten guards have been watched
+firing; nine have only ever been watched passing — including `QueryFailed` on
+all ten pages, the per-step workflow isolation, and the nightly repair step,
+none of which has yet run in anger. Guards protecting faults that already
+happened are well tested; guards protecting faults that have not happened yet
+are decoration until proven.
+
+**Found and fixed while reviewing:** `fetchSnapshotGaps` kept its own untested
+copy of the day-walk that decides whether a loyalty night is missing — the
+alarm for the only irrecoverable loss in the system was the untested
+implementation. It now reuses `tierSeriesWithGaps`, which has nine checks and
+two watched regressions.
+
 ## /v2/orders verification — DONE, and it found something in both directions
 
 `scripts/diagnose/verify-loyaltylion-orders.mjs [--days 30]`. Read-only.

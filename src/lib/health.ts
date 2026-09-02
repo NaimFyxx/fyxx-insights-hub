@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/queries";
+import { tierSeriesWithGaps } from "@/lib/timeseries";
 
 /** The unattended jobs, and how far behind each is allowed to be. */
 export const SOURCES = [
@@ -240,16 +241,29 @@ export async function fetchSnapshotGaps(): Promise<{
     .sort();
   if (scanned.length === 0) return { gaps: [], firstScan: null, lastScan: null, scanned: 0 };
 
-  const have = new Set(scanned);
-  const first = scanned[0]!;
-  const last = scanned[scanned.length - 1]!;
-  const gaps: SnapshotGap[] = [];
-  // Walk the span day by day rather than differencing consecutive rows, so a
-  // multi-day outage is listed as each missing date rather than one range.
-  for (let d = new Date(`${first}T00:00:00Z`); ; d.setUTCDate(d.getUTCDate() + 1)) {
-    const iso = d.toISOString().slice(0, 10);
-    if (iso > last) break;
-    if (!have.has(iso)) gaps.push({ date: iso });
-  }
-  return { gaps, firstScan: first, lastScan: last, scanned: scanned.length };
+  // Reuses the SAME day-walk the chart uses, rather than keeping a second copy
+  // of it here. Two implementations of "which nights are missing" can disagree,
+  // and the one on this page is the alarm for the only irrecoverable loss in
+  // the system — it must not be the untested copy. tierSeriesWithGaps has nine
+  // checks against it, including two deliberate regressions.
+  const series = tierSeriesWithGaps(
+    rows
+      .filter((r) => r.snapshot_date && Number(r.blue_members ?? 0) > 0)
+      .map((r) => ({
+        snapshot_date: r.snapshot_date as string,
+        blue_members: Number(r.blue_members),
+        silver_members: 0,
+        gold_members: 0,
+        platinum_members: 0,
+      })),
+  );
+  const gaps: SnapshotGap[] = series
+    .filter((p) => p.Blue === null)
+    .map((p) => ({ date: p.date }));
+  return {
+    gaps,
+    firstScan: scanned[0]!,
+    lastScan: scanned[scanned.length - 1]!,
+    scanned: scanned.length,
+  };
 }

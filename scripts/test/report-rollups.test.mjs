@@ -157,5 +157,66 @@ group("push: an empty month");
   check("and a zero total rather than a crash", r.total.sent === 0 && r.total.name === "Total");
 }
 
+const monthly = (name, channel, recipients, delivered, opened) => ({
+  month: "2026-09-01", flow_id: "F" + name, flow_message_id: "M" + name + channel,
+  send_channel: channel, flow_name: name,
+  recipients, delivered, opened, clicked: 0, conversions: 0, revenue_jod: 0,
+});
+
+group("flows table reads WHOLE-MONTH opens, never the daily sum");
+{
+  // The bug: Klaviyo counts unique people inside the window asked about, so
+  // daily opens cannot be added up. September 2026 review-request-judgeme
+  // summed to 1,298 against Klaviyo's 761 for the month.
+  const r = m.rollUpFlowsMonthly([
+    monthly("review-request-judgeme", "email", 1366, 1362, 387),
+    monthly("review-request-judgeme", "email", 1403, 1400, 374),
+    // Push sent BY a flow belongs in the push table, not this one.
+    monthly("review-request-judgeme", "push", 500, 499, 40),
+  ]);
+  check("push rows are excluded from the flows table", r.total.recipients === 1366 + 1403,
+    `${r.total.recipients}`);
+  check("the month's opens are Klaviyo's 761", r.total.opened === 761, `${r.total.opened}`);
+  check("open rate is 27.6 per cent, not 47",
+    Math.abs((r.total.opened / r.total.delivered) * 100 - 27.55) < 0.05,
+    ((r.total.opened / r.total.delivered) * 100).toFixed(2));
+}
+
+group("push table takes each row from the source that is right for it");
+{
+  // Campaign push is fetched in ONE call and is correct. Flow push is fetched
+  // per day, so its opens must come from the monthly figures instead.
+  const campaignPush = [
+    { source_type: "Campaign", source_name: "x", sent: 30540, delivered: 30399, opened: 152 },
+    // A flow push row from the daily table, carrying the inflated 308.
+    { source_type: "Flow", source_name: "y", sent: 8658, delivered: 8635, opened: 308 },
+  ];
+  const r = m.pushByTypeForMonth(campaignPush, [monthly("f", "push", 8658, 8635, 274)]);
+  // Looked up by NAME, not by index. Indexing blew up with a TypeError when a
+  // regression dropped the Flows row, which killed the run and hid every check
+  // after it; a missing row should read as one failure, not as a crash.
+  const row = (n) => r.types.find((t) => t.name === n) ?? { sent: 0, delivered: 0, opened: -1 };
+  check("campaign opens come from the campaign rows", row("Campaigns").opened === 152);
+  check("there is a Flows row at all", r.types.some((t) => t.name === "Flows"),
+    r.types.map((t) => t.name).join(", ") || "no rows");
+  check("flow opens come from the monthly figure, not the daily 308",
+    row("Flows").opened === 274, `${row("Flows").opened}`);
+  check("the daily flow-push row is not double counted into sends",
+    r.total.sent === 30540 + 8658, `${r.total.sent}`);
+  check("total opens are 426, not 460", r.total.opened === 426, `${r.total.opened}`);
+}
+
+group("a range is only a whole month when it is exactly one");
+{
+  check("1 to 30 September", m.wholeMonthOf({ from: "2026-09-01", to: "2026-09-30" }) === "2026-09-01");
+  check("February in a leap year", m.wholeMonthOf({ from: "2024-02-01", to: "2024-02-29" }) === "2024-02-01");
+  check("February in a common year", m.wholeMonthOf({ from: "2026-02-01", to: "2026-02-28" }) === "2026-02-01");
+  check("a month one day short is not", m.wholeMonthOf({ from: "2026-09-01", to: "2026-09-29" }) === null);
+  check("a month one day over is not", m.wholeMonthOf({ from: "2026-09-01", to: "2026-10-01" }) === null);
+  check("not starting on the first is not", m.wholeMonthOf({ from: "2026-09-02", to: "2026-09-30" }) === null);
+  check("two whole months is not one", m.wholeMonthOf({ from: "2026-09-01", to: "2026-10-31" }) === null);
+  check("31-day month", m.wholeMonthOf({ from: "2026-08-01", to: "2026-08-31" }) === "2026-08-01");
+}
+
 console.log(`\n${failed === 0 ? "all checks passed" : `${failed} FAILED`}`);
 process.exit(failed === 0 ? 0 : 1);

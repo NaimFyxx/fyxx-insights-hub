@@ -248,6 +248,69 @@ export type Database = {
         };
         Relationships: [];
       };
+      klaviyo_flow_monthly: {
+        Row: {
+          month: string;
+          flow_id: string;
+          flow_message_id: string;
+          send_channel: string;
+          flow_name: string;
+          recipients: number;
+          delivered: number;
+          opened: number;
+          clicked: number;
+          open_rate: number;
+          click_rate: number;
+          conversions: number;
+          conversion_rate: number;
+          revenue_jod: number;
+          unsubscribes: number | null;
+          spam_complaints: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          month: string;
+          flow_id: string;
+          flow_message_id: string;
+          send_channel?: string;
+          flow_name: string;
+          recipients?: number;
+          delivered?: number;
+          opened?: number;
+          clicked?: number;
+          open_rate?: number;
+          click_rate?: number;
+          conversions?: number;
+          conversion_rate?: number;
+          revenue_jod?: number;
+          unsubscribes?: number | null;
+          spam_complaints?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          month?: string;
+          flow_id?: string;
+          flow_message_id?: string;
+          send_channel?: string;
+          flow_name?: string;
+          recipients?: number;
+          delivered?: number;
+          opened?: number;
+          clicked?: number;
+          open_rate?: number;
+          click_rate?: number;
+          conversions?: number;
+          conversion_rate?: number;
+          revenue_jod?: number;
+          unsubscribes?: number | null;
+          spam_complaints?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       klaviyo_order_influence: {
         Row: {
           created_at: string;

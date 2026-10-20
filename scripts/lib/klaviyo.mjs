@@ -230,6 +230,78 @@ export async function fetchFlowValuesForDay({ day, conversionMetricId }) {
 }
 
 /** ------------------------------------------------------------------------
+ * FLOW VALUES FOR A WHOLE PERIOD, in one call.
+ *
+ * The per-day call above cannot answer "how did this flow do this month",
+ * because opens_unique counts unique PEOPLE inside the window asked for and
+ * is therefore not additive: someone who opens on three days is one person in
+ * a monthly report and three in the sum of three daily ones. Measured on
+ * review-request-judgeme, 1 to 5 September 2026: one call for the range gives
+ * delivered 405 and opens_unique 183, five daily calls give delivered 405 and
+ * opens_unique 197. Delivered agrees exactly; only opens disagree.
+ *
+ * So a period figure has to be asked for as a period. Same report, same
+ * grouping, one call.
+ * --------------------------------------------------------------------- */
+export async function fetchFlowValuesForPeriod({ from, to, conversionMetricId }) {
+  const body = {
+    data: {
+      type: "flow-values-report",
+      attributes: {
+        statistics: STATS,
+        timeframe: { start: dayStart(from), end: dayEnd(to) },
+        conversion_metric_id: conversionMetricId,
+        group_by: ["flow_id", "flow_message_id", "flow_name", "send_channel"],
+      },
+    },
+  };
+  const res = await postReport("/flow-values-reports", body, `flow values report ${from}..${to}`);
+  return (res.data?.attributes?.results ?? []).map((r) => ({
+    flowId: r.groupings?.flow_id,
+    messageId: r.groupings?.flow_message_id,
+    flowName: r.groupings?.flow_name ?? "(unnamed flow)",
+    channel: r.groupings?.send_channel,
+    s: r.statistics ?? {},
+  }));
+}
+
+/**
+ * Rows for klaviyo_flow_monthly. `month` is the first of the month, which is
+ * how the table is keyed.
+ *
+ * Unlike the daily builder this keeps PUSH in the same table rather than
+ * splitting it into klaviyo_push, because the push rows there are per send day
+ * and carry the same non-additive opens. `send_channel` separates them.
+ */
+export function toFlowMonthlyRows(results, month) {
+  const out = [];
+  for (const r of results) {
+    if (!r.flowId) continue;
+    const s = r.s;
+    if (int(s.recipients) === 0) continue;
+    out.push({
+      month,
+      flow_id: r.flowId,
+      flow_message_id: r.messageId,
+      send_channel: isPush(r.channel) ? "push" : "email",
+      flow_name: r.flowName,
+      recipients: int(s.recipients),
+      delivered: int(s.delivered),
+      opened: int(s.opens_unique),
+      clicked: int(s.clicks_unique),
+      open_rate: rate4(s.open_rate),
+      click_rate: rate4(s.click_rate),
+      conversions: int(s.conversions),
+      conversion_rate: rate4(s.conversion_rate),
+      revenue_jod: money3(s.conversion_value),
+      unsubscribes: int(s.unsubscribes),
+      spam_complaints: int(s.spam_complaints),
+    });
+  }
+  return out;
+}
+
+/** ------------------------------------------------------------------------
  * ATTRIBUTED REVENUE — event-date basis. A different question, deliberately.
  *
  * The reports above answer "how did this send perform", dated by SEND date.

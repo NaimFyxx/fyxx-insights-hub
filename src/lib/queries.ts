@@ -69,6 +69,34 @@ export type PushRow = {
   revenue_jod: number;
 };
 
+/**
+ * A flow's performance over a WHOLE calendar month, from one Klaviyo call.
+ *
+ * Separate from FlowRow because opens cannot be summed out of daily rows:
+ * Klaviyo's opens_unique counts unique people inside the window asked for, so
+ * a person who opens on three days is one person in a monthly report and three
+ * in the sum of three daily ones. September 2026, review-request-judgeme: the
+ * daily rows sum to 1,298 opens against Klaviyo's 761 for the month.
+ *
+ * Everything else agrees exactly, delivered included, so the daily table is
+ * still right about everything it is asked for by day.
+ */
+export type FlowMonthlyRow = {
+  month: string;
+  flow_id: string;
+  flow_message_id: string;
+  /** "email" or "push". The report tables split on this. */
+  send_channel: string;
+  flow_name: string;
+  recipients: number;
+  delivered: number;
+  /** Unique people who opened during the month. Never add across months. */
+  opened: number;
+  clicked: number;
+  conversions: number;
+  revenue_jod: number;
+};
+
 export type Snapshot = {
   snapshot_date: string;
   points_source: string;
@@ -239,6 +267,23 @@ export const fetchPush = (r: DateRange) =>
       .gte("sent_on", r.from)
       .lte("sent_on", r.to)
       .order("sent_on")
+      .range(from, to),
+  );
+
+/**
+ * Flow figures for the calendar month a range starts in.
+ *
+ * The monthly report always picks a whole month, so this is exact for it. A
+ * caller with an arbitrary range must not use this: see flowOpensAvailable.
+ */
+export const fetchFlowMonthly = (month: string) =>
+  fetchAllRows<FlowMonthlyRow>((from, to) =>
+    supabase
+      .from("klaviyo_flow_monthly")
+      .select(
+        "month,flow_id,flow_message_id,send_channel,flow_name,recipients,delivered,opened,clicked,conversions,revenue_jod",
+      )
+      .eq("month", month)
       .range(from, to),
   );
 

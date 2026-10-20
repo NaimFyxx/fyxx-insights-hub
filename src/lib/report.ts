@@ -7,6 +7,7 @@ import {
   fetchAttributed,
   fetchSnapshots,
   fetchActivations,
+  fetchFlowMonthly,
   type Campaign,
   type FlowRow,
   type PushRow,
@@ -15,10 +16,24 @@ import {
 import { POS_DEFINITION_CHANGED } from "@/lib/channels";
 import { settledOnly, rangeIncludesToday, type DateRange } from "@/lib/ranges";
 import { fetchCoverage, coverageGap } from "@/lib/coverage";
-import { rollUpCampaigns, rollUpFlows, rollUpPushByType } from "@/lib/rollups";
+import {
+  pushByTypeForMonth,
+  rollUpCampaigns,
+  rollUpFlows,
+  rollUpFlowsMonthly,
+  rollUpPushByType,
+  wholeMonthOf,
+} from "@/lib/rollups";
 
 // Re-exported so report.ts stays the one import the report page needs.
-export { rollUpCampaigns, rollUpFlows, rollUpPushByType } from "@/lib/rollups";
+export {
+  pushByTypeForMonth,
+  rollUpCampaigns,
+  rollUpFlows,
+  rollUpFlowsMonthly,
+  rollUpPushByType,
+  wholeMonthOf,
+} from "@/lib/rollups";
 export type { CampaignAgg, FlowAgg, PushAgg } from "@/lib/rollups";
 
 /**
@@ -274,13 +289,24 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     fetchNarrative(range),
   ]);
 
+  // Flow OPENS come from the whole-month report, not from the daily rows.
+  // Klaviyo's opens_unique counts unique people inside the window asked for,
+  // so it cannot be summed across days: September 2026 review-request-judgeme
+  // reads 1,298 from the daily rows against Klaviyo's 761 for the month.
+  // Everything else agrees exactly, delivered included.
+  const flowMonthly = await fetchFlowMonthly(range.from);
+
   const days = daysIn(range);
 
   // Flow reports are backfilled a day at a time; an incomplete range would
   // understate every flow figure without looking wrong.
   const flowDays = new Set(flows.map((f) => f.date));
   const flowsAvailability: Availability =
-    flowDays.size === 0
+    flowMonthly.length === 0
+      ? no(
+          "Flow figures for this month have not been collected yet. They come from a single monthly report, which runs nightly.",
+        )
+      : flowDays.size === 0
       ? no(
           `Flow data has not been collected for this period. The backfill runs nightly and has not yet reached ${range.from}.`,
         )
@@ -354,9 +380,16 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
   // Summed from the same rows the tables total, so the strip above cannot
   // disagree with the tables below. Flow "sends" are recipients, which is what
   // Klaviyo reports for a flow message and what the flows table shows.
+  // Taken from the SAME rows each table totals, so the strip cannot disagree
+  // with the tables. Flows and flow push read the monthly figures because the
+  // tables below do; campaign push stays on its own correct per-send rows.
   const campaignSends = splitTestSends(campaigns).real.reduce((a, c) => a + c.sent, 0);
-  const flowSends = flows.reduce((a, f) => a + f.recipients, 0);
-  const pushSends = push.reduce((a, p) => a + p.sent, 0);
+  const flowSends = flowMonthly
+    .filter((f) => f.send_channel === "email")
+    .reduce((a, f) => a + f.recipients, 0);
+  const pushSends =
+    push.filter((p) => p.source_type === "Campaign").reduce((a, p) => a + p.sent, 0) +
+    flowMonthly.filter((f) => f.send_channel === "push").reduce((a, f) => a + f.recipients, 0);
 
   const notices: string[] = [];
   if (range.from < POS_DEFINITION_CHANGED && range.to >= POS_DEFINITION_CHANGED) {
@@ -382,10 +415,10 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
       rollup: rollUpCampaigns(splitTestSends(campaigns).real),
       excludedTests: splitTestSends(campaigns).tests,
     },
-    flows: { availability: flowsAvailability, rollup: rollUpFlows(flows) },
+    flows: { availability: flowsAvailability, rollup: rollUpFlowsMonthly(flowMonthly) },
     push: {
       availability: push.length ? ok : no("No push notifications were sent in this period."),
-      rollup: rollUpPushByType(push),
+      rollup: pushByTypeForMonth(push, flowMonthly),
     },
     loyalty: {
       availability: loyaltyAvailability,

@@ -260,6 +260,87 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
  * Marketing-influenced orders. Cheap compared with reach: the events are
  * orders and clicks, thousands a month rather than hundreds of thousands.
  */
+/** ------------------------------------------------------------------------
+ * FLOW MONTHLY — one call per calendar month.
+ *
+ * Opens cannot be summed from daily rows. Klaviyo's opens_unique counts unique
+ * PEOPLE inside the window asked for, so a person who opens on three days is
+ * one person in a monthly report and three in the sum of three daily ones.
+ * September 2026, review-request-judgeme: daily rows sum to 1,298 against
+ * Klaviyo's 761 for the month.
+ *
+ * Everything else in klaviyo_flows is additive and already correct, delivered
+ * included, so this does not replace the daily table. It answers the period
+ * question the daily table cannot.
+ *
+ * Cheap: three calls covers August to October, against about ninety for the
+ * same span one day at a time.
+ * --------------------------------------------------------------------- */
+function monthsIn(from, to) {
+  const out = [];
+  let d = new Date(`${from.slice(0, 7)}-01T12:00:00Z`);
+  const end = new Date(`${to.slice(0, 7)}-01T12:00:00Z`);
+  while (d <= end) {
+    out.push(d.toISOString().slice(0, 10));
+    d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 12));
+  }
+  return out;
+}
+
+/** Last day of the calendar month that `month` (a YYYY-MM-01) begins. */
+function monthEnd(month) {
+  const d = new Date(`${month}T12:00:00Z`);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 12))
+    .toISOString()
+    .slice(0, 10);
+}
+
+async function syncFlowMonthly({ from, to, dryRun }) {
+  const metricId = await klaviyo.findPlacedOrderMetricId();
+  const months = monthsIn(from, to);
+  const today = ammanToday();
+  let written = 0;
+
+  for (const month of months) {
+    // A month still in progress is fetched to its last SETTLED day, so the
+    // figure is of completed days rather than of a partial one. It is
+    // refetched on later runs, and the upsert replaces it.
+    const end = monthEnd(month);
+    const windowEnd = end >= today ? shiftDays(today, -1) : end;
+    if (windowEnd < month) {
+      log.info(`${month.slice(0, 7)}: no settled days yet, skipped`);
+      continue;
+    }
+    const results = await klaviyo.fetchFlowValuesForPeriod({
+      from: month,
+      to: windowEnd,
+      conversionMetricId: metricId,
+    });
+    const rows = klaviyo.toFlowMonthlyRows(results, month);
+    const opens = rows.reduce((a, r) => a + r.opened, 0);
+    const delivered = rows.reduce((a, r) => a + r.delivered, 0);
+    log.info(
+      `${month.slice(0, 7)} (${month} … ${windowEnd}): ${rows.length} flow message(s), ` +
+        `${delivered} delivered, ${opens} opened`,
+    );
+    written += await upsert(
+      "klaviyo_flow_monthly",
+      rows,
+      "month,flow_id,flow_message_id,send_channel",
+      { dryRun },
+    );
+  }
+
+  if (!dryRun) {
+    await writeSyncLog(
+      { source: "klaviyo_flow_monthly", status: "success", rangeStart: from, rangeEnd: to, rowsWritten: written },
+      { dryRun },
+    );
+  }
+  log.ok(`Flow monthly: ${written} row(s) across ${months.length} month(s)`);
+  return written;
+}
+
 async function syncInfluence({ from, to, dryRun }) {
   const started = Date.now();
   const metricId = await klaviyo.findPlacedOrderMetricId();
@@ -554,7 +635,7 @@ async function main() {
   if (from > to) throw new Error(`--from (${from}) is after --to (${to})`);
 
   const sources = args.only ?? ["klaviyo", "shopify", "loyaltylion"];
-  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin", "influence", "customers"].includes(s));
+  const unknown = sources.filter((s) => !["klaviyo", "shopify", "loyaltylion", "reach", "margin", "influence", "customers", "flow-monthly"].includes(s));
   if (unknown.length) throw new Error(`--only: unknown source(s) ${unknown.join(", ")}`);
 
   preflight(sources, args.dryRun);
@@ -628,6 +709,21 @@ async function main() {
 
   // Customers are a whole-population snapshot, not a date range, so this is
   // opt-in via --only rather than part of the nightly run.
+  if (sources.includes("flow-monthly")) {
+    try {
+      totalRows += await syncFlowMonthly({ from, to, dryRun: args.dryRun });
+    } catch (err) {
+      failures.push(["flow-monthly", err]);
+      log.error(`Flow monthly failed: ${redact(err.message)}`);
+      if (!args.dryRun) {
+        await writeSyncLog(
+          { source: "klaviyo_flow_monthly", status: "error", rangeStart: from, rangeEnd: to, message: redact(String(err.message)).slice(0, 500) },
+          { dryRun: false },
+        );
+      }
+    }
+  }
+
   if (sources.includes("customers")) {
     try {
       totalRows += await syncCustomers({ dryRun: args.dryRun });
@@ -702,7 +798,7 @@ function preflight(sources, dryRun) {
 
 function readmeUsage() {
   return `Usage: node scripts/sync.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD]
-                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach,margin,influence]
+                            [--dry-run] [--force] [--only klaviyo,shopify,loyaltylion,reach,margin,influence,flow-monthly]
 
   --max-days N   cap how many flow days one run attempts, so a long backfill
                  can span several runs within Klaviyo's 225/day limit

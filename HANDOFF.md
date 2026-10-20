@@ -9,6 +9,11 @@ a decision from Naim. See "Waiting on a decision".
 
 ## Anything that changed a previously reported figure
 
+**Flow open rates were overstated and are now correct.** September 2026, email
+flows: 38.4 per cent, not 48.7. review-request-judgeme: 761 opens of 2,762
+delivered, not 1,298. Flow push opens: 274, not 308. Campaigns were never
+affected and have not moved.
+
 **Flow and push revenue on the report is now ex VAT.** Previously the flows
 table printed gross while the campaign table printed ex VAT, so the two tables
 on the same page used different units. September flow revenue reads 13,141
@@ -110,6 +115,66 @@ the table was empty, so the wrong branch had never run. Now compared
 case-insensitively, since the two spellings live in different files.
 
 ---
+
+## Why flow opens were wrong, and why there is no per-day fix
+
+Klaviyo's `opens_unique` counts unique PEOPLE inside the window it is asked
+about. It is therefore not a quantity that can be split across days and added
+back up: someone who opens on three days is one person in a monthly report and
+three in the sum of three daily ones.
+
+The sync was already storing `opens_unique` rather than total opens, so that
+was not it. Measured on review-request-judgeme, 1 to 5 September:
+
+| | delivered | opens_unique |
+|---|---|---|
+| one call for the range | 405 | 183 |
+| five daily calls, summed | 405 | 197 |
+
+Delivered agrees exactly. Only opens disagree, and only upward, and the gap
+widens with the window because a longer window dedups more: over the full month
+the daily rows sum to 1,298 against Klaviyo's 761, a factor of 1.71.
+
+A second, smaller error ran the other way. Klaviyo returns no row at all for a
+flow message that sent nothing that day, and the sync drops any row with zero
+recipients anyway, so opens of an earlier send that land on a quiet day are
+never recorded. Flows that send in bursts lose opens; flows that send daily
+double count them. Checked directly: on 4 September the API returned 52 rows
+and not one had opens without sends.
+
+So there is no per-day figure to store. The only way to match Klaviyo over a
+period is to ask Klaviyo for that period, which is what
+`klaviyo_flow_monthly` now holds: one call per calendar month, which is also
+the window the monthly report reads. Three calls cover August to October,
+against about ninety for the same span one day at a time.
+
+`klaviyo_flows` is unchanged and still right about everything else. Summing a
+month of daily rows reproduces Klaviyo's delivered, conversions and revenue
+exactly, which is why only the opens column moved.
+
+**Campaigns were never affected.** The campaign sync already makes ONE call for
+the whole range, and all seven August 2026 campaigns match Klaviyo exactly on
+delivered and opens. Nothing there needed changing.
+
+**The Flows page cannot show an open rate for an arbitrary range**, because no
+true figure exists for one. It shows the rate when the range is exactly one
+calendar month and withholds it otherwise, with the reason on the page.
+Recipients, clicks, conversions and revenue are correct for any range.
+
+## How Conv. rate is worked out, and a discrepancy in it
+
+On the report it is **conversions divided by delivered**, where `conversions`
+is Klaviyo's count of conversion EVENTS, meaning orders.
+
+That is not the same as Klaviyo's own `conversion_rate`, which is **unique
+buyers divided by delivered**. The two differ whenever a customer orders twice.
+7 September, VW5Gsd: 76 delivered, 6 conversions, so the report shows 7.89 per
+cent while Klaviyo shows 6.58, which is 5 buyers over 76.
+
+Both denominators are delivered, so that part matches. Only the numerator
+differs: orders here, people at Klaviyo. Worth deciding which one the report
+should carry, since the stored `conversion_rate` column already holds
+Klaviyo's version and nothing reads it.
 
 ## Two pages in heavy months, decided and built
 

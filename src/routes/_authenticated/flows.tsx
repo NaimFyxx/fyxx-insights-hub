@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useDateRange } from "@/context/date-range-context";
-import { fetchFlows } from "@/lib/queries";
+import { fetchFlows, fetchFlowMonthly } from "@/lib/queries";
+import { wholeMonthOf } from "@/lib/report";
 import { jod, num, pct, rate } from "@/lib/format";
 import { OpensCaveat, QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
 import { Table, Th, Td, TotalsRow } from "@/components/fyxx/data-table";
@@ -25,7 +26,12 @@ type Agg = {
   recipients: number;
   /** Klaviyo computes its rates off delivered, so totals must too. */
   delivered: number;
-  opened: number;
+  /**
+   * NULL when the selected range is not a whole calendar month, because then
+   * no true figure exists: see the note on `month` below. Rendering a null as
+   * a number here would print the inflated daily sum.
+   */
+  opened: number | null;
   clicked: number;
   conversions: number;
   revenue: number;
@@ -38,14 +44,32 @@ function FlowsPage() {
   const [sortKey, setSortKey] = useState<SortKey>("revenue");
   const [asc, setAsc] = useState(false);
 
+  /**
+   * Opens are only true for a window Klaviyo was asked about.
+   *
+   * Klaviyo's opens_unique counts unique PEOPLE inside the window, so summing
+   * the daily rows counts anyone who opened on more than one day more than
+   * once: September 2026 sums to 1,298 for review-request-judgeme against
+   * Klaviyo's 761 for the month, and the gap widens with the range. The only
+   * window we hold a true figure for is the calendar month, so on any other
+   * range the open rate is withheld rather than overstated.
+   */
+  const month = wholeMonthOf(range);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["flows", range.from, range.to, refreshKey],
-    queryFn: () => fetchFlows(range),
+    queryFn: async () => {
+      const [daily, monthly] = await Promise.all([
+        fetchFlows(range),
+        month ? fetchFlowMonthly(month) : Promise.resolve([]),
+      ]);
+      return { daily, monthly };
+    },
   });
 
   const rows = useMemo(() => {
     const map = new Map<string, Agg>();
-    for (const r of data ?? []) {
+    for (const r of data?.daily ?? []) {
       const cur = map.get(r.flow_name) ?? {
         flow_name: r.flow_name,
         recipients: 0,
@@ -57,12 +81,22 @@ function FlowsPage() {
       };
       cur.recipients += r.recipients;
       cur.delivered += r.delivered;
-      cur.opened += r.opened;
       cur.clicked += r.clicked;
       cur.conversions += r.conversions;
       cur.revenue += Number(r.revenue_jod);
       map.set(r.flow_name, cur);
     }
+    // Opens come from the monthly report, never from the daily rows. Email
+    // only, matching what this table shows: flow push lives on the Push page.
+    const opensByFlow = new Map<string, number>();
+    for (const m of data?.monthly ?? []) {
+      if (m.send_channel !== "email") continue;
+      opensByFlow.set(m.flow_name, (opensByFlow.get(m.flow_name) ?? 0) + m.opened);
+    }
+    for (const f of map.values()) {
+      f.opened = month ? (opensByFlow.get(f.flow_name) ?? 0) : null;
+    }
+
     const list = [...map.values()].filter((f) => f.recipients > 0);
     const value = (f: Agg) => {
       switch (sortKey) {
@@ -71,7 +105,7 @@ function FlowsPage() {
         case "recipients":
           return f.recipients;
         case "open_rate":
-          return rate(f.opened, f.delivered);
+          return f.opened === null ? -1 : rate(f.opened, f.delivered);
         case "click_rate":
           return rate(f.clicked, f.delivered);
         case "conversion_rate":
@@ -86,13 +120,13 @@ function FlowsPage() {
       const cmp = typeof va === "string" ? va.localeCompare(vb as string) : (va as number) - (vb as number);
       return asc ? cmp : -cmp;
     });
-  }, [data, sortKey, asc]);
+  }, [data, month, sortKey, asc]);
 
   const t = rows.reduce(
     (acc, r) => ({
       recipients: acc.recipients + r.recipients,
       delivered: acc.delivered + r.delivered,
-      opened: acc.opened + r.opened,
+      opened: r.opened === null ? acc.opened : acc.opened + r.opened,
       clicked: acc.clicked + r.clicked,
       conversions: acc.conversions + r.conversions,
       revenue: acc.revenue + r.revenue,
@@ -124,6 +158,17 @@ function FlowsPage() {
         subtitle="Aggregated per flow across the selected range. Klaviyo cannot split by Shopify sales channel, so no channel filter applies here."
       />
       {isError ? <QueryFailed error={error} /> : null}
+      {month ? null : (
+        <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
+          <span className="text-foreground">Open rate is not shown for this range.</span> Klaviyo
+          counts unique people who opened inside the window it is asked about, so a figure for one
+          day cannot be added to the next: anyone who opens on two days would be counted twice.
+          September 2026 summed that way gives 1,298 opens for review-request-judgeme against
+          Klaviyo&rsquo;s 761 for the month. A true figure is held for whole calendar months only,
+          so <b>set the range to one month</b> to see it. Recipients, clicks, conversions and
+          revenue are unaffected and correct for any range.
+        </p>
+      )}
       <OpensCaveat />
       <Panel title="Live flows">
         {isError ? (
@@ -149,7 +194,9 @@ function FlowsPage() {
                 <tr key={r.flow_name}>
                   <Td>{r.flow_name}</Td>
                   <Td align="right">{num(r.recipients)}</Td>
-                  <Td align="right">{pct(rate(r.opened, r.delivered))}</Td>
+                  <Td align="right">
+                    {r.opened === null ? "n/a" : pct(rate(r.opened, r.delivered))}
+                  </Td>
                   <Td align="right">{pct(rate(r.clicked, r.delivered))}</Td>
                   <Td align="right">{pct(rate(r.conversions, r.delivered), 2)}</Td>
                   <Td align="right">{jod(r.revenue)}</Td>
@@ -158,7 +205,7 @@ function FlowsPage() {
               <TotalsRow>
                 <Td>Total</Td>
                 <Td align="right">{num(t.recipients)}</Td>
-                <Td align="right">{pct(rate(t.opened, t.delivered))}</Td>
+                <Td align="right">{month ? pct(rate(t.opened, t.delivered)) : "n/a"}</Td>
                 <Td align="right">{pct(rate(t.clicked, t.delivered))}</Td>
                 <Td align="right">{pct(rate(t.conversions, t.delivered), 2)}</Td>
                 <Td align="right">{jod(t.revenue)}</Td>

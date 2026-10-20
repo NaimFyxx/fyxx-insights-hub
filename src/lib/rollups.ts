@@ -7,7 +7,8 @@
  * the Supabase client, scripts/test/report-rollups.test.mjs can no longer load
  * it, and these checks go quiet instead of failing.
  */
-import type { FlowRow, PushRow } from "@/lib/queries";
+import type { FlowMonthlyRow, FlowRow, PushRow } from "@/lib/queries";
+import type { DateRange } from "@/lib/ranges";
 
 export type FlowAgg = {
   name: string;
@@ -206,3 +207,110 @@ export function rollUpCampaigns<
     total: fold("All campaigns", live),
   };
 }
+
+/**
+ * The push table on the report: Campaigns, Flows, and a total.
+ *
+ * The two rows come from DIFFERENT sources on purpose, because only one of
+ * them can be trusted per day.
+ *
+ *   Campaigns  klaviyo_push, written by a single call covering the whole
+ *              range. A campaign has one send date, so its opens_unique is
+ *              counted once and is correct. Checked against Klaviyo for all
+ *              seven August 2026 campaigns: delivered and opens match exactly.
+ *
+ *   Flows      klaviyo_flow_monthly, because flow push is fetched one day at a
+ *              time and opens_unique is not additive across days. September
+ *              2026 flow push read 308 opens from the daily rows against
+ *              Klaviyo's 274 for the month.
+ *
+ * Sends and deliveries ARE additive and agree between the two sources, so
+ * either would do for those; opens decide which source each row uses.
+ */
+export function pushByTypeForMonth(
+  campaignPush: PushRow[],
+  flowMonthly: FlowMonthlyRow[],
+): { types: PushAgg[]; total: PushAgg } {
+  const campaigns = campaignPush
+    .filter((p) => p.source_type === "Campaign")
+    .reduce(
+      (a, p) => ({
+        name: "Campaigns",
+        sent: a.sent + p.sent,
+        delivered: a.delivered + p.delivered,
+        opened: a.opened + p.opened,
+      }),
+      { name: "Campaigns", sent: 0, delivered: 0, opened: 0 },
+    );
+  const flows = flowMonthly
+    .filter((f) => f.send_channel === "push")
+    .reduce(
+      (a, f) => ({
+        name: "Flows",
+        sent: a.sent + f.recipients,
+        delivered: a.delivered + f.delivered,
+        opened: a.opened + f.opened,
+      }),
+      { name: "Flows", sent: 0, delivered: 0, opened: 0 },
+    );
+  const types = [campaigns, flows].filter((t) => t.sent > 0);
+  const total = types.reduce(
+    (a, t) => ({
+      name: "Total",
+      sent: a.sent + t.sent,
+      delivered: a.delivered + t.delivered,
+      opened: a.opened + t.opened,
+    }),
+    { name: "Total", sent: 0, delivered: 0, opened: 0 },
+  );
+  return { types, total };
+}
+
+/**
+ * The flows table on the report, built from whole-month figures.
+ *
+ * Takes the same shape as rollUpFlows and exists so the caller does not have
+ * to reshape monthly rows into daily ones. Email only: push sent by a flow is
+ * counted in the push table, and folding it in here would double count it.
+ */
+export function rollUpFlowsMonthly(rows: FlowMonthlyRow[]) {
+  return rollUpFlows(
+    rows
+      .filter((r) => r.send_channel === "email")
+      .map((r) => ({
+        id: r.flow_message_id,
+        flow_name: r.flow_name,
+        date: r.month,
+        recipients: r.recipients,
+        delivered: r.delivered,
+        opened: r.opened,
+        clicked: r.clicked,
+        conversions: r.conversions,
+        revenue_jod: r.revenue_jod,
+        open_rate: 0,
+        click_rate: 0,
+        conversion_rate: 0,
+      })),
+  );
+}
+
+/**
+ * The calendar month a range covers exactly, or null if it covers anything
+ * else. Returns the first of that month, which is how klaviyo_flow_monthly is
+ * keyed.
+ *
+ * Flow opens are only knowable for a window Klaviyo was asked about, and the
+ * only such window we store is the calendar month. A page showing an arbitrary
+ * range therefore cannot show a true open rate, and must say so rather than
+ * print the sum of the daily figures, which overstates by up to about 70 per
+ * cent and gets worse the longer the range.
+ */
+export function wholeMonthOf(r: DateRange): string | null {
+  const start = new Date(`${r.from}T12:00:00Z`);
+  if (start.getUTCDate() !== 1) return null;
+  const lastDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0, 12))
+    .toISOString()
+    .slice(0, 10);
+  return r.to === lastDay ? r.from : null;
+}
+

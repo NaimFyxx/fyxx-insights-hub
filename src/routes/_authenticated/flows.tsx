@@ -32,6 +32,14 @@ type Agg = {
    * a number here would print the inflated daily sum.
    */
   opened: number | null;
+  /**
+   * Distinct customers who ordered, the numerator Klaviyo's conversion_rate
+   * uses. NULL on a range that is not a whole month, for the same reason as
+   * `opened`: uniqueness is defined over the window asked about, so daily
+   * figures cannot be added. `conversions` below counts ORDERS and is
+   * additive, which is why it stays a number.
+   */
+  uniqueBuyers: number | null;
   clicked: number;
   conversions: number;
   revenue: number;
@@ -75,6 +83,7 @@ function FlowsPage() {
         recipients: 0,
         delivered: 0,
         opened: 0,
+        uniqueBuyers: 0,
         clicked: 0,
         conversions: 0,
         revenue: 0,
@@ -89,12 +98,15 @@ function FlowsPage() {
     // Opens come from the monthly report, never from the daily rows. Email
     // only, matching what this table shows: flow push lives on the Push page.
     const opensByFlow = new Map<string, number>();
+    const buyersByFlow = new Map<string, number>();
     for (const m of data?.monthly ?? []) {
       if (m.send_channel !== "email") continue;
       opensByFlow.set(m.flow_name, (opensByFlow.get(m.flow_name) ?? 0) + m.opened);
+      buyersByFlow.set(m.flow_name, (buyersByFlow.get(m.flow_name) ?? 0) + (m.unique_buyers ?? 0));
     }
     for (const f of map.values()) {
       f.opened = month ? (opensByFlow.get(f.flow_name) ?? 0) : null;
+      f.uniqueBuyers = month ? (buyersByFlow.get(f.flow_name) ?? 0) : null;
     }
 
     const list = [...map.values()].filter((f) => f.recipients > 0);
@@ -109,7 +121,7 @@ function FlowsPage() {
         case "click_rate":
           return rate(f.clicked, f.delivered);
         case "conversion_rate":
-          return rate(f.conversions, f.delivered);
+          return f.uniqueBuyers === null ? -1 : rate(f.uniqueBuyers, f.delivered);
         default:
           return f.revenue;
       }
@@ -129,9 +141,10 @@ function FlowsPage() {
       opened: r.opened === null ? acc.opened : acc.opened + r.opened,
       clicked: acc.clicked + r.clicked,
       conversions: acc.conversions + r.conversions,
+      uniqueBuyers: r.uniqueBuyers === null ? acc.uniqueBuyers : acc.uniqueBuyers + r.uniqueBuyers,
       revenue: acc.revenue + r.revenue,
     }),
-    { recipients: 0, delivered: 0, opened: 0, clicked: 0, conversions: 0, revenue: 0 },
+    { recipients: 0, delivered: 0, opened: 0, uniqueBuyers: 0, clicked: 0, conversions: 0, revenue: 0 },
   );
 
   const header = (key: SortKey, label: string, align: "left" | "right" = "right") => (
@@ -165,8 +178,10 @@ function FlowsPage() {
           day cannot be added to the next: anyone who opens on two days would be counted twice.
           September 2026 summed that way gives 1,298 opens for review-request-judgeme against
           Klaviyo&rsquo;s 761 for the month. A true figure is held for whole calendar months only,
-          so <b>set the range to one month</b> to see it. Recipients, clicks, conversions and
-          revenue are unaffected and correct for any range.
+          so <b>set the range to one month</b> to see it. Conversion rate is withheld for the
+          same reason: it divides distinct BUYERS by delivered, and a buyer who orders in two
+          months is one buyer in each. Recipients, clicks, orders and revenue are all additive
+          and correct for any range.
         </p>
       )}
       <OpensCaveat />
@@ -198,7 +213,9 @@ function FlowsPage() {
                     {r.opened === null ? "n/a" : pct(rate(r.opened, r.delivered))}
                   </Td>
                   <Td align="right">{pct(rate(r.clicked, r.delivered))}</Td>
-                  <Td align="right">{pct(rate(r.conversions, r.delivered), 2)}</Td>
+                  <Td align="right">
+                    {r.uniqueBuyers === null ? "n/a" : pct(rate(r.uniqueBuyers, r.delivered), 2)}
+                  </Td>
                   <Td align="right">{jod(r.revenue)}</Td>
                 </tr>
               ))}
@@ -207,7 +224,9 @@ function FlowsPage() {
                 <Td align="right">{num(t.recipients)}</Td>
                 <Td align="right">{month ? pct(rate(t.opened, t.delivered)) : "n/a"}</Td>
                 <Td align="right">{pct(rate(t.clicked, t.delivered))}</Td>
-                <Td align="right">{pct(rate(t.conversions, t.delivered), 2)}</Td>
+                <Td align="right">
+                  {month ? pct(rate(t.uniqueBuyers, t.delivered), 2) : "n/a"}
+                </Td>
                 <Td align="right">{jod(t.revenue)}</Td>
               </TotalsRow>
             </tbody>

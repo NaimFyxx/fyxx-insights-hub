@@ -171,9 +171,7 @@ function ReportPage() {
             Print / Save as PDF
           </Button>
         </div>
-        {data && draft ? (
-          <NarrativeEditor range={range} draft={draft} onChange={setDraft} />
-        ) : null}
+        {data && draft ? <NarrativeEditor range={range} draft={draft} onChange={setDraft} /> : null}
       </div>
 
       {isLoading ? (
@@ -553,7 +551,7 @@ export function ReportPage1({
                   </td>
                   <td>{num(f.recipients)}</td>
                   <td>{pct(rateOf(f.opened, f.delivered))}</td>
-                  <td>{pct(rateOf(f.conversions, f.delivered))}</td>
+                  <td>{pct(rateOf(f.uniqueBuyers, f.delivered))}</td>
                   <td>{num(Math.round(exVat(f.revenue)))}</td>
                 </tr>
               ))}
@@ -565,7 +563,7 @@ export function ReportPage1({
                     {pct(rateOf(flows.rollup.other.opened, flows.rollup.other.delivered))}
                   </td>
                   <td className="sub">
-                    {pct(rateOf(flows.rollup.other.conversions, flows.rollup.other.delivered))}
+                    {pct(rateOf(flows.rollup.other.uniqueBuyers, flows.rollup.other.delivered))}
                   </td>
                   <td className="sub">{num(Math.round(exVat(flows.rollup.other.revenue)))}</td>
                 </tr>
@@ -574,7 +572,9 @@ export function ReportPage1({
                 <td>{flows.rollup.total.name}</td>
                 <td>{num(flows.rollup.total.recipients)}</td>
                 <td>{pct(rateOf(flows.rollup.total.opened, flows.rollup.total.delivered))}</td>
-                <td>{pct(rateOf(flows.rollup.total.conversions, flows.rollup.total.delivered))}</td>
+                <td>
+                  {pct(rateOf(flows.rollup.total.uniqueBuyers, flows.rollup.total.delivered))}
+                </td>
                 <td>{num(Math.round(exVat(flows.rollup.total.revenue)))}</td>
               </tr>
             </tbody>
@@ -666,15 +666,22 @@ export function ReportPage1({
             <div className="facts" style={{ marginTop: "2mm" }}>
               <div className="fact">
                 <div className="n">
-                  {/* Base is members who still BUY, not every member ever. The
-                      old figure divided ONE DAY's redeemers by all 12,081
-                      members and read 0.15 per cent whatever happened, which is
-                      a number nobody could act on. September 2026 reads 6.4 per
-                      cent on this basis. */}
+                  {/* A true share: redeemers who are IN the base, over the
+                      base. 161 of 2,701 for September 2026.
+
+                      Not `redeemers`, which is every member who redeemed, 172
+                      in September. That is not contained in the base, because
+                      11 of them are members who have stopped buying or whose
+                      id resolves to no Shopify customer, so "172 of 2,701"
+                      claimed a subset that was not one.
+
+                      The old figure was different again: ONE DAY's redeemers
+                      over all 12,081 members ever, which read 0.15 per cent
+                      whatever happened. */}
                   {loyalty.redemptionAvailability.available && loyalty.redemption ? (
                     <>
                       {(
-                        (loyalty.redemption.redeemers /
+                        (loyalty.redemption.redeemersInBase /
                           Math.max(1, loyalty.redemption.activeMembers)) *
                         100
                       ).toFixed(1)}
@@ -691,7 +698,7 @@ export function ReportPage1({
                     <>
                       {" "}
                       <span className="sub">
-                        {num(loyalty.redemption.redeemers)} of{" "}
+                        {num(loyalty.redemption.redeemersInBase)} of{" "}
                         {num(loyalty.redemption.activeMembers)}
                       </span>
                     </>
@@ -733,8 +740,8 @@ export function ReportPage1({
               </div>
             </div>
             <p className="caption">
-              Tiers, redemption rate and points outstanding are balances read on one day, not totals
-              for the month; LoyaltyLion keeps no history for them.
+              Tiers and points outstanding are read on the last day of the month. The redemption
+              rate covers the whole month.
             </p>
           </section>
         </div>
@@ -780,7 +787,10 @@ export function ReportPage1({
                   const [title, rest] =
                     colon > 0
                       ? [b.slice(0, colon + 1), b.slice(colon + 1)]
-                      : [b.split(/\s+/).slice(0, 3).join(" "), " " + b.split(/\s+/).slice(3).join(" ")];
+                      : [
+                          b.split(/\s+/).slice(0, 3).join(" "),
+                          " " + b.split(/\s+/).slice(3).join(" "),
+                        ];
                   return (
                     <div key={b}>
                       <b>{title}</b>

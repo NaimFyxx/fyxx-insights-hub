@@ -15,7 +15,17 @@ export type FlowAgg = {
   recipients: number;
   delivered: number;
   opened: number;
+  /** Conversion EVENTS, meaning orders. Not the Conv. rate numerator. */
   conversions: number;
+  /**
+   * Distinct customers who ordered, from Klaviyo's conversion_uniques.
+   *
+   * This is what Conv. rate divides by delivered, because it is the numerator
+   * Klaviyo's own conversion_rate uses. Dividing `conversions` instead counts
+   * a customer who ordered twice as two: review-request-judgeme, September
+   * 2026, read 98 / 2,762 = 3.5 per cent against Klaviyo's 54 / 2,762 = 2.0.
+   */
+  uniqueBuyers: number;
   revenue: number;
 };
 
@@ -38,12 +48,19 @@ export function rollUpFlows(rows: FlowRow[]): {
       delivered: 0,
       opened: 0,
       conversions: 0,
+      uniqueBuyers: 0,
       revenue: 0,
     };
     cur.recipients += r.recipients;
     cur.delivered += r.delivered;
     cur.opened += r.opened;
     cur.conversions += r.conversions;
+    // Summing buyers across a flow's messages slightly overcounts anyone who
+    // bought from two of them. Klaviyo offers nothing finer: its flow values
+    // report rejects a request grouped by flow_id alone with "Group by
+    // flow_message_id is required", so this sum is the only flow-level figure
+    // that exists.
+    cur.uniqueBuyers += (r as { unique_buyers?: number }).unique_buyers ?? 0;
     cur.revenue += Number(r.revenue_jod);
     byName.set(r.flow_name, cur);
   }
@@ -62,9 +79,10 @@ export function rollUpFlows(rows: FlowRow[]): {
         delivered: a.delivered + f.delivered,
         opened: a.opened + f.opened,
         conversions: a.conversions + f.conversions,
+        uniqueBuyers: a.uniqueBuyers + f.uniqueBuyers,
         revenue: a.revenue + f.revenue,
       }),
-      { name, recipients: 0, delivered: 0, opened: 0, conversions: 0, revenue: 0 },
+      { name, recipients: 0, delivered: 0, opened: 0, conversions: 0, uniqueBuyers: 0, revenue: 0 },
     );
 
   return {
@@ -286,6 +304,7 @@ export function rollUpFlowsMonthly(rows: FlowMonthlyRow[]) {
         opened: r.opened,
         clicked: r.clicked,
         conversions: r.conversions,
+        unique_buyers: r.unique_buyers ?? 0,
         revenue_jod: r.revenue_jod,
         open_rate: 0,
         click_rate: 0,

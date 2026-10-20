@@ -263,6 +263,7 @@ export type Database = {
           click_rate: number;
           conversions: number;
           conversion_rate: number;
+          unique_buyers: number | null;
           revenue_jod: number;
           unsubscribes: number | null;
           spam_complaints: number | null;

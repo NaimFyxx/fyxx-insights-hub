@@ -93,7 +93,14 @@ export type FlowMonthlyRow = {
   /** Unique people who opened during the month. Never add across months. */
   opened: number;
   clicked: number;
+  /** Conversion EVENTS, meaning orders. */
   conversions: number;
+  /**
+   * Distinct customers who ordered, from Klaviyo's conversion_uniques, which
+   * is the numerator its own conversion_rate uses. NULL on rows written before
+   * 21 October 2026, never zero buyers.
+   */
+  unique_buyers: number | null;
   revenue_jod: number;
 };
 
@@ -290,7 +297,7 @@ export const fetchFlowMonthly = (month: string) =>
     supabase
       .from("klaviyo_flow_monthly")
       .select(
-        "month,flow_id,flow_message_id,send_channel,flow_name,recipients,delivered,opened,clicked,conversions,revenue_jod",
+        "month,flow_id,flow_message_id,send_channel,flow_name,recipients,delivered,opened,clicked,conversions,unique_buyers,revenue_jod",
       )
       .eq("month", month)
       .range(from, to),

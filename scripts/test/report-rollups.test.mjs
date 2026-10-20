@@ -157,10 +157,11 @@ group("push: an empty month");
   check("and a zero total rather than a crash", r.total.sent === 0 && r.total.name === "Total");
 }
 
-const monthly = (name, channel, recipients, delivered, opened) => ({
+const monthly = (name, channel, recipients, delivered, opened, buyers = 0, orders = 0) => ({
   month: "2026-09-01", flow_id: "F" + name, flow_message_id: "M" + name + channel,
   send_channel: channel, flow_name: name,
-  recipients, delivered, opened, clicked: 0, conversions: 0, revenue_jod: 0,
+  recipients, delivered, opened, clicked: 0,
+  conversions: orders, unique_buyers: buyers, revenue_jod: 0,
 });
 
 group("flows table reads WHOLE-MONTH opens, never the daily sum");
@@ -169,10 +170,10 @@ group("flows table reads WHOLE-MONTH opens, never the daily sum");
   // daily opens cannot be added up. September 2026 review-request-judgeme
   // summed to 1,298 against Klaviyo's 761 for the month.
   const r = m.rollUpFlowsMonthly([
-    monthly("review-request-judgeme", "email", 1366, 1362, 387),
-    monthly("review-request-judgeme", "email", 1403, 1400, 374),
+    monthly("review-request-judgeme", "email", 1366, 1362, 387, 17, 34),
+    monthly("review-request-judgeme", "email", 1403, 1400, 374, 37, 64),
     // Push sent BY a flow belongs in the push table, not this one.
-    monthly("review-request-judgeme", "push", 500, 499, 40),
+    monthly("review-request-judgeme", "push", 500, 499, 40, 9, 11),
   ]);
   check("push rows are excluded from the flows table", r.total.recipients === 1366 + 1403,
     `${r.total.recipients}`);
@@ -180,6 +181,18 @@ group("flows table reads WHOLE-MONTH opens, never the daily sum");
   check("open rate is 27.6 per cent, not 47",
     Math.abs((r.total.opened / r.total.delivered) * 100 - 27.55) < 0.05,
     ((r.total.opened / r.total.delivered) * 100).toFixed(2));
+
+  // Conv. rate divides BUYERS by delivered, not orders. 98 orders came from
+  // 54 people, so dividing orders reads 3.5 per cent against Klaviyo's 2.0.
+  check("unique buyers are summed, orders are not mistaken for them",
+    r.total.uniqueBuyers === 54, `${r.total.uniqueBuyers}`);
+  check("orders are still carried separately", r.total.conversions === 98,
+    `${r.total.conversions}`);
+  check("conv rate is 2.0 per cent, not 3.5",
+    Math.abs((r.total.uniqueBuyers / r.total.delivered) * 100 - 1.96) < 0.05,
+    ((r.total.uniqueBuyers / r.total.delivered) * 100).toFixed(2));
+  check("push buyers are not folded into the email flows table",
+    r.total.uniqueBuyers !== 54 + 9);
 }
 
 group("push table takes each row from the source that is right for it");

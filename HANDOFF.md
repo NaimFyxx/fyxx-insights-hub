@@ -9,9 +9,20 @@ a decision from Naim. See "Waiting on a decision".
 
 ## Anything that changed a previously reported figure
 
-**The redemption rate is now 6.4 per cent for September 2026, not 0.15.** The
-definition changed, not the data: 172 members who claimed a reward that month
-over 2,701 members who bought in the trailing 12 months. The old figure divided
+**Conv. rate on the report now divides unique BUYERS by delivered**, which is
+the numerator Klaviyo's own conversion_rate uses. review-request-judgeme,
+September 2026: 2.0 per cent (54 of 2,762), not 3.5 (98 of 2,762). All email
+flows: 1.2 per cent, not 1.9. `conversions` counts ORDERS, so a customer who
+orders twice was being counted twice.
+
+**Redemption rate is now the true share: 161 of 2,701, 6.0 per cent**, rather
+than 172 of 2,701, 6.4. The numerator is now redeemers who are IN the base, so
+"X of Y" is literally true. The 11 members who redeemed without buying in the
+window are excluded.
+
+**The redemption rate moved off the one-day basis.** It was 0.15 per cent,
+one day's redeemers over every member ever. It is now a whole month over
+members who still buy. The old figure divided
 ONE DAY's redeemers by every member ever, so it read near zero whatever
 happened and barely moved.
 
@@ -122,20 +133,51 @@ case-insensitively, since the two spellings live in different files.
 
 ---
 
+## Conv. rate divides buyers, not orders
+
+Klaviyo's `conversions` counts conversion EVENTS, meaning orders, so a customer
+who orders twice is two conversions but one buyer. The report was dividing
+orders by delivered and so ran above Klaviyo's own figure.
+
+September 2026, review-request-judgeme: **54 of 2,762, 2.0 per cent**, not 98
+of 2,762, 3.5. All email flows: 1.2 per cent, not 1.9.
+
+Stored from Klaviyo's `conversion_uniques` statistic rather than derived from
+`conversion_rate * delivered`. The derivation happens to be exact here, but the
+rate is kept to four decimal places, so on a flow delivering tens of thousands
+the rounding is worth a buyer or two either way.
+
+One caveat that cannot be removed: summing unique buyers across a flow's
+messages slightly overcounts anyone who bought from two of them. Klaviyo offers
+nothing finer, and this was checked rather than assumed. A flow values report
+grouped by `flow_id` alone is REJECTED with "Group by flow_message_id is
+required", so the message is the smallest unit it will report and the sum is
+the only flow-level figure that exists.
+
+The Flows page withholds conversion rate on any range that is not a whole
+calendar month, for the same reason it withholds open rate: a buyer who orders
+in two months is one buyer in each, so the figures cannot be added. Orders,
+recipients, clicks and revenue are additive and stay correct for any range.
+
 ## The redemption rate, and two traps in getting there
 
 New definition, per Naim: members who claimed a reward in the month, state
 approved or expired, over members who placed a non-cancelled Shopify order in
 the 12 months to the end of that month.
 
-September 2026: **172 of 2,701, which is 6.37 per cent.**
+September 2026: **161 of 2,701, which is 5.96 per cent**, displayed as 6.0.
+
+The numerator is redeemers who are IN the base, so the two numbers nest and
+"161 of 2,701" is literally true. 172 members redeemed in all; the other 11 are
+6 enrolled members with no order in the window, 3 whose enrolment flag is not
+set, and 2 whose id resolves to no Shopify customer.
 
 | Month | Redeemers | Active members | Rate |
 |---|---|---|---|
 | June 2026 | 150 | 2,924 | 5.1% |
 | July 2026 | 163 | 2,897 | 5.6% |
 | August 2026 | 161 | 2,806 | 5.7% |
-| September 2026 | 172 | 2,701 | 6.4% |
+| September 2026 | 161 | 2,701 | 6.0% |
 
 ### Trap one: ll_rewards holds two different kinds of id
 

@@ -195,11 +195,14 @@ function LoyaltyPage() {
           {data.redemption ? (
             <>
               <p className="display-num text-3xl">
-                {pct((data.redemption.redeemers / Math.max(1, data.redemption.activeMembers)) * 100)}
+                {pct(
+                  (data.redemption.redeemersInBase / Math.max(1, data.redemption.activeMembers)) *
+                    100,
+                )}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 <b>
-                  {num(data.redemption.redeemers)} of {num(data.redemption.activeMembers)}
+                  {num(data.redemption.redeemersInBase)} of {num(data.redemption.activeMembers)}
                 </b>{" "}
                 members who bought in the last 12 months. The base is checked against
                 LoyaltyLion&rsquo;s own trailing 12-month customer count, which gave 2,703 for
@@ -207,9 +210,13 @@ function LoyaltyPage() {
                 {data.redemption.redeemers > data.redemption.redeemersInBase ? (
                   <>
                     {" "}
-                    {num(data.redemption.redeemers - data.redemption.redeemersInBase)} of the
-                    redeemers are not in that base, because they are members who have stopped
-                    buying, so this is redeemers per active member rather than a share of them.
+                    A further{" "}
+                    {num(data.redemption.redeemers - data.redemption.redeemersInBase)} member
+                    {data.redemption.redeemers - data.redemption.redeemersInBase === 1 ? "" : "s"}{" "}
+                    redeemed without being in the base, having stopped buying, and{" "}
+                    {data.redemption.redeemers - data.redemption.redeemersInBase === 1 ? "is" : "are"}{" "}
+                    deliberately left out so this is a true share rather than a ratio of two
+                    different populations.
                   </>
                 ) : null}
               </p>

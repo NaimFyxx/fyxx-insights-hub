@@ -165,6 +165,10 @@ export async function fetchCampaignMeta(from, to) {
 const STATS = [
   "recipients", "delivered", "opens_unique", "open_rate",
   "clicks_unique", "click_rate", "conversions", "conversion_rate", "conversion_value",
+  // conversions counts conversion EVENTS, so a customer who orders twice is
+  // two conversions but one buyer. conversion_uniques is the buyer count, and
+  // it is the numerator Klaviyo's own conversion_rate uses.
+  "conversion_uniques",
   // Unsubscribe rate is the only engagement figure Apple Mail Privacy
   // Protection cannot distort — no mail client unsubscribes on a recipient's
   // behalf — and it is a real cost: a campaign that earns well while burning
@@ -292,6 +296,7 @@ export function toFlowMonthlyRows(results, month) {
       open_rate: rate4(s.open_rate),
       click_rate: rate4(s.click_rate),
       conversions: int(s.conversions),
+      unique_buyers: int(s.conversion_uniques),
       conversion_rate: rate4(s.conversion_rate),
       revenue_jod: money3(s.conversion_value),
       unsubscribes: int(s.unsubscribes),

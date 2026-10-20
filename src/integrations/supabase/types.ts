@@ -768,6 +768,17 @@ export type Database = {
         };
         Relationships: [];
       };
+      source_volume_check: {
+        Row: {
+          date: string | null;
+          is_anomaly: boolean | null;
+          pct_of_typical: number | null;
+          rows_today: number | null;
+          source: string | null;
+          typical_for_weekday: number | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       klaviyo_reach_counts: {

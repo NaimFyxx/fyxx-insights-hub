@@ -8,6 +8,7 @@ import {
   fetchBackfillProgress,
   fetchSeedResidue,
   fetchSnapshotGaps,
+  fetchVolumeAnomalies,
   type SourceHealth,
 } from "@/lib/health";
 import { QueryFailed, PageHeader, Panel, EmptyState } from "@/components/fyxx/primitives";
@@ -17,7 +18,7 @@ import { num } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/health")({
   head: () => ({
     meta: [
-      { title: "Sync health — Fyxx Marketing" },
+      { title: "Sync health · Fyxx Marketing" },
       { name: "description", content: "What is synced, what is outstanding, what is broken." },
       { name: "robots", content: "noindex" },
     ],
@@ -29,13 +30,13 @@ const BACKFILL_FROM = "2025-01-01";
 
 const STATE_LABEL: Record<SourceHealth["state"], string> = {
   ok: "OK",
-  stale: "Stale — job",
+  stale: "Stale: job",
   // Distinct from "stale" on purpose. The job is succeeding; the DATA is old.
   // The two need different fixes, and collapsing them is what let reach report
   // healthy while its figures were a week behind.
-  behind: "Behind — data",
+  behind: "Behind: data",
   failing: "FAILING",
-  paused: "Paused — daily quota",
+  paused: "Paused: daily quota",
   never: "Never run",
 };
 
@@ -56,13 +57,14 @@ function HealthPage() {
     queryKey: ["health", refreshKey],
     queryFn: async () => {
       const rows = await fetchSyncLog();
-      const [flows, reach, seed, snapshots] = await Promise.all([
+      const [flows, reach, seed, snapshots, thin] = await Promise.all([
         fetchBackfillProgress("klaviyo_flows", BACKFILL_FROM),
         fetchBackfillProgress("klaviyo_reach", BACKFILL_FROM),
         fetchSeedResidue(),
         fetchSnapshotGaps(),
+        fetchVolumeAnomalies(),
       ]);
-      return { health: summarise(rows), rows, flows, reach, seed, snapshots };
+      return { health: summarise(rows), rows, flows, reach, seed, snapshots, thin };
     },
     refetchInterval: 60_000,
   });
@@ -99,7 +101,7 @@ function HealthPage() {
 
       {/* ABOVE everything else, and never auto-dismissed. Every other failure
           on this page delays data; this one destroyed it. LoyaltyLion has no
-          history endpoint for tier counts, so a night not recorded is gone —
+          history endpoint for tier counts, so a night not recorded is gone and
           no backfill exists, which is why there is no "retry" here. */}
       {gaps.length > 0 ? (
         <section className="border-2 border-destructive bg-destructive/5 px-5 py-4">
@@ -120,7 +122,7 @@ function HealthPage() {
             ))}
           </ul>
           <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
-            Tier counts and points outstanding are only knowable on the day they are read —
+            Tier counts and points outstanding are only knowable on the day they are read.
             LoyaltyLion answers &ldquo;what is true now&rdquo; and keeps no history. These nights
             <b> cannot be backfilled</b> and this notice will not clear. Treat those dates as
             absent rather than zero; any comparison spanning them is comparing across a hole.
@@ -147,7 +149,7 @@ function HealthPage() {
             {problems.map((p) => (
               <li key={p.key}>
                 <span className="text-foreground">{p.label}</span>
-                {p.why ? <span className="text-muted-foreground"> — {p.why}</span> : null}
+                {p.why ? <span className="text-muted-foreground">: {p.why}</span> : null}
               </li>
             ))}
           </ul>
@@ -156,6 +158,46 @@ function HealthPage() {
         <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
           All sources ran recently <b>and their data reaches today</b>. Both are checked: a job
           can succeed every night while its data stays weeks behind, which is not health.
+        </p>
+      )}
+
+      {/* The check that was missing. Everything above asks whether a job ran
+          and whether its data is current. Both were true throughout the
+          September break; only the VOLUME was wrong. */}
+      {data.thin.length ? (
+        <div className="border border-destructive bg-destructive/10 px-4 py-3 text-xs">
+          <p className="font-semibold">
+            {data.thin.length} day{data.thin.length === 1 ? "" : "s"} stored far fewer rows than
+            that weekday usually brings
+          </p>
+          <ul className="mt-2 space-y-1">
+            {data.thin.slice(0, 12).map((t) => (
+              <li key={`${t.source}-${t.date}`}>
+                <span className="text-foreground">{t.date}</span>{" "}
+                <span className="text-muted-foreground">
+                  {t.source}: {num(t.rows_today)} rows against {num(t.typical_for_weekday)} typical
+                  ({t.pct_of_typical}%)
+                </span>
+              </li>
+            ))}
+          </ul>
+          {data.thin.length > 12 ? (
+            <p className="mt-1 text-muted-foreground">
+              and {data.thin.length - 12} more.
+            </p>
+          ) : null}
+          <p className="mt-2 max-w-3xl text-muted-foreground">
+            A day flagged here was fetched and saved, so every other check on this page passes.
+            Re-run that source for those dates with <code>--force</code> and compare the row count
+            before deciding it is a real quiet day.
+          </p>
+        </div>
+      ) : (
+        <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
+          <span className="text-foreground">No thin days in the last 60.</span> Each elapsed day is
+          compared against the median for the same weekday over the preceding eight weeks, and
+          flagged below 40 per cent of it. This is the check that was missing when the nightly sync
+          stored two hours of each day and reported success.
         </p>
       )}
 
@@ -180,7 +222,7 @@ function HealthPage() {
       {paused.length ? (
         <p className="border border-border bg-secondary/40 px-4 py-3 text-xs text-muted-foreground">
           {paused.map((p) => p.label).join(", ")} stopped on Klaviyo&apos;s daily quota. That is
-          expected during a backfill — work already done is saved and the next nightly run
+          expected during a backfill. Work already done is saved and the next nightly run
           continues. Nothing to fix.
         </p>
       ) : null}
@@ -205,18 +247,18 @@ function HealthPage() {
                   <StateBadge state={h.state} />
                 </Td>
                 {/* "Data through" is the furthest date covered, which is not
-                    the same as when the job last ran — a job can run nightly
+                    the same as when the job last ran, because a job can run nightly
                     and still be months behind on a backfill. */}
-                <Td>{h.coveredThrough ? format(parseISO(h.coveredThrough), "d MMM yyyy") : "—"}</Td>
+                <Td>{h.coveredThrough ? format(parseISO(h.coveredThrough), "d MMM yyyy") : "n/a"}</Td>
                 <Td>
                   {h.lastSuccess
                     ? `${formatDistanceToNow(parseISO(h.lastSuccess.synced_at))} ago`
                     : "never"}
                 </Td>
-                <Td align="right">{h.lastSuccess ? num(h.lastSuccess.rows_written) : "—"}</Td>
+                <Td align="right">{h.lastSuccess ? num(h.lastSuccess.rows_written) : "n/a"}</Td>
                 <Td>
                   <span className="text-xs text-muted-foreground">
-                    {h.lastRun?.message?.slice(0, 70) ?? "—"}
+                    {h.lastRun?.message?.slice(0, 70) ?? "n/a"}
                   </span>
                 </Td>
               </tr>
@@ -276,12 +318,12 @@ function HealthPage() {
                 <Td>
                   {r.range_start
                     ? `${r.range_start}${r.range_end && r.range_end !== r.range_start ? ` … ${r.range_end}` : ""}`
-                    : "—"}
+                    : "n/a"}
                 </Td>
                 <Td align="right">{num(r.rows_written)}</Td>
                 <Td>
                   <span className="text-xs text-muted-foreground">
-                    {r.message?.slice(0, 60) ?? "—"}
+                    {r.message?.slice(0, 60) ?? "n/a"}
                   </span>
                 </Td>
               </tr>

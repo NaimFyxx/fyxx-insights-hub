@@ -13,8 +13,8 @@ import { tierSeriesWithGaps } from "@/lib/timeseries";
  *
  * The second exists because a backfill can succeed nightly, forever, while
  * recent days stay empty. On 2 September 2026 `klaviyo_reach` had run
- * successfully that morning and its data covered only to 26 August — seven
- * days behind — and this page called it healthy. The monthly report caught it
+ * successfully that morning and its data covered only to 26 August, seven
+ * days behind, and this page called it healthy. The monthly report caught it
  * and refused to total reach at 3 of 31 days; the health page did not.
  *
  * `null` means the source has no meaningful data date (the backup covers the
@@ -26,7 +26,7 @@ export const SOURCES = [
   { key: "shopify_daily_sales", label: "Shopify sales", staleAfterHours: 36, dataStaleAfterDays: 2 },
   { key: "ll_snapshots", label: "Loyalty snapshot", staleAfterHours: 36, dataStaleAfterDays: 2 },
   // Reach is quota-limited and works through a backfill queue, so it is
-  // allowed to lag further than the nightly sources — but not indefinitely,
+  // allowed to lag further than the nightly sources, but not indefinitely,
   // which is what no threshold at all meant.
   { key: "klaviyo_reach", label: "Unique reach", staleAfterHours: 36, dataStaleAfterDays: 4 },
   { key: "klaviyo_order_influence", label: "Order influence", staleAfterHours: 24 * 8, dataStaleAfterDays: 9 },
@@ -81,7 +81,7 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
       ? (now.getTime() - new Date(lastSuccess.synced_at).getTime()) / 3600000
       : null;
 
-    // The furthest date any successful run covered — the question people
+    // The furthest date any successful run covered, which is the question people
     // actually mean by "is it up to date", which is not "did it run".
     const coveredThrough =
       mine
@@ -121,7 +121,7 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
     ) {
       state = "behind";
       why =
-        `the job is succeeding, but its data only reaches ${coveredThrough} — ` +
+        `the job is succeeding, but its data only reaches ${coveredThrough}. ` +
         `${daysBehind} day${daysBehind === 1 ? "" : "s"} behind`;
     }
 
@@ -142,7 +142,7 @@ export function summarise(rows: SyncRow[], now = new Date()): SourceHealth[] {
 /** Backfill progress for the two sources that run a day at a time. */
 export async function fetchBackfillProgress(source: string, from: string) {
   // Must page: PostgREST caps at 1000 per request whatever limit is asked for,
-  // and a 605-day backfill has more successful days than that — the progress
+  // and a 605-day backfill has more successful days than that, so the progress
   // bar would stall at 1000 and read as stuck.
   const days = new Set<string>();
   for (let start = 0; ; start += 1000) {
@@ -237,7 +237,7 @@ export const SEED_PROBES = [
 
 export type SeedResidue = { label: string; table: string; rows: number };
 
-/** Counts only — HEAD requests, so this is cheap enough to run on every load. */
+/** Counts only, via HEAD requests, so this is cheap enough to run on every load. */
 export async function fetchSeedResidue(): Promise<SeedResidue[]> {
   const hits = await Promise.all(
     SEED_PROBES.map(async (p) => {
@@ -261,7 +261,8 @@ export async function fetchSeedResidue(): Promise<SeedResidue[]> {
  *
  * THIS IS THE ONLY IRRECOVERABLE LOSS IN THE SYSTEM. Every other source can be
  * re-fetched for a past date. LoyaltyLion has no history endpoint for tier
- * counts or points outstanding — the API answers only "what is true now" — so
+ * counts or points outstanding, because the API answers only "what is true
+ * now", so
  * a night that is not recorded is gone permanently. Nothing can backfill it.
  *
  * It nearly happened silently on 31 August 2026: a false alarm in the filter
@@ -297,7 +298,7 @@ export async function fetchSnapshotGaps(): Promise<{
   // Reuses the SAME day-walk the chart uses, rather than keeping a second copy
   // of it here. Two implementations of "which nights are missing" can disagree,
   // and the one on this page is the alarm for the only irrecoverable loss in
-  // the system — it must not be the untested copy. tierSeriesWithGaps has nine
+  // the system, so it must not be the untested copy. tierSeriesWithGaps has nine
   // checks against it, including two deliberate regressions.
   const series = tierSeriesWithGaps(
     rows
@@ -319,4 +320,62 @@ export async function fetchSnapshotGaps(): Promise<{
     lastScan: scanned[scanned.length - 1]!,
     scanned: scanned.length,
   };
+}
+
+/**
+ * Volume anomalies: a day where a source stored far fewer rows than the same
+ * weekday normally brings.
+ *
+ * WHY THIS EXISTS
+ * Between 3 September and 20 October 2026 the nightly sync fetched flows and
+ * reach for the CURRENT day, stored the two or three hours that had elapsed,
+ * and marked the day complete. Every existing check passed: the job ran, it
+ * succeeded, it wrote rows, and the data was current to yesterday. Only the
+ * SIZE was wrong, and nothing was watching size. September flow recipients
+ * stood at roughly 350 against a true 21,278.
+ *
+ * The comparison is same-weekday, not a flat average, because sends are
+ * strongly weekly: a Friday is not a quiet Tuesday. The median over the
+ * preceding eight weeks ignores one-off spikes.
+ *
+ * Replayed against the pre-repair counts before shipping: it fires on
+ * 1 September, the first day of the break, at 22 per cent of typical.
+ *
+ * Deliberately NOT an upper bound. A day that brings far MORE than usual is
+ * normally a real campaign, and an alarm that cries at good news gets ignored.
+ */
+export type VolumeAnomaly = {
+  source: string;
+  date: string;
+  rows_today: number;
+  typical_for_weekday: number;
+  pct_of_typical: number;
+};
+
+export async function fetchVolumeAnomalies(sinceDays = 60): Promise<VolumeAnomaly[]> {
+  const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString().slice(0, 10);
+  const rows = await fetchAllRows<{
+    source: string | null;
+    date: string | null;
+    rows_today: number | null;
+    typical_for_weekday: number | null;
+    pct_of_typical: number | null;
+  }>((from, to) =>
+    supabase
+      .from("source_volume_check")
+      .select("source,date,rows_today,typical_for_weekday,pct_of_typical")
+      .eq("is_anomaly", true)
+      .gte("date", since)
+      .order("date", { ascending: false })
+      .range(from, to),
+  );
+  return rows
+    .filter((r) => r.source !== null && r.date !== null)
+    .map((r) => ({
+      source: r.source as string,
+      date: r.date as string,
+      rows_today: Number(r.rows_today ?? 0),
+      typical_for_weekday: Number(r.typical_for_weekday ?? 0),
+      pct_of_typical: Number(r.pct_of_typical ?? 0),
+    }));
 }

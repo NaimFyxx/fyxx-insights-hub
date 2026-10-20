@@ -13,9 +13,13 @@ import {
   type Activation,
 } from "@/lib/queries";
 import { POS_DEFINITION_CHANGED } from "@/lib/channels";
-import { fetchAcquisition, headline, BASIS_BREAK_MONTH } from "@/lib/acquisition";
 import { settledOnly, rangeIncludesToday, type DateRange } from "@/lib/ranges";
 import { fetchCoverage, coverageGap } from "@/lib/coverage";
+import { rollUpCampaigns, rollUpFlows, rollUpPushByType } from "@/lib/rollups";
+
+// Re-exported so report.ts stays the one import the report page needs.
+export { rollUpCampaigns, rollUpFlows, rollUpPushByType } from "@/lib/rollups";
+export type { CampaignAgg, FlowAgg, PushAgg } from "@/lib/rollups";
 
 /**
  * A section that cannot be rendered honestly is marked unavailable with the
@@ -69,8 +73,8 @@ export type ReachSection = {
 
 /**
  * Unique reach. The cross-channel total is a genuine distinct count, so it is
- * SMALLER than the three channel figures added together — anyone reached on
- * both email and push is one person, counted once. That is expected, and the
+ * SMALLER than the three channel figures added together, because anyone
+ * reached on both email and push is one person, counted once. That is said
  * report says so rather than leaving it to look like an error.
  */
 async function buildReach(r: DateRange): Promise<ReachSection> {
@@ -141,71 +145,6 @@ async function buildReach(r: DateRange): Promise<ReachSection> {
   };
 }
 
-export type FlowAgg = {
-  name: string;
-  recipients: number;
-  delivered: number;
-  opened: number;
-  conversions: number;
-  revenue: number;
-};
-
-/**
- * Top 8 flows by revenue, then ONE rolled-up row for every other flow with
- * sends in the period, then a total. Names exactly as Klaviyo returns them —
- * never reformatted, because a renamed flow must be recognisable.
- */
-export function rollUpFlows(rows: FlowRow[]): {
-  top: FlowAgg[];
-  otherCount: number;
-  other: FlowAgg | null;
-  total: FlowAgg;
-} {
-  const byName = new Map<string, FlowAgg>();
-  for (const r of rows) {
-    const cur = byName.get(r.flow_name) ?? {
-      name: r.flow_name,
-      recipients: 0,
-      delivered: 0,
-      opened: 0,
-      conversions: 0,
-      revenue: 0,
-    };
-    cur.recipients += r.recipients;
-    cur.delivered += r.delivered;
-    cur.opened += r.opened;
-    cur.conversions += r.conversions;
-    cur.revenue += Number(r.revenue_jod);
-    byName.set(r.flow_name, cur);
-  }
-  // Only flows that actually sent. Over 50 flows exist and most never send;
-  // a zero row for each would fill the page with nothing.
-  const live = [...byName.values()].filter((f) => f.recipients > 0);
-  live.sort((a, b) => b.revenue - a.revenue);
-
-  const top = live.slice(0, 8);
-  const rest = live.slice(8);
-  const fold = (name: string, xs: FlowAgg[]): FlowAgg =>
-    xs.reduce(
-      (a, f) => ({
-        name,
-        recipients: a.recipients + f.recipients,
-        delivered: a.delivered + f.delivered,
-        opened: a.opened + f.opened,
-        conversions: a.conversions + f.conversions,
-        revenue: a.revenue + f.revenue,
-      }),
-      { name, recipients: 0, delivered: 0, opened: 0, conversions: 0, revenue: 0 },
-    );
-
-  return {
-    top,
-    otherCount: rest.length,
-    other: rest.length ? fold(`All other live flows with sends (${rest.length})`, rest) : null,
-    total: fold("All live flows", live),
-  };
-}
-
 export type Narrative = {
   id: string | null;
   monthHighlight: string;
@@ -240,53 +179,6 @@ export async function saveNarrative(r: DateRange, n: Omit<Narrative, "id">) {
   if (error) throw error;
 }
 
-export type PushAgg = { name: string; sent: number; delivered: number; opened: number };
-
-/**
- * 34 distinct push sources send in a typical month, which would run to a
- * 35-row table in a half-width column. Same shape as the flows table: the
- * biggest senders by name, then one honest rollup, then a total.
- */
-export function rollUpPush(
-  rows: PushRow[],
-  topN = 6,
-): {
-  top: PushAgg[];
-  other: PushAgg | null;
-  total: PushAgg;
-} {
-  const byName = new Map<string, PushAgg>();
-  for (const r of rows) {
-    const cur = byName.get(r.source_name) ?? {
-      name: r.source_name,
-      sent: 0,
-      delivered: 0,
-      opened: 0,
-    };
-    cur.sent += r.sent;
-    cur.delivered += r.delivered;
-    cur.opened += r.opened;
-    byName.set(r.source_name, cur);
-  }
-  const live = [...byName.values()].filter((p) => p.sent > 0).sort((a, b) => b.sent - a.sent);
-  const fold = (name: string, xs: PushAgg[]): PushAgg =>
-    xs.reduce(
-      (a, p) => ({
-        name,
-        sent: a.sent + p.sent,
-        delivered: a.delivered + p.delivered,
-        opened: a.opened + p.opened,
-      }),
-      { name, sent: 0, delivered: 0, opened: 0 },
-    );
-  const rest = live.slice(topN);
-  return {
-    top: live.slice(0, topN),
-    other: rest.length ? fold(`All other push sends (${rest.length})`, rest) : null,
-    total: fold("Total", live),
-  };
-}
-
 export type ReportData = {
   range: DateRange;
   narrative: Narrative;
@@ -294,11 +186,13 @@ export type ReportData = {
   campaigns: {
     availability: Availability;
     rows: Campaign[];
+    /** The printed table: top 6 by revenue, one rolled-up row, then a total. */
+    rollup: ReturnType<typeof rollUpCampaigns<Campaign>>;
     /** Sends below MIN_CAMPAIGN_RECIPIENTS, excluded from rows but named. */
     excludedTests: Campaign[];
   };
   flows: { availability: Availability; rollup: ReturnType<typeof rollUpFlows> };
-  push: { availability: Availability; rollup: ReturnType<typeof rollUpPush> };
+  push: { availability: Availability; rollup: ReturnType<typeof rollUpPushByType> };
   loyalty: {
     availability: Availability;
     latest: Awaited<ReturnType<typeof fetchSnapshots>>[number] | null;
@@ -320,37 +214,18 @@ export type ReportData = {
     shareIsPartial: boolean;
   };
   /**
-   * Revenue from customers marketing ACQUIRED, wherever they now buy.
+   * Messages sent, summed from the SAME rows the three tables below total.
    *
-   * A different claim from attributed revenue, and a stronger one: it needs no
-   * attribution modelling at all, only the channel each customer first arrived
-   * through. Kept separate from `revenue` so the two are never added.
+   * The reach strip used to show unique people per channel beside tables
+   * counting messages, and the two could not be made to agree because they
+   * were never the same quantity: 6,252 people against 39,198 push messages
+   * reads as a contradiction on a page with no way to ask.
+   *
+   * So the tile now shows both, and the message figure is computed here from
+   * the table rows rather than from the reach table, which makes it agree with
+   * the tables by construction rather than by coincidence.
    */
-  acquisition: {
-    availability: Availability;
-    onlineAcquired: number;
-    total: number;
-    sharePct: number | null;
-    /** Share of only the revenue that CAN carry an acquisition channel. */
-    coveragePct: number | null;
-    /**
-     * The same share on the LIKE-FOR-LIKE basis, and the year-ago comparison.
-     *
-     * Zeid's first question about a figure that rose from 44% to 61% will be
-     * why. Roughly a third of that is the denominator changing: the Odoo
-     * connector began requiring a customer on every POS order after 27 Feb
-     * 2026, so revenue that could not carry an acquisition channel almost
-     * vanished. Reporting the raw jump without this invites a challenge the
-     * number cannot survive, and the honest rise is still substantial.
-     */
-    comparable: {
-      thisPeriodPct: number | null;
-      yearAgoPct: number | null;
-      yearAgoRawPct: number | null;
-      /** True when the comparison spans the 27 Feb 2026 basis change. */
-      spansBasisChange: boolean;
-    };
-  };
+  sends: { campaigns: number; flows: number; push: number; total: number };
   notices: string[];
 };
 
@@ -444,7 +319,7 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     : no("Points outstanding was not recorded for this period.");
 
   // Birthday rewards ARE collected now. The old zero came from counting only
-  // `approved` activities while LoyaltyLion issues them `pending` — measured
+  // `approved` activities while LoyaltyLion issues them `pending`. Measured
   // over the full history, 1,753 of 1,831 do approve, so pending is transient.
   // A day still showing zero is a day the sync had not yet been fixed, which is
   // a real absence rather than a real zero.
@@ -454,18 +329,6 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     : no(
         "Birthday rewards were not collected for this period. Collection was fixed on 29 August 2026; earlier snapshots hold no figure.",
       );
-
-  const acqRows = await fetchAcquisition(range);
-  const acqHead = headline(acqRows);
-
-  // The same month a year earlier, for the comparison Zeid will make anyway.
-  // Fetched on the LIKE-FOR-LIKE basis so the two ends mean the same thing.
-  const yearAgo: DateRange = {
-    from: `${Number(range.from.slice(0, 4)) - 1}${range.from.slice(4)}`,
-    to: `${Number(range.to.slice(0, 4)) - 1}${range.to.slice(4)}`,
-  };
-  const acqYearAgoRows = await fetchAcquisition(yearAgo);
-  const acqYearAgoHead = acqYearAgoRows.length ? headline(acqYearAgoRows) : null;
 
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
@@ -488,6 +351,13 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     .reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
   const shareIsPartial = rangeIncludesToday(range);
 
+  // Summed from the same rows the tables total, so the strip above cannot
+  // disagree with the tables below. Flow "sends" are recipients, which is what
+  // Klaviyo reports for a flow message and what the flows table shows.
+  const campaignSends = splitTestSends(campaigns).real.reduce((a, c) => a + c.sent, 0);
+  const flowSends = flows.reduce((a, f) => a + f.recipients, 0);
+  const pushSends = push.reduce((a, p) => a + p.sent, 0);
+
   const notices: string[] = [];
   if (range.from < POS_DEFINITION_CHANGED && range.to >= POS_DEFINITION_CHANGED) {
     notices.push(
@@ -509,12 +379,13 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
             )
           : ok,
       rows: splitTestSends(campaigns).real,
+      rollup: rollUpCampaigns(splitTestSends(campaigns).real),
       excludedTests: splitTestSends(campaigns).tests,
     },
     flows: { availability: flowsAvailability, rollup: rollUpFlows(flows) },
     push: {
       availability: push.length ? ok : no("No push notifications were sent in this period."),
-      rollup: rollUpPush(push),
+      rollup: rollUpPushByType(push),
     },
     loyalty: {
       availability: loyaltyAvailability,
@@ -545,29 +416,11 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
       sharePct: onlineSettled > 0 ? (klaviyoSettled / onlineSettled) * 100 : null,
       shareIsPartial,
     },
-    acquisition: {
-      // Withheld rather than guessed if the order sweep has not reached this
-      // period. A blank month is honest; a month computed from partial orders
-      // would understate the share without saying so.
-      availability:
-        acqRows.length === 0
-          ? no(
-              "Revenue by acquisition channel is not available for this period. It needs order-level history, which is loaded from September 2019 onward.",
-            )
-          : ok,
-      onlineAcquired: acqHead.onlineAcquiredRevenue,
-      total: acqHead.totalRevenue,
-      sharePct: acqHead.pct,
-      coveragePct: acqHead.unattributablePct === null ? null : 100 - acqHead.unattributablePct,
-      comparable: {
-        thisPeriodPct: acqHead.pctOfAttributable,
-        yearAgoPct: acqYearAgoHead ? acqYearAgoHead.pctOfAttributable : null,
-        yearAgoRawPct: acqYearAgoHead ? acqYearAgoHead.pct : null,
-        // The comparison is unsafe exactly when one side predates the change
-        // and the other does not.
-        spansBasisChange:
-          range.to >= `${BASIS_BREAK_MONTH}-01` && yearAgo.to < `${BASIS_BREAK_MONTH}-01`,
-      },
+    sends: {
+      campaigns: campaignSends,
+      flows: flowSends,
+      push: pushSends,
+      total: campaignSends + flowSends + pushSends,
     },
     notices,
   };
@@ -588,7 +441,7 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
 export const VAT_RATE = 0.16;
 export const VAT_DIVISOR = 1 + VAT_RATE;
 export const exVat = (gross: number) => gross / VAT_DIVISOR;
-export const VAT_FOOTER_NOTE = "All figures ex VAT (divided by 1.16).";
+export const VAT_FOOTER_NOTE = "All figures ex VAT (\u00f7 1.16).";
 
 /**
  * Online revenue: Mobile App plus Website only.

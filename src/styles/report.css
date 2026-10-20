@@ -34,7 +34,10 @@
   padding: 8mm 13mm 6.5mm 13mm;
   display: flex;
   flex-direction: column;
-  gap: 2mm;
+  /* 1.6mm rather than 2mm between sections. Worth 2.8mm over the eight
+     sections, which is the difference between a long month highlight fitting
+     and pushing the footer onto a second sheet. */
+  gap: 1.6mm;
   box-shadow: 0 2px 20px rgba(0, 0, 0, 0.12);
   font-family: "Inter", system-ui, sans-serif;
   color: var(--ink);
@@ -179,7 +182,9 @@
   line-height: 1.25;
 }
 .rp td {
-  padding: 0.85mm 0;
+  /* 0.7mm rather than 0.85mm. Twenty-one table rows print on a full month, so
+     this is worth about 6mm, and at 7.4pt the row still has clear air. */
+  padding: 0.7mm 0;
   border-bottom: 1px solid #eeeeee;
   text-align: right;
   font-variant-numeric: tabular-nums;

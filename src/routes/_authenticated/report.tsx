@@ -13,19 +13,19 @@ import {
   VAT_FOOTER_NOTE,
   MIN_CAMPAIGN_RECIPIENTS,
   type Availability,
+  type Narrative,
   type ReportData,
 } from "@/lib/report";
 import { ammanNow, iso, type DateRange } from "@/lib/ranges";
 import { useDateRange } from "@/context/date-range-context";
 import { num, pct, jod } from "@/lib/format";
-import { attributionLimitNote, SUB_CHANNELS } from "@/lib/channels";
 import { ENGAGEMENT_SIGNAL } from "@/lib/engagement";
 import "@/styles/report.css";
 
 export const Route = createFileRoute("/_authenticated/report")({
   head: () => ({
     meta: [
-      { title: "Report — Fyxx Marketing" },
+      { title: "Report · Fyxx Marketing" },
       { name: "description", content: "Printable monthly executive report built from live data." },
       { name: "robots", content: "noindex" },
     ],
@@ -35,6 +35,38 @@ export const Route = createFileRoute("/_authenticated/report")({
 
 const day = (d: string) => format(parseISO(d), "d MMM");
 const rateOf = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 0);
+/** Empty cell. Not a dash, which reads as a minus sign in a column of numbers. */
+const NONE = "n/a";
+
+/**
+ * Whether an activation counts as done.
+ *
+ * The Activations form offers "Planned", "Done" and "Not done", and the column
+ * default is "Planned" — all capitalised. This comparison was against the
+ * lowercase "done", so an activation marked Done on the Activations page would
+ * have printed as "Not done" on the report, with the tick unfilled. Nothing
+ * caught it because the table was empty, so the wrong branch had never run.
+ *
+ * Compared case-insensitively rather than against the exact string, because the
+ * two spellings live in different files and will drift apart again.
+ */
+const isDone = (status: string) => status.trim().toLowerCase() === "done";
+
+/**
+ * "1 to 30 September 2026", not "1 Sep to 30 September 2026".
+ *
+ * The month and year are printed once, on whichever end carries them. Inside
+ * one month only the two day numbers differ, and repeating the month there
+ * made the line read like two separate dates.
+ */
+function periodLine(from: string, to: string): string {
+  const a = parseISO(from);
+  const b = parseISO(to);
+  const sameMonth = format(a, "yyyy-MM") === format(b, "yyyy-MM");
+  if (sameMonth) return `${format(a, "d")} to ${format(b, "d MMMM yyyy")}`;
+  const sameYear = format(a, "yyyy") === format(b, "yyyy");
+  return `${format(a, sameYear ? "d MMMM" : "d MMMM yyyy")} to ${format(b, "d MMMM yyyy")}`;
+}
 
 /** Renders a section's figures, or the reason they cannot be shown. */
 function Guard({
@@ -65,12 +97,31 @@ function ReportPage() {
     queryFn: () => buildReport(range),
   });
 
+  /**
+   * The wording being edited, held here rather than inside the editor.
+   *
+   * The preview below renders from THIS, not from what is stored, so typing
+   * shows up on the page immediately and nothing is written until Save report
+   * is pressed. Previously the preview rendered the saved value, so the only
+   * way to see a change was to save it, which made Save the preview button and
+   * left no way to look at a sentence before committing it.
+   */
+  const [draft, setDraft] = useState<Omit<Narrative, "id"> | null>(null);
+  useEffect(() => {
+    if (data) {
+      setDraft({
+        monthHighlight: data.narrative.monthHighlight,
+        nextMonthBullets: data.narrative.nextMonthBullets,
+      });
+    }
+  }, [data?.narrative]);
+
   return (
     <div className="space-y-6">
       <div className="no-print space-y-6">
         <PageHeader
           title="Report"
-          subtitle="The monthly page sent to Zeid. Pick the month below — the date range above does not apply. Print to PDF at A4, no scaling, background graphics on."
+          subtitle="The monthly page sent to Zeid. Pick the month below; the date range above does not apply. Print to PDF at A4, no scaling, background graphics on."
         />
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
@@ -87,7 +138,9 @@ function ReportPage() {
             Print / Save as PDF
           </Button>
         </div>
-        {data ? <NarrativeEditor range={range} data={data} /> : null}
+        {data && draft ? (
+          <NarrativeEditor range={range} draft={draft} onChange={setDraft} />
+        ) : null}
       </div>
 
       {isLoading ? (
@@ -98,30 +151,28 @@ function ReportPage() {
           The report could not be built: {(error as Error).message}
         </p>
       ) : null}
-      {data ? <ReportPage1 data={data} /> : null}
+      {data ? <ReportPage1 data={data} narrative={draft ?? data.narrative} /> : null}
     </div>
   );
 }
 
-function NarrativeEditor({ range, data }: { range: DateRange; data: ReportData }) {
+function NarrativeEditor({
+  range,
+  draft,
+  onChange,
+}: {
+  range: DateRange;
+  draft: Omit<Narrative, "id">;
+  onChange: (n: Omit<Narrative, "id">) => void;
+}) {
   const qc = useQueryClient();
-  const [highlight, setHighlight] = useState(data.narrative.monthHighlight);
-  const [bullets, setBullets] = useState(data.narrative.nextMonthBullets.join("\n"));
-
-  // Reload the written parts when the month changes.
-  useEffect(() => {
-    setHighlight(data.narrative.monthHighlight);
-    setBullets(data.narrative.nextMonthBullets.join("\n"));
-  }, [data.narrative]);
+  const bulletText = draft.nextMonthBullets.join("\n");
 
   const save = useMutation({
     mutationFn: () =>
       saveNarrative(range, {
-        monthHighlight: highlight.trim(),
-        nextMonthBullets: bullets
-          .split("\n")
-          .map((b) => b.trim())
-          .filter(Boolean),
+        monthHighlight: draft.monthHighlight.trim(),
+        nextMonthBullets: draft.nextMonthBullets.map((b) => b.trim()).filter(Boolean),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["report"] }),
   });
@@ -130,19 +181,30 @@ function NarrativeEditor({ range, data }: { range: DateRange; data: ReportData }
     <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-2">
       <label className="text-sm">
         <span className="mb-1 block font-medium">Month highlight</span>
-        <Textarea rows={4} value={highlight} onChange={(e) => setHighlight(e.target.value)} />
+        <Textarea
+          rows={4}
+          value={draft.monthHighlight}
+          onChange={(e) => onChange({ ...draft, monthHighlight: e.target.value })}
+        />
       </label>
       <label className="text-sm">
         <span className="mb-1 block font-medium">Next month</span>
         <span className="mb-1 block text-xs text-muted-foreground">
-          One per line, as <code>Title — the rest of the sentence</code>.
+          One per line. The first few words become the bold lead-in.
         </span>
-        <Textarea rows={4} value={bullets} onChange={(e) => setBullets(e.target.value)} />
+        <Textarea
+          rows={4}
+          value={bulletText}
+          onChange={(e) => onChange({ ...draft, nextMonthBullets: e.target.value.split("\n") })}
+        />
       </label>
       <div className="md:col-span-2 flex items-center gap-3">
         <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-          {save.isPending ? "Saving…" : "Save wording"}
+          {save.isPending ? "Saving…" : "Save report"}
         </Button>
+        <span className="text-xs text-muted-foreground">
+          The page below updates as you type and is not saved until you press Save report.
+        </span>
         {save.isError ? (
           <span className="text-xs text-destructive">{(save.error as Error).message}</span>
         ) : null}
@@ -152,20 +214,18 @@ function NarrativeEditor({ range, data }: { range: DateRange; data: ReportData }
   );
 }
 
-export function ReportPage1({ data }: { data: ReportData }) {
-  const {
-    range,
-    reach,
-    campaigns,
-    flows,
-    push,
-    loyalty,
-    activations,
-    revenue,
-    acquisition,
-    narrative,
-    notices,
-  } = data;
+export function ReportPage1({
+  data,
+  narrative,
+}: {
+  data: ReportData;
+  /** The wording to render, which may be an unsaved draft. */
+  narrative?: Omit<Narrative, "id">;
+}) {
+  const { range, reach, campaigns, flows, push, loyalty, activations, revenue, sends, notices } =
+    data;
+  const words = narrative ?? data.narrative;
+  const bullets = words.nextMonthBullets.map((b) => b.trim()).filter(Boolean);
 
   const campaignTotals = campaigns.rows.reduce(
     (a, c) => ({
@@ -203,10 +263,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
         <div className="headgrid">
           <div className="month">{format(parseISO(range.from), "MMMM yyyy")}</div>
           <div className="meta">
-            Period{" "}
-            <b>
-              {day(range.from)} to {format(parseISO(range.to), "d MMMM yyyy")}
-            </b>
+            Period <b>{periodLine(range.from, range.to)}</b>
             &nbsp;·&nbsp; Prepared by <b>Naím Aljada</b>
             &nbsp;·&nbsp; Issued <b>{format(new Date(), "d MMMM yyyy")}</b>
           </div>
@@ -221,12 +278,12 @@ export function ReportPage1({ data }: { data: ReportData }) {
         </section>
       ) : null}
 
-      {narrative.monthHighlight ? (
+      {words.monthHighlight ? (
         <section>
           <div className="sec">
             <span className="eyebrow">Month highlight</span>
           </div>
-          <p className="highlight">{narrative.monthHighlight}</p>
+          <p className="highlight">{words.monthHighlight}</p>
         </section>
       ) : null}
 
@@ -239,28 +296,28 @@ export function ReportPage1({ data }: { data: ReportData }) {
             reported. Refusing the whole strip would discard two good figures. */}
         <div className="reach">
           {reach.availability.available ? (
-            <>
-              <div className="kpi">
-                <div className="n">{num(reach.totalUnique)}</div>
-                <div className="l">People reached across all channels</div>
-              </div>
-              <div className="kpi">
-                <div className="n">
-                  {num(reach.emailCampaigns)}{" "}
-                  <small>
-                    · {num(reach.push)} · {num(reach.flows)}
-                  </small>
-                </div>
-                <div className="l">Email campaigns · Push · Flows</div>
-              </div>
-            </>
+            <div className="kpi">
+              <div className="n">{num(reach.totalUnique)}</div>
+              <div className="l">People reached, each counted once</div>
+            </div>
           ) : (
-            <div className="kpi" style={{ gridColumn: "span 2" }}>
+            <div className="kpi">
               <div className="l" style={{ marginTop: 0 }}>
                 {reach.availability.reason}
               </div>
             </div>
           )}
+          {/* Summed from the table rows below, not from the reach table, so
+              this tile and the tables cannot disagree. */}
+          <div className="kpi">
+            <div className="n">
+              {num(sends.total)}{" "}
+              <small>
+                · {num(sends.campaigns)} · {num(sends.flows)} · {num(sends.push)}
+              </small>
+            </div>
+            <div className="l">Messages sent · Campaigns · Flows · Push</div>
+          </div>
           {revenue.availability.available ? (
             <>
               <div className="kpi">
@@ -313,117 +370,10 @@ export function ReportPage1({ data }: { data: ReportData }) {
           )}
         </div>
 
-        {/* Revenue from customers marketing ACQUIRED. Deliberately its own
-            block, below attributed revenue and never added to it: the two
-            answer different questions and summing them would double-count
-            every order that is both. */}
-        {acquisition.availability.available ? (
-          <>
-            <h3 style={{ marginTop: "6mm" }}>Revenue from customers marketing brought in</h3>
-
-            {/* Zeid's first question about a figure that appears to have risen
-                17 points will be why. It leads the section rather than
-                footnoting it, because a caveat read after the number has
-                already been challenged is worth nothing. */}
-            {acquisition.comparable.spansBasisChange &&
-            acquisition.comparable.thisPeriodPct !== null &&
-            acquisition.comparable.yearAgoPct !== null ? (
-              <p className="caption" style={{ marginBottom: "3mm" }}>
-                <b>Read the like-for-like comparison, not the raw one.</b> Against the same month
-                last year this figure appears to rise from{" "}
-                {pct(acquisition.comparable.yearAgoRawPct!)} to {pct(acquisition.sharePct!)}, but
-                roughly a third of that is a change in measurement rather than in the business:
-                after 27 February 2026 the till began recording a customer on every in-store
-                order, so sales that previously could not be traced to anyone now can. Comparing
-                only the traceable portion at both ends, the real movement is{" "}
-                <b>
-                  {pct(acquisition.comparable.yearAgoPct)} to{" "}
-                  {pct(acquisition.comparable.thisPeriodPct)}
-                </b>
-                . That is the number to rely on.
-              </p>
-            ) : null}
-
-            <div className="kpis">
-              <div className="kpi">
-                <div className="n">
-                  {acquisition.sharePct === null ? "—" : pct(acquisition.sharePct)}
-                </div>
-                <div className="l">
-                  Of all sales this month
-                  {acquisition.comparable.thisPeriodPct !== null &&
-                  acquisition.comparable.spansBasisChange
-                    ? ` — like-for-like ${pct(acquisition.comparable.thisPeriodPct)}`
-                    : ""}
-                </div>
-              </div>
-              <div className="kpi">
-                <div className="n">
-                  {num(Math.round(acquisition.onlineAcquired))} <small>JOD</small>
-                </div>
-                <div className="l">
-                  From customers first acquired through the app or the website
-                </div>
-              </div>
-              <div className="kpi">
-                <div className="n">
-                  {acquisition.coveragePct === null ? "—" : pct(acquisition.coveragePct)}
-                </div>
-                <div className="l">Of sales could be traced to an acquisition channel</div>
-              </div>
-            </div>
-            <p className="caption">
-              This counts revenue from <b>customers marketing brought in</b>, wherever they now
-              buy — including orders they later placed by phone or in store. It is not a claim
-              that marketing caused those sales: a customer first acquired in store in 2020 who
-              has bought online ever since counts as in-store here. It needs no attribution
-              modelling, only the channel each customer first arrived through, which is why it is
-              reported separately from the attributed-revenue figure above and must never be added
-              to it. The total it divides by excludes staff and house accounts, so it is slightly
-              below the all-channels sales figure shown earlier.{" "}
-              {acquisition.coveragePct !== null && acquisition.coveragePct < 99.5 ? (
-                <>
-                  The remaining {pct(100 - acquisition.coveragePct)} is orders with no customer
-                  attached, mostly in store, which can never carry an acquisition channel — so the
-                  figure above is a floor rather than a total.
-                </>
-              ) : (
-                <>
-                  Nearly every order this month carried an identified customer, so little revenue
-                  is left untraceable. Earlier periods have lower coverage and are not directly
-                  comparable.
-                </>
-              )}
-            </p>
-          </>
-        ) : (
-          <>
-            <h3 style={{ marginTop: "6mm" }}>Revenue from customers marketing brought in</h3>
-            <p className="caption">{acquisition.availability.reason}</p>
-          </>
-        )}
-
         <p className="caption">
-          {reach.availability.available ? (
-            <>
-              Reach counts people, not messages. Someone who received both an email and a push is
-              counted once in the total, so the total is smaller than the three channels added
-              together — that is expected, not an error.{" "}
-            </>
-          ) : null}
-          {revenue.availability.available ? (
-            <>
-              Attributed revenue is counted on the date the order was placed; the campaign and flow
-              tables below are counted on the date each message was sent, so the two are not
-              directly comparable.
-            </>
-          ) : (
-            <>
-              Total sales covers every channel, including POS and Draft Orders, and is counted on
-              the date each order was placed. It is not an online-only figure.{" "}
-              {attributionLimitNote(SUB_CHANNELS)}
-            </>
-          )}
+          People are counted once however many messages they received, so the first figure is
+          smaller than the second; attributed revenue is counted on the date the order was placed,
+          the tables below on the date each message was sent.
         </p>
       </section>
 
@@ -459,23 +409,40 @@ export function ReportPage1({ data }: { data: ReportData }) {
               </tr>
             </thead>
             <tbody>
-              {campaigns.rows.map((c) => (
-                <tr key={c.id}>
+              {campaigns.rollup.top.map((c) => (
+                <tr key={c.name + c.sentOn}>
                   <td className="name" title={c.name}>
                     {c.name}
                   </td>
                   <td>{num(c.sent)}</td>
-                  <td>{day(c.sent_on)}</td>
+                  <td>{c.sentOn ? day(c.sentOn) : ""}</td>
                   <td>{num(c.opened)}</td>
-                  <td>{pct(c.open_rate * 100)}</td>
+                  <td>{pct(rateOf(c.opened, c.delivered))}</td>
                   <td>{num(c.clicked)}</td>
-                  <td>{pct(c.click_rate * 100)}</td>
+                  <td>{pct(rateOf(c.clicked, c.delivered))}</td>
                   <td>{num(c.orders)}</td>
-                  <td>{num(Math.round(exVat(Number(c.revenue_jod))))}</td>
+                  <td>{num(Math.round(exVat(c.revenue)))}</td>
                 </tr>
               ))}
+              {campaigns.rollup.other ? (
+                <tr>
+                  <td className="name sub">{campaigns.rollup.other.name}</td>
+                  <td className="sub">{num(campaigns.rollup.other.sent)}</td>
+                  <td className="sub" />
+                  <td className="sub">{num(campaigns.rollup.other.opened)}</td>
+                  <td className="sub">
+                    {pct(rateOf(campaigns.rollup.other.opened, campaigns.rollup.other.delivered))}
+                  </td>
+                  <td className="sub">{num(campaigns.rollup.other.clicked)}</td>
+                  <td className="sub">
+                    {pct(rateOf(campaigns.rollup.other.clicked, campaigns.rollup.other.delivered))}
+                  </td>
+                  <td className="sub">{num(campaigns.rollup.other.orders)}</td>
+                  <td className="sub">{num(Math.round(exVat(campaigns.rollup.other.revenue)))}</td>
+                </tr>
+              ) : null}
               <tr className="total">
-                <td>Total</td>
+                <td>{campaigns.rollup.total.name}</td>
                 <td>{num(campaignTotals.sent)}</td>
                 <td />
                 <td>{num(campaignTotals.opened)}</td>
@@ -488,15 +455,10 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </tbody>
           </table>
           <p className="caption">
-            <b>Open rate is the weakest column here and should not carry a decision.</b> Apple
-            Mail pre-fetches images and marks a message opened whether or not anyone read it, so
-            opens are inflated by an unknown amount and cannot be compared with earlier months —
-            the inflation grows as Apple&rsquo;s share of the list grows. Across our own{" "}
-            {ENGAGEMENT_SIGNAL.campaigns} campaigns, click rate predicts revenue roughly four
-            times better than open rate ({ENGAGEMENT_SIGNAL.clickVsRevenue} against{" "}
-            {ENGAGEMENT_SIGNAL.openVsRevenue}). Judge a campaign on clicks, orders and revenue.
-            Open and click rates are otherwise Klaviyo&rsquo;s own, measured against messages
-            delivered rather than sent.
+            Judge a campaign on clicks, orders and revenue: Apple Mail marks a message opened
+            without anyone reading it, and across our own {ENGAGEMENT_SIGNAL.campaigns} campaigns
+            click rate predicts revenue about four times better than open rate (
+            {ENGAGEMENT_SIGNAL.clickVsRevenue} against {ENGAGEMENT_SIGNAL.openVsRevenue}).
             {campaigns.excludedTests.length ? (
               <>
                 {" "}
@@ -505,11 +467,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                   : num(campaigns.excludedTests.length) + " sends are"}{" "}
                 excluded as {campaigns.excludedTests.length === 1 ? "a test" : "tests"}, below{" "}
                 {MIN_CAMPAIGN_RECIPIENTS} recipients:{" "}
-                {campaigns.excludedTests
-                  .map((c) => c.name + " (" + num(c.sent) + ")")
-                  .join(", ")}
-                . A rate measured over a handful of recipients is noise wearing the authority of a
-                percentage, and beside real campaigns it reads as the best send of the month.
+                {campaigns.excludedTests.map((c) => c.name + " (" + num(c.sent) + ")").join(", ")}.
               </>
             ) : null}
           </p>
@@ -540,7 +498,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                   <td>{num(f.recipients)}</td>
                   <td>{pct(rateOf(f.opened, f.delivered))}</td>
                   <td>{pct(rateOf(f.conversions, f.delivered))}</td>
-                  <td>{num(Math.round(f.revenue))}</td>
+                  <td>{num(Math.round(exVat(f.revenue)))}</td>
                 </tr>
               ))}
               {flows.rollup.other ? (
@@ -553,21 +511,21 @@ export function ReportPage1({ data }: { data: ReportData }) {
                   <td className="sub">
                     {pct(rateOf(flows.rollup.other.conversions, flows.rollup.other.delivered))}
                   </td>
-                  <td className="sub">{num(Math.round(flows.rollup.other.revenue))}</td>
+                  <td className="sub">{num(Math.round(exVat(flows.rollup.other.revenue)))}</td>
                 </tr>
               ) : null}
               <tr className="total">
-                <td>All live flows</td>
+                <td>{flows.rollup.total.name}</td>
                 <td>{num(flows.rollup.total.recipients)}</td>
                 <td>{pct(rateOf(flows.rollup.total.opened, flows.rollup.total.delivered))}</td>
                 <td>{pct(rateOf(flows.rollup.total.conversions, flows.rollup.total.delivered))}</td>
-                <td>{num(Math.round(flows.rollup.total.revenue))}</td>
+                <td>{num(Math.round(exVat(flows.rollup.total.revenue)))}</td>
               </tr>
             </tbody>
           </table>
           <p className="caption">
-            Only flows that sent at least one message in the period are listed. Flows that exist but
-            did not send are left out entirely rather than shown as zero.
+            Email flow messages only, and only flows that sent: push sent by a flow is counted in
+            the push table below, not here.
           </p>
         </Guard>
       </section>
@@ -592,28 +550,16 @@ export function ReportPage1({ data }: { data: ReportData }) {
                 </tr>
               </thead>
               <tbody>
-                {push.rollup.top.map((p) => (
+                {push.rollup.types.map((p) => (
                   <tr key={p.name}>
-                    <td className="name" title={p.name}>
-                      {p.name}
-                    </td>
+                    <td className="name">{p.name}</td>
                     <td>{num(p.sent)}</td>
                     <td>{num(p.opened)}</td>
                     <td>{pct(rateOf(p.opened, p.delivered))}</td>
                   </tr>
                 ))}
-                {push.rollup.other ? (
-                  <tr>
-                    <td className="name sub">{push.rollup.other.name}</td>
-                    <td className="sub">{num(push.rollup.other.sent)}</td>
-                    <td className="sub">{num(push.rollup.other.opened)}</td>
-                    <td className="sub">
-                      {pct(rateOf(push.rollup.other.opened, push.rollup.other.delivered))}
-                    </td>
-                  </tr>
-                ) : null}
                 <tr className="total">
-                  <td>Total</td>
+                  <td>{push.rollup.total.name}</td>
                   <td>{num(push.rollup.total.sent)}</td>
                   <td>{num(push.rollup.total.opened)}</td>
                   <td>{pct(rateOf(push.rollup.total.opened, push.rollup.total.delivered))}</td>
@@ -621,9 +567,8 @@ export function ReportPage1({ data }: { data: ReportData }) {
               </tbody>
             </table>
             <p className="caption">
-              Push clicks are not shown because Klaviyo does not measure them. It emits opens and
-              bounces for push, and no click event of any kind, so opens are the only push signal
-              available to anyone using Klaviyo. This is a closed question, not an outstanding one.
+              Opens are the only push signal Klaviyo measures; it emits no click event for push at
+              all.
             </p>
           </Guard>
         </section>
@@ -655,10 +600,6 @@ export function ReportPage1({ data }: { data: ReportData }) {
                 {tierDelta(loyalty.latest!.platinum_members, loyalty.prior?.platinum_members)}
               </div>
             </div>
-            <p className="caption">
-              Tier counts are a snapshot taken on {day(loyalty.latest!.snapshot_date)}, not an
-              average over the month. LoyaltyLion cannot report tier membership historically.
-            </p>
           </Guard>
 
           <div className="facts" style={{ marginTop: "2mm" }}>
@@ -677,7 +618,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                     <small>%</small>
                   </>
                 ) : (
-                  "—"
+                  NONE
                 )}
               </div>
               <div className="l">
@@ -695,7 +636,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                     <small>M pts</small>
                   </>
                 ) : (
-                  "—"
+                  NONE
                 )}
               </div>
               <div className="l">
@@ -709,7 +650,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </div>
             <div className="fact">
               <div className="n">
-                {loyalty.birthdayAvailability.available ? num(loyalty.birthdayRewards) : "—"}
+                {loyalty.birthdayAvailability.available ? num(loyalty.birthdayRewards) : NONE}
               </div>
               <div className="l">
                 Birthday rewards{" "}
@@ -722,8 +663,8 @@ export function ReportPage1({ data }: { data: ReportData }) {
             </div>
           </div>
           <p className="caption">
-            Redemption rate and points outstanding are balances read on a single day, not totals for
-            the month.
+            Tiers, redemption rate and points outstanding are balances read on one day, not totals
+            for the month; LoyaltyLion keeps no history for them.
           </p>
         </section>
       </div>
@@ -736,7 +677,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
           {activations.length ? (
             <ul className="acts">
               {activations.map((a) => {
-                const done = a.status === "done";
+                const done = isDone(a.status);
                 return (
                   <li key={a.id}>
                     <span className={done ? "mark done" : "mark"} />
@@ -759,14 +700,21 @@ export function ReportPage1({ data }: { data: ReportData }) {
           <div className="sec">
             <span className="eyebrow">Next month</span>
           </div>
-          {narrative.nextMonthBullets.length ? (
+          {bullets.length ? (
             <div className="next stack">
-              {narrative.nextMonthBullets.map((b) => {
-                const [title, ...rest] = b.split(/\s+[—–-]\s+/);
+              {bullets.map((b) => {
+                // The lead-in is whatever comes before the first colon, and
+                // failing that the first three words. The old version split on
+                // a dash, which is why every line had to be written with one.
+                const colon = b.indexOf(":");
+                const [title, rest] =
+                  colon > 0
+                    ? [b.slice(0, colon + 1), b.slice(colon + 1)]
+                    : [b.split(/\s+/).slice(0, 3).join(" "), " " + b.split(/\s+/).slice(3).join(" ")];
                 return (
                   <div key={b}>
                     <b>{title}</b>
-                    {rest.join(" — ")}
+                    {rest}
                   </div>
                 );
               })}
@@ -778,7 +726,9 @@ export function ReportPage1({ data }: { data: ReportData }) {
       </div>
 
       <footer className="foot">
-        <span>Fyxx · Al-Kasra for Trade and Marketing · Prepared for Zeid Salfiti</span>
+        <span>
+          Fyxx · Al-Kasra for Trade and Marketing · Prepared for Zeid Salfiti · {VAT_FOOTER_NOTE}
+        </span>
         <span>
           Sources: Klaviyo, LoyaltyLion, Shopify · Generated from the Fyxx Marketing dashboard
         </span>

@@ -334,33 +334,6 @@ ignored would have printed the overflow wherever it landed, which is the exact
 thing this is meant to prevent. Printing switches `.rp` to block layout and
 restores the flex gap as margins.
 
-## One change is NOT in the repo and needs Naim to apply it
-
-The nightly sync does not yet refresh `klaviyo_flow_monthly`, so flow opens
-will go stale from 20 October onward until this lands. August to October are
-already loaded, so nothing is wrong today.
-
-The change is one word in three places in `.github/workflows/sync.yml`, on the
-lines reading:
-
-    SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
-
-becoming:
-
-    SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion,flow-monthly' }}
-
-All three have to match, because they are the preview step, the run and the
-summary, and a preview that advertises a source the run does not do is worse
-than not changing it at all.
-
-It could not be pushed from here: the token has no `workflow` scope, and GitHub
-rejects any push that touches `.github/workflows/`. Either apply it in the
-GitHub web editor or grant the scope and say so.
-
-Until then it can be run by hand, and it is cheap, one call per month:
-
-    node scripts/sync.mjs --only flow-monthly --from 2026-10-01 --to <yesterday>
-
 ## Also carried over, not started
 
 - Whether Refresh should trigger the `updated_at` order repair.

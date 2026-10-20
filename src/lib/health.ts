@@ -195,8 +195,14 @@ export const SEED_PROBES = [
   {
     table: "ll_snapshots" as const,
     label: "Loyalty snapshots",
-    // Seeded redemption_rate is ~21. A real one is a percentage near 0.2,
-    // so anything above 1 is seed residue rather than a measurement.
+    // ll_snapshots.redemption_rate is the ONE-DAY figure: that day's redeeming
+    // members over every member ever. Not the reported redemption rate, which
+    // is a whole month over members who still buy and lives in
+    // loyalty_redemption_monthly. The column is kept for this probe and for
+    // the nightly snapshot record, and is no longer shown anywhere.
+    //
+    // Seeded values are ~21. A real one-day figure is near 0.2 per cent, so
+    // anything above 1 is seed residue rather than a measurement.
     apply: (q: SeedFilter) => q.gt("redemption_rate", 1),
   },
   {

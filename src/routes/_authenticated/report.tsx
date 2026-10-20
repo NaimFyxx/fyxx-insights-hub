@@ -666,16 +666,18 @@ export function ReportPage1({
             <div className="facts" style={{ marginTop: "2mm" }}>
               <div className="fact">
                 <div className="n">
-                  {loyalty.latest ? (
+                  {/* Base is members who still BUY, not every member ever. The
+                      old figure divided ONE DAY's redeemers by all 12,081
+                      members and read 0.15 per cent whatever happened, which is
+                      a number nobody could act on. September 2026 reads 6.4 per
+                      cent on this basis. */}
+                  {loyalty.redemptionAvailability.available && loyalty.redemption ? (
                     <>
-                      {/* redemption_rate is stored as a PERCENTAGE, not a
-                          fraction. Proved from the same row: 20 Oct 2026 stored
-                          0.15, with 18 redemptions against 12,081 members, which
-                          is 0.149 per cent. Multiplying by 100 here turned 0.10
-                          into "10.0%" on the report while the Loyalty page
-                          correctly showed 0.1%, and the two pages contradicted
-                          each other for weeks. */}
-                      {Number(loyalty.latest.redemption_rate).toFixed(2)}
+                      {(
+                        (loyalty.redemption.redeemers /
+                          Math.max(1, loyalty.redemption.activeMembers)) *
+                        100
+                      ).toFixed(1)}
                       <small>%</small>
                     </>
                   ) : (
@@ -684,8 +686,15 @@ export function ReportPage1({
                 </div>
                 <div className="l">
                   Redemption rate{" "}
-                  {loyalty.latest ? (
-                    <span className="sub">(on {day(loyalty.latest.snapshot_date)})</span>
+                  <span className="sub">(members who bought in the last 12 months)</span>
+                  {loyalty.redemptionAvailability.available && loyalty.redemption ? (
+                    <>
+                      {" "}
+                      <span className="sub">
+                        {num(loyalty.redemption.redeemers)} of{" "}
+                        {num(loyalty.redemption.activeMembers)}
+                      </span>
+                    </>
                   ) : null}
                 </div>
               </div>

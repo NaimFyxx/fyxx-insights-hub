@@ -831,6 +831,15 @@ export type Database = {
         };
         Relationships: [];
       };
+      loyalty_redemption_monthly: {
+        Row: {
+          month: string | null;
+          redeemers: number | null;
+          active_members: number | null;
+          redeemers_in_base: number | null;
+        };
+        Relationships: [];
+      };
       source_volume_check: {
         Row: {
           date: string | null;

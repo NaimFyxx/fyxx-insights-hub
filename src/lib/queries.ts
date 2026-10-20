@@ -105,9 +105,18 @@ export type Snapshot = {
   gold_members: number;
   platinum_members: number;
   /**
-   * A PERCENTAGE already, not a 0-1 fraction. 0.15 means 0.15 per cent.
-   * Derived from the same snapshot row: 18 redemptions / 12,081 members =
-   * 0.149 per cent, stored as 0.15. Do not multiply by 100.
+   * ONE DAY's redeeming members over ALL members ever, as a percentage already
+   * rather than a 0-1 fraction. 0.15 means 0.15 per cent, not 15.
+   *
+   * SUPERSEDED for reporting by loyalty_redemption_monthly. Both halves of
+   * this answer the wrong question: the base counts members who never bought
+   * or stopped years ago, and a single day catches almost nobody, so it reads
+   * near zero and barely moves. 20 October 2026: 18 of 12,081, 0.15 per cent,
+   * against 6.37 per cent on the monthly basis for September.
+   *
+   * Kept because it is what the nightly snapshot records and the Sync health
+   * seed probe tests against it. Anywhere it is shown it must be labelled as
+   * the one-day figure so the two cannot be confused.
    */
   redemption_rate: number;
   points_outstanding: number;
@@ -286,6 +295,41 @@ export const fetchFlowMonthly = (month: string) =>
       .eq("month", month)
       .range(from, to),
   );
+
+/**
+ * Redemption on a base of members who still buy, for one calendar month.
+ *
+ * `redeemers` counts every member who claimed a reward that month, including
+ * members who have stopped buying, so it is NOT contained in `activeMembers`:
+ * September 2026 has 172 redeemers of whom 161 are in the base. `redeemersInBase`
+ * is the contained figure, carried so the gap is visible rather than guessed.
+ *
+ * The base reconciles with LoyaltyLion: their trailing_12m_customers for
+ * September 2026 gives 662 redeeming plus 2,041 non-redeeming members, so
+ * 2,703, against 2,701 here.
+ */
+export type RedemptionMonth = {
+  month: string;
+  redeemers: number;
+  activeMembers: number;
+  redeemersInBase: number;
+};
+
+export const fetchRedemptionMonth = async (month: string): Promise<RedemptionMonth | null> => {
+  const { data, error } = await supabase
+    .from("loyalty_redemption_monthly")
+    .select("month,redeemers,active_members,redeemers_in_base")
+    .eq("month", month)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.month === null) return null;
+  return {
+    month: data.month,
+    redeemers: Number(data.redeemers ?? 0),
+    activeMembers: Number(data.active_members ?? 0),
+    redeemersInBase: Number(data.redeemers_in_base ?? 0),
+  };
+};
 
 export const fetchSnapshots = async (r: DateRange) =>
   unwrap<Snapshot[]>(

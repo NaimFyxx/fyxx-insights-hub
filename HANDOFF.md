@@ -9,6 +9,12 @@ a decision from Naim. See "Waiting on a decision".
 
 ## Anything that changed a previously reported figure
 
+**The redemption rate is now 6.4 per cent for September 2026, not 0.15.** The
+definition changed, not the data: 172 members who claimed a reward that month
+over 2,701 members who bought in the trailing 12 months. The old figure divided
+ONE DAY's redeemers by every member ever, so it read near zero whatever
+happened and barely moved.
+
 **Flow open rates were overstated and are now correct.** September 2026, email
 flows: 38.4 per cent, not 48.7. review-request-judgeme: 761 opens of 2,762
 delivered, not 1,298. Flow push opens: 274, not 308. Campaigns were never
@@ -115,6 +121,82 @@ the table was empty, so the wrong branch had never run. Now compared
 case-insensitively, since the two spellings live in different files.
 
 ---
+
+## The redemption rate, and two traps in getting there
+
+New definition, per Naim: members who claimed a reward in the month, state
+approved or expired, over members who placed a non-cancelled Shopify order in
+the 12 months to the end of that month.
+
+September 2026: **172 of 2,701, which is 6.37 per cent.**
+
+| Month | Redeemers | Active members | Rate |
+|---|---|---|---|
+| June 2026 | 150 | 2,924 | 5.1% |
+| July 2026 | 163 | 2,897 | 5.6% |
+| August 2026 | 161 | 2,806 | 5.7% |
+| September 2026 | 172 | 2,701 | 6.4% |
+
+### Trap one: ll_rewards holds two different kinds of id
+
+`ll_customer_id` means different things depending on which sync wrote the row,
+and nothing in the column says which:
+
+| source | id kind | length | period |
+|---|---|---|---|
+| `v2_transactions` | LoyaltyLion id | 9 to 10 | 31 Aug 2026 onward |
+| `ll_export_20260829` | **Shopify customer id** | 13 to 14 | everything before |
+
+Joining on `loyaltylion_id` alone silently drops 2,211 of 2,678 reward rows,
+which is 82 per cent of the history. That is why only 173 of 816 redeemers
+matched in the first rough count. Both joins are tried now and whichever
+resolves is used.
+
+### Trap two: loyaltylion_id is not a membership flag
+
+`customer_identity.loyaltylion_id` is an identity LINK, set for 18,864
+customers, far more than are actually members. Using it as the membership test
+gives **4,314** active members, which is exactly the figure that looked wrong.
+`shopify_customers.loyalty_enrolled` is the enrolment flag and gives **2,701**.
+
+### The base reconciles, and which one is right
+
+LoyaltyLion's `trailing_12m_customers` for September 2026 is 4,531 unfiltered.
+Split by engagement status it is 662 redeeming plus 2,041 non-redeeming
+members, so **2,703 members**, which is where that number comes from. Against
+2,701 here, a difference of 2, or 0.07 per cent. The 4,314 was wrong.
+
+Earlier months drift: June 2026 reads 2,924 here against LoyaltyLion's 2,808.
+The cause is known. `loyalty_enrolled` is a CURRENT flag, while LoyaltyLion
+counts a customer as a member only if they were already enrolled at their
+latest order in the window. Testing enrolment date instead tracks July and
+August better (within 3 and 9) but September worse (2,663 against 2,703).
+Naim's definition says "LoyaltyLion members", present tense, so the current
+flag is what is implemented, and recent months are the accurate ones.
+
+### The numerator is not inside the denominator
+
+172 redeemers, of whom 161 are in the base. The other 11 are 6 enrolled members
+with no order in the window, 3 whose enrolment flag is not set, and 2 whose id
+resolves to no Shopify customer at all. So the figure is redeemers per active
+member, not the share of active members who redeemed. The view carries
+`redeemers_in_base` so the gap is visible, and the Loyalty page says so.
+
+If the share is wanted instead, it is 161 of 2,701, or 5.96 per cent, and the
+change is one column name.
+
+### Why it says 172 and not 173
+
+The 173 in the brief counts a void claim. Void means the claim was cancelled
+and nothing was redeemed, and the agreed definition excludes it. No timezone
+effect: 172 either way.
+
+### The old figure
+
+`ll_snapshots.redemption_rate` is kept, because the nightly snapshot records it
+and the Sync health seed probe tests against it, but it is no longer shown
+anywhere. It is documented in queries.ts and health.ts as the one-day figure so
+the two cannot be confused.
 
 ## Why flow opens were wrong, and why there is no per-day fix
 

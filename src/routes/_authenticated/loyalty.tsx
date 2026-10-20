@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDateRange } from "@/context/date-range-context";
-import { fetchSnapshots } from "@/lib/queries";
+import { fetchSnapshots, fetchRedemptionMonth } from "@/lib/queries";
+import { wholeMonthOf } from "@/lib/report";
 import { previousRange } from "@/lib/ranges";
 import { deltaPct, jod, num, pct, pointsToJod } from "@/lib/format";
 import { QueryFailed, PageHeader, Panel, StatTile, EmptyState } from "@/components/fyxx/primitives";
@@ -51,8 +52,16 @@ function LoyaltyPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["loyalty", range.from, range.to, refreshKey],
     queryFn: async () => {
-      const [current, previous] = await Promise.all([fetchSnapshots(range), fetchSnapshots(prev)]);
-      return { current, previous };
+      // Redemption is a whole-month figure on a whole-month base, so it only
+      // exists when the selected range IS one month. Anything else and the
+      // panel says so rather than dividing two numbers that do not line up.
+      const month = wholeMonthOf(range);
+      const [current, previous, redemption] = await Promise.all([
+        fetchSnapshots(range),
+        fetchSnapshots(prev),
+        month ? fetchRedemptionMonth(month) : Promise.resolve(null),
+      ]);
+      return { current, previous, redemption, month };
     },
   });
 
@@ -180,17 +189,37 @@ function LoyaltyPage() {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <Panel title="Redemption rate">
-          {/* Computed from one nightly sync window, not the selected range —
-              so it is only meaningful on days we actually scanned. */}
-          {hasScanData ? (
+          {/* The base is members who still BUY. The old figure, kept below
+              under its own name, divided ONE DAY's redeemers by every member
+              ever and so read about 0.15 per cent whatever happened. */}
+          {data.redemption ? (
             <>
-              <p className="display-num text-3xl">{pct(Number(last.redemption_rate))}</p>
+              <p className="display-num text-3xl">
+                {pct((data.redemption.redeemers / Math.max(1, data.redemption.activeMembers)) * 100)}
+              </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Redeeming members as a share of all members, measured on {last.snapshot_date}.
+                <b>
+                  {num(data.redemption.redeemers)} of {num(data.redemption.activeMembers)}
+                </b>{" "}
+                members who bought in the last 12 months. The base is checked against
+                LoyaltyLion&rsquo;s own trailing 12-month customer count, which gave 2,703 for
+                September 2026 against 2,701 here.
+                {data.redemption.redeemers > data.redemption.redeemersInBase ? (
+                  <>
+                    {" "}
+                    {num(data.redemption.redeemers - data.redemption.redeemersInBase)} of the
+                    redeemers are not in that base, because they are members who have stopped
+                    buying, so this is redeemers per active member rather than a share of them.
+                  </>
+                ) : null}
               </p>
             </>
           ) : (
-            <NoData what="Redemption rate" />
+            <p className="text-xs text-muted-foreground">
+              <span className="text-foreground">Set the range to one calendar month.</span>{" "}
+              Redemption is counted over a month against members who bought in the 12 months
+              before it ended, so a partial range has no figure.
+            </p>
           )}
         </Panel>
         <Panel title="Points liability">

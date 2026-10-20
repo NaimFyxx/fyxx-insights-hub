@@ -8,6 +8,7 @@ import {
   fetchSnapshots,
   fetchActivations,
   fetchFlowMonthly,
+  fetchRedemptionMonth,
   type Campaign,
   type FlowRow,
   type PushRow,
@@ -216,6 +217,15 @@ export type ReportData = {
     birthdayAvailability: Availability;
     pointsRow: Awaited<ReturnType<typeof fetchSnapshots>>[number] | null;
     pointsAvailability: Availability;
+    /**
+     * Redemption on a base of members who still buy, for this whole month.
+     *
+     * Replaces the one-day figure on ll_snapshots, which divided one day's
+     * redeemers by every member ever and so read near zero whatever happened:
+     * 0.15 per cent on 20 October against 6.37 per cent here for September.
+     */
+    redemption: Awaited<ReturnType<typeof fetchRedemptionMonth>>;
+    redemptionAvailability: Availability;
   };
   activations: Activation[];
   revenue: {
@@ -295,6 +305,10 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
   // reads 1,298 from the daily rows against Klaviyo's 761 for the month.
   // Everything else agrees exactly, delivered included.
   const flowMonthly = await fetchFlowMonthly(range.from);
+
+  // Redemption is a whole-month figure on a whole-month base, so it is fetched
+  // by month rather than derived from the snapshots in the range.
+  const redemption = await fetchRedemptionMonth(range.from);
 
   const days = daysIn(range);
 
@@ -428,6 +442,10 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
       birthdayAvailability,
       pointsRow,
       pointsAvailability,
+      redemption,
+      redemptionAvailability: redemption
+        ? ok
+        : no("Redemption has not been calculated for this month."),
     },
     activations: activations.filter((a) => a.date >= range.from && a.date <= range.to),
     revenue: {

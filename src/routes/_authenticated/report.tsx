@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, endOfMonth, startOfMonth } from "date-fns";
@@ -66,6 +66,39 @@ function periodLine(from: string, to: string): string {
   if (sameMonth) return `${format(a, "d")} to ${format(b, "d MMMM yyyy")}`;
   const sameYear = format(a, "yyyy") === format(b, "yyyy");
   return `${format(a, sameYear ? "d MMMM" : "d MMMM yyyy")} to ${format(b, "d MMMM yyyy")}`;
+}
+
+/**
+ * Content height, in millimetres, above which the report prints on two sheets.
+ *
+ * Below A4's 297mm on purpose. Print layout rounds differently from screen, and
+ * a month that overflows by a millimetre without a deliberate break gets an
+ * accidental one instead: the browser picks the last fitting boundary and
+ * usually strands the footer alone on sheet two. Breaking on purpose at 292
+ * costs an unnecessary second page only for a month within 5mm of the limit,
+ * and buys a predictable layout for every month past it.
+ *
+ * September 2026 measures 283mm, so it stays on one sheet with room to spare.
+ */
+const SINGLE_PAGE_LIMIT_MM = 292;
+
+const PX_PER_MM = 96 / 25.4;
+
+/**
+ * The content height of the report, which is NOT its box height: `.rp` carries
+ * `min-height: 297mm`, so reading the box back always returns at least a full
+ * page and can never say whether the content fits inside one.
+ */
+function contentHeightMm(el: HTMLElement): number {
+  const style = getComputedStyle(el);
+  const kids = [...el.children] as HTMLElement[];
+  const gap = parseFloat(style.rowGap) || 0;
+  const px =
+    kids.reduce((a, k) => a + k.getBoundingClientRect().height, 0) +
+    gap * Math.max(0, kids.length - 1) +
+    parseFloat(style.paddingTop) +
+    parseFloat(style.paddingBottom);
+  return px / PX_PER_MM;
 }
 
 /** Renders a section's figures, or the reason they cannot be shown. */
@@ -227,6 +260,29 @@ export function ReportPage1({
   const words = narrative ?? data.narrative;
   const bullets = words.nextMonthBullets.map((b) => b.trim()).filter(Boolean);
 
+  /**
+   * Measured rather than guessed from the row counts, because the thing that
+   * decides it is how many flow and campaign NAMES wrap to a second line.
+   *
+   * Nothing the two-page class turns on changes the height on screen: the page
+   * break and its top padding are both inside `@media print`. If either applied
+   * on screen this measurement would feed back into itself.
+   */
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [twoPage, setTwoPage] = useState(false);
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const measure = () => setTwoPage(contentHeightMm(el) > SINGLE_PAGE_LIMIT_MM);
+    measure();
+    // Web fonts arrive after first paint and change the height of every row,
+    // so the first measurement is of the fallback font and is usually wrong.
+    document.fonts?.ready.then(measure).catch(() => {});
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [data, words]);
+
   const campaignTotals = campaigns.rows.reduce(
     (a, c) => ({
       sent: a.sent + c.sent,
@@ -252,7 +308,7 @@ export function ReportPage1({
   };
 
   return (
-    <div className="rp">
+    <div className={twoPage ? "rp two-page" : "rp"} ref={pageRef}>
       <header className="head">
         <div className="headtop">
           <div className="wordmark">
@@ -530,209 +586,215 @@ export function ReportPage1({
         </Guard>
       </section>
 
-      <div className="cols cols-32">
-        <section>
-          <div className="sec">
-            <span className="eyebrow">Push notifications</span>
-          </div>
-          <Guard availability={push.availability}>
-            <table className="w46">
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Sent</th>
-                  <th>Opened</th>
-                  <th>
-                    Open
-                    <br />
-                    rate
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {push.rollup.types.map((p) => (
-                  <tr key={p.name}>
-                    <td className="name">{p.name}</td>
-                    <td>{num(p.sent)}</td>
-                    <td>{num(p.opened)}</td>
-                    <td>{pct(rateOf(p.opened, p.delivered))}</td>
+      {/* Page 2 when the month does not fit on one sheet. The split is
+          deliberate and always in the same place, so a heavy month reads as
+          two designed pages rather than wherever the content happened to run
+          over. On a month that fits, this wrapper changes nothing. */}
+      <div className="page-two">
+        <div className="cols cols-32">
+          <section>
+            <div className="sec">
+              <span className="eyebrow">Push notifications</span>
+            </div>
+            <Guard availability={push.availability}>
+              <table className="w46">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Sent</th>
+                    <th>Opened</th>
+                    <th>
+                      Open
+                      <br />
+                      rate
+                    </th>
                   </tr>
-                ))}
-                <tr className="total">
-                  <td>{push.rollup.total.name}</td>
-                  <td>{num(push.rollup.total.sent)}</td>
-                  <td>{num(push.rollup.total.opened)}</td>
-                  <td>{pct(rateOf(push.rollup.total.opened, push.rollup.total.delivered))}</td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {push.rollup.types.map((p) => (
+                    <tr key={p.name}>
+                      <td className="name">{p.name}</td>
+                      <td>{num(p.sent)}</td>
+                      <td>{num(p.opened)}</td>
+                      <td>{pct(rateOf(p.opened, p.delivered))}</td>
+                    </tr>
+                  ))}
+                  <tr className="total">
+                    <td>{push.rollup.total.name}</td>
+                    <td>{num(push.rollup.total.sent)}</td>
+                    <td>{num(push.rollup.total.opened)}</td>
+                    <td>{pct(rateOf(push.rollup.total.opened, push.rollup.total.delivered))}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="caption">
+                Opens are the only push signal Klaviyo measures; it emits no click event for push at
+                all.
+              </p>
+            </Guard>
+          </section>
+
+          <section>
+            <div className="sec">
+              <span className="eyebrow">LoyaltyLion</span>
+            </div>
+            <Guard availability={loyalty.availability}>
+              <div className="tiers">
+                <div className="tier">
+                  <div className="t">Blue</div>
+                  <div className="n">{num(loyalty.latest!.blue_members)}</div>
+                  {tierDelta(loyalty.latest!.blue_members, loyalty.prior?.blue_members)}
+                </div>
+                <div className="tier">
+                  <div className="t">Silver</div>
+                  <div className="n">{num(loyalty.latest!.silver_members)}</div>
+                  {tierDelta(loyalty.latest!.silver_members, loyalty.prior?.silver_members)}
+                </div>
+                <div className="tier gold">
+                  <div className="t">Gold</div>
+                  <div className="n">{num(loyalty.latest!.gold_members)}</div>
+                  {tierDelta(loyalty.latest!.gold_members, loyalty.prior?.gold_members)}
+                </div>
+                <div className="tier">
+                  <div className="t">Platinum</div>
+                  <div className="n">{num(loyalty.latest!.platinum_members)}</div>
+                  {tierDelta(loyalty.latest!.platinum_members, loyalty.prior?.platinum_members)}
+                </div>
+              </div>
+            </Guard>
+
+            <div className="facts" style={{ marginTop: "2mm" }}>
+              <div className="fact">
+                <div className="n">
+                  {loyalty.latest ? (
+                    <>
+                      {/* redemption_rate is stored as a PERCENTAGE, not a
+                          fraction. Proved from the same row: 20 Oct 2026 stored
+                          0.15, with 18 redemptions against 12,081 members, which
+                          is 0.149 per cent. Multiplying by 100 here turned 0.10
+                          into "10.0%" on the report while the Loyalty page
+                          correctly showed 0.1%, and the two pages contradicted
+                          each other for weeks. */}
+                      {Number(loyalty.latest.redemption_rate).toFixed(2)}
+                      <small>%</small>
+                    </>
+                  ) : (
+                    NONE
+                  )}
+                </div>
+                <div className="l">
+                  Redemption rate{" "}
+                  {loyalty.latest ? (
+                    <span className="sub">(on {day(loyalty.latest.snapshot_date)})</span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="fact">
+                <div className="n">
+                  {loyalty.pointsAvailability.available && loyalty.pointsRow ? (
+                    <>
+                      {(Number(loyalty.pointsRow.points_outstanding) / 1_000_000).toFixed(2)}
+                      <small>M pts</small>
+                    </>
+                  ) : (
+                    NONE
+                  )}
+                </div>
+                <div className="l">
+                  Points outstanding{" "}
+                  {loyalty.pointsAvailability.available && loyalty.pointsRow ? (
+                    <span className="sub">
+                      ({jod(Number(loyalty.pointsRow.points_outstanding) / 100)})
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="fact">
+                <div className="n">
+                  {loyalty.birthdayAvailability.available ? num(loyalty.birthdayRewards) : NONE}
+                </div>
+                <div className="l">
+                  Birthday rewards{" "}
+                  {loyalty.birthdayAvailability.available ? (
+                    "issued"
+                  ) : (
+                    <span className="sub">not collected</span>
+                  )}
+                </div>
+              </div>
+            </div>
             <p className="caption">
-              Opens are the only push signal Klaviyo measures; it emits no click event for push at
-              all.
+              Tiers, redemption rate and points outstanding are balances read on one day, not totals
+              for the month; LoyaltyLion keeps no history for them.
             </p>
-          </Guard>
-        </section>
+          </section>
+        </div>
 
-        <section>
-          <div className="sec">
-            <span className="eyebrow">LoyaltyLion</span>
-          </div>
-          <Guard availability={loyalty.availability}>
-            <div className="tiers">
-              <div className="tier">
-                <div className="t">Blue</div>
-                <div className="n">{num(loyalty.latest!.blue_members)}</div>
-                {tierDelta(loyalty.latest!.blue_members, loyalty.prior?.blue_members)}
-              </div>
-              <div className="tier">
-                <div className="t">Silver</div>
-                <div className="n">{num(loyalty.latest!.silver_members)}</div>
-                {tierDelta(loyalty.latest!.silver_members, loyalty.prior?.silver_members)}
-              </div>
-              <div className="tier gold">
-                <div className="t">Gold</div>
-                <div className="n">{num(loyalty.latest!.gold_members)}</div>
-                {tierDelta(loyalty.latest!.gold_members, loyalty.prior?.gold_members)}
-              </div>
-              <div className="tier">
-                <div className="t">Platinum</div>
-                <div className="n">{num(loyalty.latest!.platinum_members)}</div>
-                {tierDelta(loyalty.latest!.platinum_members, loyalty.prior?.platinum_members)}
-              </div>
+        <div className="cols cols-32">
+          <section>
+            <div className="sec">
+              <span className="eyebrow">Activations</span>
             </div>
-          </Guard>
+            {activations.length ? (
+              <ul className="acts">
+                {activations.map((a) => {
+                  const done = isDone(a.status);
+                  return (
+                    <li key={a.id}>
+                      <span className={done ? "mark done" : "mark"} />
+                      <span>
+                        {a.title} <span className="date">· {day(a.date)}</span>
+                      </span>
+                      <span className={done ? "status" : "status no"}>
+                        {done ? "Done" : "Not done"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="unavail">No activations were recorded for this period.</p>
+            )}
+          </section>
 
-          <div className="facts" style={{ marginTop: "2mm" }}>
-            <div className="fact">
-              <div className="n">
-                {loyalty.latest ? (
-                  <>
-                    {/* redemption_rate is stored as a PERCENTAGE, not a
-                        fraction. Proved from the same row: 20 Oct 2026 stored
-                        0.15, with 18 redemptions against 12,081 members, which
-                        is 0.149 per cent. Multiplying by 100 here turned 0.10
-                        into "10.0%" on the report while the Loyalty page
-                        correctly showed 0.1%, and the two pages contradicted
-                        each other for weeks. */}
-                    {Number(loyalty.latest.redemption_rate).toFixed(2)}
-                    <small>%</small>
-                  </>
-                ) : (
-                  NONE
-                )}
-              </div>
-              <div className="l">
-                Redemption rate{" "}
-                {loyalty.latest ? (
-                  <span className="sub">(on {day(loyalty.latest.snapshot_date)})</span>
-                ) : null}
-              </div>
+          <section>
+            <div className="sec">
+              <span className="eyebrow">Next month</span>
             </div>
-            <div className="fact">
-              <div className="n">
-                {loyalty.pointsAvailability.available && loyalty.pointsRow ? (
-                  <>
-                    {(Number(loyalty.pointsRow.points_outstanding) / 1_000_000).toFixed(2)}
-                    <small>M pts</small>
-                  </>
-                ) : (
-                  NONE
-                )}
+            {bullets.length ? (
+              <div className="next stack">
+                {bullets.map((b) => {
+                  // The lead-in is whatever comes before the first colon, and
+                  // failing that the first three words. The old version split on
+                  // a dash, which is why every line had to be written with one.
+                  const colon = b.indexOf(":");
+                  const [title, rest] =
+                    colon > 0
+                      ? [b.slice(0, colon + 1), b.slice(colon + 1)]
+                      : [b.split(/\s+/).slice(0, 3).join(" "), " " + b.split(/\s+/).slice(3).join(" ")];
+                  return (
+                    <div key={b}>
+                      <b>{title}</b>
+                      {rest}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="l">
-                Points outstanding{" "}
-                {loyalty.pointsAvailability.available && loyalty.pointsRow ? (
-                  <span className="sub">
-                    ({jod(Number(loyalty.pointsRow.points_outstanding) / 100)})
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="fact">
-              <div className="n">
-                {loyalty.birthdayAvailability.available ? num(loyalty.birthdayRewards) : NONE}
-              </div>
-              <div className="l">
-                Birthday rewards{" "}
-                {loyalty.birthdayAvailability.available ? (
-                  "issued"
-                ) : (
-                  <span className="sub">not collected</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <p className="caption">
-            Tiers, redemption rate and points outstanding are balances read on one day, not totals
-            for the month; LoyaltyLion keeps no history for them.
-          </p>
-        </section>
+            ) : (
+              <p className="unavail">Not yet written.</p>
+            )}
+          </section>
+        </div>
+
+        <footer className="foot">
+          <span>
+            Fyxx · Al-Kasra for Trade and Marketing · Prepared for Zeid Salfiti · {VAT_FOOTER_NOTE}
+          </span>
+          <span>
+            Sources: Klaviyo, LoyaltyLion, Shopify · Generated from the Fyxx Marketing dashboard
+          </span>
+        </footer>
       </div>
-
-      <div className="cols cols-32">
-        <section>
-          <div className="sec">
-            <span className="eyebrow">Activations</span>
-          </div>
-          {activations.length ? (
-            <ul className="acts">
-              {activations.map((a) => {
-                const done = isDone(a.status);
-                return (
-                  <li key={a.id}>
-                    <span className={done ? "mark done" : "mark"} />
-                    <span>
-                      {a.title} <span className="date">· {day(a.date)}</span>
-                    </span>
-                    <span className={done ? "status" : "status no"}>
-                      {done ? "Done" : "Not done"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="unavail">No activations were recorded for this period.</p>
-          )}
-        </section>
-
-        <section>
-          <div className="sec">
-            <span className="eyebrow">Next month</span>
-          </div>
-          {bullets.length ? (
-            <div className="next stack">
-              {bullets.map((b) => {
-                // The lead-in is whatever comes before the first colon, and
-                // failing that the first three words. The old version split on
-                // a dash, which is why every line had to be written with one.
-                const colon = b.indexOf(":");
-                const [title, rest] =
-                  colon > 0
-                    ? [b.slice(0, colon + 1), b.slice(colon + 1)]
-                    : [b.split(/\s+/).slice(0, 3).join(" "), " " + b.split(/\s+/).slice(3).join(" ")];
-                return (
-                  <div key={b}>
-                    <b>{title}</b>
-                    {rest}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="unavail">Not yet written.</p>
-          )}
-        </section>
-      </div>
-
-      <footer className="foot">
-        <span>
-          Fyxx · Al-Kasra for Trade and Marketing · Prepared for Zeid Salfiti · {VAT_FOOTER_NOTE}
-        </span>
-        <span>
-          Sources: Klaviyo, LoyaltyLion, Shopify · Generated from the Fyxx Marketing dashboard
-        </span>
-      </footer>
     </div>
   );
 }

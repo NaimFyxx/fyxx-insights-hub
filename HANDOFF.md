@@ -111,37 +111,39 @@ case-insensitively, since the two spellings live in different files.
 
 ---
 
-## Waiting on a decision: the page fits September, not a month with campaigns
+## Two pages in heavy months, decided and built
 
-Measured by mounting the real report component at A4 width with fixture data,
-not estimated.
+Naim's call, 20 October: a month that does not fit prints on two sheets, the
+type size stays as it is, and the split is always in the same place.
 
-| Month shape | Rendered height | Verdict |
-|---|---|---|
-| September 2026, no campaigns | 283mm content, 297mm page | fits, 14mm spare |
-| December 2025, 11 campaigns | 351mm | 54mm over |
+    sheet 1   month highlight, total reach, email campaigns, flows
+    sheet 2   push, LoyaltyLion, activations, next month, footer
 
-Removing the acquisition section, shortening every note to one line, capping
-the campaigns table, tightening the section gap to 1.6mm and row padding to
-0.7mm together took roughly 90mm out of the page. September now fits
-comfortably. A month with campaigns does not, and roughly one month in three
-has six or more.
+Whether a month needs the second sheet is MEASURED after layout, not guessed
+from row counts, because what decides it is how many flow and campaign names
+wrap onto a second line. The threshold is 292mm rather than 297mm: print
+rounds differently from screen, and a month that overflows by a millimetre
+without a deliberate break gets an accidental one, which usually strands the
+footer alone on sheet two.
 
-The remaining 54mm cannot come out without changing something Zeid approved.
-The options, in the order I would pick them:
+Verified through the real print pipeline, not by estimate. Headless Chrome
+printed both shapes to PDF:
 
-1. **Accept two pages in months with campaigns.** Costs nothing, changes no
-   figure, and the second sheet carries the footer rather than losing rows.
-2. **Drop the type scale**, tables from 7.4pt to about 6.6pt and the tiers with
-   them. Keeps one page in every month, but the page will not look like the one
-   he signed off.
-3. **Move Activations and Next month to a second sheet** in heavy months only,
-   which makes the page count vary by month in a way nobody can predict.
+| Month shape | Sheet 1 | Sheet 2 | Pages in the PDF |
+|---|---|---|---|
+| September 2026, no campaigns | 283mm | none | 1 |
+| December 2025, 11 campaigns | 240mm | 119mm | 2 |
 
-Nothing has been done on this, because picking for him is how a figure or a
-layout gets redefined without being asked. **This one is Naim's call.**
+No table crosses a boundary: `break-inside: avoid` on every table, section and
+column block, and each is well under a sheet. The campaigns and flows tables
+both sit whole on sheet 1 in the heavy month.
 
----
+One trap worth keeping. `.rp` is a column flex container and the page-two
+wrapper is one of its flex items, and page breaking inside a flex container is
+the weakest corner of fragmentation support. A `break-before` that is silently
+ignored would have printed the overflow wherever it landed, which is the exact
+thing this is meant to prevent. Printing switches `.rp` to block layout and
+restores the flex gap as margins.
 
 ## Also carried over, not started
 

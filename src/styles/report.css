@@ -480,3 +480,113 @@
     display: table-header-group;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Two-page months.
+
+   Most months fit one A4 sheet. A month with campaigns does not: December 2025
+   runs about 54mm over, and that cannot be recovered without shrinking the type
+   Zeid approved.
+
+   So a long month prints on two sheets, and the split is always in the same
+   place rather than wherever the content happened to run out:
+
+     sheet 1   month highlight, total reach, email campaigns, flows
+     sheet 2   push, LoyaltyLion, activations, next month, footer
+
+   The class is set from a measurement in report.tsx, not from a media query,
+   because what decides the height is how many flow and campaign names wrap onto
+   a second line. On a month that fits, none of this applies.
+   ------------------------------------------------------------------------ */
+
+/* Nothing here may change the height on SCREEN. The measurement that sets
+   `.two-page` reads the rendered height, so a rule that grew the page would
+   feed its own input back into itself. Both height-affecting rules below are
+   inside @media print for that reason. */
+@media print {
+  /* Block layout for printing, not flex.
+
+     `.rp` is a column flex container on screen and the page-two wrapper is one
+     of its flex items. Page breaking inside a flex container is the weakest
+     corner of fragmentation support, and a `break-before` that is silently
+     ignored would print the overflow wherever it landed, which is the whole
+     thing this is meant to prevent. Block boxes fragment predictably.
+
+     The flex `gap` goes with it, so the spacing is restored as margins. */
+  .rp,
+  .rp .page-two {
+    display: block;
+  }
+  .rp > * + *,
+  .rp .page-two > * + * {
+    margin-top: 1.6mm;
+  }
+
+  .rp.two-page .page-two {
+    break-before: page;
+    page-break-before: always;
+    /* `@page` margin is 0 and the page padding belongs to `.rp`, so without
+       this the second sheet starts flush against the top edge of the paper
+       while the first one has 8mm of air. */
+    padding-top: 8mm;
+  }
+
+  /* Never split a table across the two sheets. A table broken over a page
+     boundary loses its header on the continuation and reads as two different
+     tables, which on this report means two different sets of figures.
+
+     Applied to the sections too, so that if a month ever overflows past what
+     the deliberate break accounts for, it breaks BETWEEN sections rather than
+     through the middle of one. The tallest section is about 78mm, so none of
+     these is ever too tall to keep whole on a page. */
+  .rp table,
+  .rp section,
+  .rp .cols,
+  .rp .tiers,
+  .rp .facts,
+  .rp .reach,
+  .rp .acts,
+  .rp .foot {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* A heading stranded at the foot of a sheet with its table overleaf. */
+  .rp .sec {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}
+
+/* The page-two wrapper is a plain flex column, matching the spacing the
+   sections had when they were direct children of `.rp`. */
+.rp .page-two {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6mm;
+  position: relative;
+}
+
+/* On screen only, mark where the sheet will break, so the split is visible
+   before anyone prints. Absolutely positioned, so it adds no height. */
+@media screen {
+  .rp.two-page .page-two::before {
+    content: "Sheet 2";
+    position: absolute;
+    top: -3.4mm;
+    right: 0;
+    font-family: "Syne", sans-serif;
+    font-size: 5.8pt;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--grey);
+  }
+  .rp.two-page .page-two::after {
+    content: "";
+    position: absolute;
+    top: -1.6mm;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--pink);
+  }
+}

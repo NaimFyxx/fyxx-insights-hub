@@ -85,7 +85,7 @@ jobs:
         env:
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
-          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
+          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion,flow-monthly' }}
           DRY_RUN: ${{ inputs.dry_run || false }}
           FORCE: ${{ inputs.force || false }}
 
@@ -109,7 +109,7 @@ jobs:
           SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN || 'drynksapp.myshopify.com' }}
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
-          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
+          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion,flow-monthly' }}
           DRY_RUN: ${{ inputs.dry_run || false }}
           FORCE: ${{ inputs.force || false }}
         run: |
@@ -250,7 +250,7 @@ jobs:
         env:
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
-          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion' }}
+          SOURCES: ${{ inputs.sources || 'klaviyo,shopify,loyaltylion,flow-monthly' }}
           DRY_RUN: ${{ inputs.dry_run || false }}
 
       # ---------------------------------------------------------------------

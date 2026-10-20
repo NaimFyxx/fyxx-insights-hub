@@ -152,3 +152,22 @@ export const money3 = (v) => roundTo(v, 3);
 export const int = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : 0);
 /** Klaviyo reports rates as fractions; keep four places, never a percentage. */
 export const rate4 = (v) => roundTo(v, 4);
+
+/**
+ * Days that have fully elapsed in Amman, newest last.
+ *
+ * Per-day sources must never sync the day still in progress. The nightly job
+ * runs at 02:00 Amman, so "today" is two hours old: a flow report for it
+ * returns the handful of sends between midnight and 02:00, the run writes a
+ * success row for that date, and the resume ledger then skips the date
+ * forever. Every day from 3 September to 20 October 2026 holds only its first
+ * two hours because of exactly this, while a manual backfill of the same dates
+ * returned roughly thirty rows a day instead of four.
+ *
+ * The caller still receives the requested range; only the in-progress day is
+ * withheld, and it is picked up by the next night's run once it is complete.
+ */
+export function settledDays(days, now = new Date()) {
+  const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Amman" });
+  return days.filter((d) => d < today);
+}

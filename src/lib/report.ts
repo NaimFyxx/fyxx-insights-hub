@@ -313,6 +313,8 @@ export type ReportData = {
     availability: Availability;
     klaviyoAttributed: number;
     allChannels: number;
+    /** Mobile App + Website only. The denominator for the share tile. */
+    onlineChannels: number;
     sharePct: number | null;
     /** True when the range runs into the day still in progress. */
     shareIsPartial: boolean;
@@ -467,16 +469,23 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
 
   const klaviyoAttributed = attributed.reduce((a, x) => a + Number(x.revenue_jod), 0);
   const allChannels = sales.reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
+  const onlineChannels = sales
+    .filter((x) => (ONLINE_SUB_CHANNELS as readonly string[]).includes(x.sub_channel))
+    .reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
 
   // The SHARE divides two sources synced hours apart, so the day still in
   // progress is excluded from both sides of it. The absolute figures above
   // keep the whole range. A month-end export is unaffected; only an export run
   // mid-month, which is exactly when someone is checking a figure early.
   const klaviyoSettled = settledOnly(attributed).reduce((a, x) => a + Number(x.revenue_jod), 0);
-  const salesSettled = settledOnly(sales).reduce(
-    (a, x) => a + Number(x.total_online_revenue_jod),
-    0,
-  );
+  // The share is now against ONLINE sales only, per Zeid's approved template.
+  // Draft orders and POS are roughly 60 per cent of turnover and Klaviyo
+  // cannot influence a sale rung up at the till, so including them understated
+  // the figure: September 2026 reads 10.1 per cent against all sales and
+  // 24.5 per cent against online.
+  const onlineSettled = settledOnly(sales)
+    .filter((x) => (ONLINE_SUB_CHANNELS as readonly string[]).includes(x.sub_channel))
+    .reduce((a, x) => a + Number(x.total_online_revenue_jod), 0);
   const shareIsPartial = rangeIncludesToday(range);
 
   const notices: string[] = [];
@@ -532,7 +541,8 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
             : ok,
       klaviyoAttributed,
       allChannels,
-      sharePct: salesSettled > 0 ? (klaviyoSettled / salesSettled) * 100 : null,
+      onlineChannels,
+      sharePct: onlineSettled > 0 ? (klaviyoSettled / onlineSettled) * 100 : null,
       shareIsPartial,
     },
     acquisition: {
@@ -562,3 +572,31 @@ export async function buildReport(range: DateRange): Promise<ReportData> {
     notices,
   };
 }
+
+/**
+ * Jordanian VAT is 16 per cent and Zeid reads money with it taken out.
+ *
+ * STORED DATA IS NEVER CHANGED. Shopify reports gross, the database keeps
+ * gross, and every figure on the dashboard stays gross. Only the monthly
+ * report divides, and only at the point of display, so the two can always be
+ * reconciled against each other and against Shopify admin.
+ *
+ * The report footer states the divisor, because a money figure that silently
+ * differs from the same figure on the Overview is the kind of discrepancy that
+ * costs an afternoon.
+ */
+export const VAT_RATE = 0.16;
+export const VAT_DIVISOR = 1 + VAT_RATE;
+export const exVat = (gross: number) => gross / VAT_DIVISOR;
+export const VAT_FOOTER_NOTE = "All figures ex VAT (divided by 1.16).";
+
+/**
+ * Online revenue: Mobile App plus Website only.
+ *
+ * Zeid's approved template asks for "Share of online revenue", not share of
+ * all sales. Dividing Klaviyo attributed revenue by EVERY channel understates
+ * it badly, because draft orders and POS are roughly 60 per cent of turnover
+ * and Klaviyo cannot influence a sale rung up at the till. September 2026:
+ * 10.1 per cent against all sales, 24.5 per cent against online.
+ */
+export const ONLINE_SUB_CHANNELS = ["Mobile App", "Website"] as const;

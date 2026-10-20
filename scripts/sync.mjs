@@ -16,6 +16,7 @@
 import { loadEnv, redact } from "./lib/env.mjs";
 import { log, money3, QuotaExhaustedError } from "./lib/log.mjs";
 import { upsert, writeSyncLog, completedDays, previousSnapshot } from "./lib/db.mjs";
+import { settledDays } from "./lib/log.mjs";
 import * as klaviyo from "./lib/klaviyo.mjs";
 import * as ll from "./lib/loyaltylion.mjs";
 import * as shopify from "./lib/shopify.mjs";
@@ -97,7 +98,10 @@ async function syncKlaviyo({ from, to, dryRun, force, maxDays }) {
   const { email: campaignRows, push: campaignPush } = klaviyo.toCampaignRows(campaignResults, meta);
 
   // --- flows: one call per day, send-date basis ---------------------------
-  const days = eachDay(from, to);
+  // settledDays drops the day still in progress. Syncing it would store two
+  // hours of activity and then mark the date complete, which is what emptied
+  // every flow day from 3 September 2026 onward.
+  const days = settledDays(eachDay(from, to));
   // A dry run touches nothing, not even a read: it must work with no Supabase
   // credentials at all, so the resume ledger is skipped rather than queried.
   const done = force || dryRun ? new Set() : await completedDays("klaviyo_flows", from, to);
@@ -308,7 +312,8 @@ async function syncReach({ from, to, dryRun, force, maxDays }) {
   const metricIds = await klaviyo.resolveReachMetricIds();
   log.ok(`reach metrics resolved: ${Object.entries(metricIds).map(([c, i]) => `${c}=${i}`).join(", ")}`);
 
-  const days = eachDay(from, to);
+  // Same rule as flows: never sync the day still in progress.
+  const days = settledDays(eachDay(from, to));
   const done = force || dryRun ? new Set() : await completedDays("klaviyo_reach", from, to);
   const allPending = days.filter((d) => !done.has(d));
   const pending = Number.isFinite(maxDays) ? allPending.slice(0, Math.max(0, maxDays)) : allPending;

@@ -195,7 +195,8 @@ export const SEED_PROBES = [
   {
     table: "ll_snapshots" as const,
     label: "Loyalty snapshots",
-    // Seeded redemption_rate is ~21; a real one is a 0-1 fraction.
+    // Seeded redemption_rate is ~21. A real one is a percentage near 0.2,
+    // so anything above 1 is seed residue rather than a measurement.
     apply: (q: SeedFilter) => q.gt("redemption_rate", 1),
   },
   {

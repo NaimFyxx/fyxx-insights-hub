@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import {
   buildReport,
   saveNarrative,
+  exVat,
+  VAT_FOOTER_NOTE,
   MIN_CAMPAIGN_RECIPIENTS,
   type Availability,
   type ReportData,
@@ -263,16 +265,16 @@ export function ReportPage1({ data }: { data: ReportData }) {
             <>
               <div className="kpi">
                 <div className="n">
-                  {num(Math.round(revenue.klaviyoAttributed))} <small>JOD</small>
+                  {num(Math.round(exVat(revenue.klaviyoAttributed)))} <small>JOD</small>
                 </div>
                 <div className="l">Revenue attributed to Klaviyo</div>
               </div>
               <div className="kpi">
                 {revenue.sharePct === null ? (
                   <>
-                    <div className="n">—</div>
+                    <div className="n">0</div>
                     <div className="l">
-                      Share of all sales <b>(no sales recorded)</b>
+                      Share of online revenue <b>(no online sales recorded)</b>
                     </div>
                   </>
                 ) : (
@@ -281,9 +283,14 @@ export function ReportPage1({ data }: { data: ReportData }) {
                       {revenue.sharePct.toFixed(1)}
                       <small>%</small>
                     </div>
+                    {/* Online means Mobile App plus Website. Dividing by every
+                        channel understated this badly, because draft orders and
+                        POS are most of turnover and Klaviyo cannot influence a
+                        till sale. */}
                     <div className="l">
-                      Share of all sales <b>({num(Math.round(revenue.allChannels))} JOD total)</b>
-                      {revenue.shareIsPartial ? " — to yesterday" : ""}
+                      Share of online revenue{" "}
+                      <b>({num(Math.round(exVat(revenue.onlineChannels)))} JOD total)</b>
+                      {revenue.shareIsPartial ? ", to yesterday" : ""}
                     </div>
                   </>
                 )}
@@ -293,7 +300,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
             <>
               <div className="kpi">
                 <div className="n">
-                  {num(Math.round(revenue.allChannels))} <small>JOD</small>
+                  {num(Math.round(exVat(revenue.allChannels)))} <small>JOD</small>
                 </div>
                 <div className="l">Total sales, all channels</div>
               </div>
@@ -464,7 +471,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                   <td>{num(c.clicked)}</td>
                   <td>{pct(c.click_rate * 100)}</td>
                   <td>{num(c.orders)}</td>
-                  <td>{num(Math.round(Number(c.revenue_jod)))}</td>
+                  <td>{num(Math.round(exVat(Number(c.revenue_jod))))}</td>
                 </tr>
               ))}
               <tr className="total">
@@ -476,7 +483,7 @@ export function ReportPage1({ data }: { data: ReportData }) {
                 <td>{num(campaignTotals.clicked)}</td>
                 <td>{pct(rateOf(campaignTotals.clicked, campaignTotals.delivered))}</td>
                 <td>{num(campaignTotals.orders)}</td>
-                <td>{num(Math.round(campaignTotals.revenue))}</td>
+                <td>{num(Math.round(exVat(campaignTotals.revenue)))}</td>
               </tr>
             </tbody>
           </table>
@@ -659,7 +666,14 @@ export function ReportPage1({ data }: { data: ReportData }) {
               <div className="n">
                 {loyalty.latest ? (
                   <>
-                    {(Number(loyalty.latest.redemption_rate) * 100).toFixed(1)}
+                    {/* redemption_rate is stored as a PERCENTAGE, not a
+                        fraction. Proved from the same row: 20 Oct 2026 stored
+                        0.15, with 18 redemptions against 12,081 members, which
+                        is 0.149 per cent. Multiplying by 100 here turned 0.10
+                        into "10.0%" on the report while the Loyalty page
+                        correctly showed 0.1%, and the two pages contradicted
+                        each other for weeks. */}
+                    {Number(loyalty.latest.redemption_rate).toFixed(2)}
                     <small>%</small>
                   </>
                 ) : (

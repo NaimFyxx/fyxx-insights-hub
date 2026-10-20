@@ -76,6 +76,11 @@ export type Snapshot = {
   silver_members: number;
   gold_members: number;
   platinum_members: number;
+  /**
+   * A PERCENTAGE already, not a 0-1 fraction. 0.15 means 0.15 per cent.
+   * Derived from the same snapshot row: 18 redemptions / 12,081 members =
+   * 0.149 per cent, stored as 0.15. Do not multiply by 100.
+   */
   redemption_rate: number;
   points_outstanding: number;
   birthday_rewards_issued: number;

@@ -1358,6 +1358,17 @@ programme, tiers and point values.
 
 ## Traps worth knowing
 
+- **A security advisor "fix" can break a working app, from outside the repo.**
+  On 20 October the monthly report failed with *permission denied for table
+  klaviyo_reach_daily*. Cause: `data_coverage` had gained
+  `security_invoker = true`, so it ran as the caller, and `authenticated`
+  deliberately has no grant on that table because it holds per-person profile
+  hashes. Nothing in this repo set that flag. Flipping it back would have been
+  undone by the next advisor pass, so the one restricted branch now reads
+  through a SECURITY DEFINER function and the view stays lint-clean. **Before
+  clearing a Supabase advisor warning, check what the pattern is load-bearing
+  for.**
+
 - **A feature that has never been used has never been tested — by anyone.** The
   report page's Save button could never have worked: it upserts on
   `(start_date, end_date)` and no unique constraint existed, so Postgres would
